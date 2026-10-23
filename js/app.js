@@ -67,7 +67,7 @@ function resolveLink(name) {
   const k = norm(name);
   const b = state.books.find((x) => norm(x.title) === k);
   if (b) return { type: 'book', href: `#/livro/${b.id}`, node: `b:${b.id}` };
-  const n = state.notes.find((x) => x.title && norm(x.title) === k);
+  const n = state.notes.find((x) => x.title && norm(noteTitle(x)) === k);
   if (n) return { type: 'note', href: `#/nota/${n.id}`, node: `n:${n.id}` };
   return { type: 'concept', href: conceptHref(name), node: `c:${k}` };
 }
@@ -85,7 +85,9 @@ function renderText(text) {
   return (out + esc(String(text || '').slice(last))).replace(/\n/g, '<br>');
 }
 
-const noteLabel = (n) => n.title || (n.text || '').replace(LINK_RE, '$1').slice(0, 48) + ((n.text || '').length > 48 ? '…' : '');
+// título sem [[ ]] (o título nomeia a própria nota; colchetes nele não são ligação)
+const noteTitle = (n) => plainText(n.title || '').trim();
+const noteLabel = (n) => noteTitle(n) || (n.text || '').replace(LINK_RE, '$1').slice(0, 48) + ((n.text || '').length > 48 ? '…' : '');
 
 // ---------------- persistência ----------------
 async function load() {
@@ -240,7 +242,7 @@ function noteCard(n, showBook = true) {
   const b = bookById(n.bookId);
   const cards = state.cards.filter((c) => c.noteId === n.id).length;
   return `<article class="note card ${n.kind === 'quote' ? 'quote' : ''}" data-href="#/nota/${n.id}" data-book="${n.bookId}" data-search="${esc(`${n.title || ''} ${n.text} ${(n.tags || []).join(' ')} ${b?.title || ''}`.toLowerCase())}">
-    ${n.title ? `<div class="note-title">${esc(n.title)}</div>` : ''}
+    ${n.title ? `<div class="note-title">${esc(noteTitle(n))}</div>` : ''}
     <div class="note-text">${renderText(n.text)}</div>
     <div class="row between wrap gap-s">
       <div class="small muted">
@@ -533,7 +535,7 @@ function noteDetail(id) {
   if (!n) return empty('Nota não encontrada.', '<a class="btn" href="#/notas">Voltar</a>');
   const b = bookById(n.bookId);
   const out = [...new Set(linksOf(n.text))];
-  const backlinks = n.title ? state.notes.filter((x) => x.id !== n.id && linksOf(x.text).some((l) => norm(l) === norm(n.title))) : [];
+  const backlinks = n.title ? state.notes.filter((x) => x.id !== n.id && linksOf(x.text).some((l) => norm(l) === norm(noteTitle(n)))) : [];
   const shared = state.notes.filter((x) => x.id !== n.id && (
     (x.tags || []).some((t) => (n.tags || []).map(norm).includes(norm(t))) ||
     linksOf(x.text).some((l) => out.map(norm).includes(norm(l)))
@@ -541,7 +543,7 @@ function noteDetail(id) {
   const cards = state.cards.filter((c) => c.noteId === n.id);
   return `<a href="#/notas" class="back">← Notas</a>
   <section class="card note ${n.kind === 'quote' ? 'quote' : ''}">
-    ${n.title ? `<h2 style="margin-top:0">${esc(n.title)}</h2>` : ''}
+    ${n.title ? `<h2 style="margin-top:0">${esc(noteTitle(n))}</h2>` : ''}
     <div class="note-text">${renderText(n.text)}</div>
     <div class="small muted">${b ? `<a href="#/livro/${b.id}">${esc(b.title)}</a>` : ''}${n.page ? ` · pág. ${n.page}` : ''} · ${n.kind === 'quote' ? 'Citação' : 'Reflexão'}
       ${n.source === 'ocr' ? '<span class="chip">📷 OCR</span>' : ''}
@@ -688,19 +690,22 @@ mapView.mount = (arg) => {
 };
 
 // ---------- cards de memorização ----------
+// [[ligação]] já escapada → negrito, sem os colchetes (em cards e textos que não levam a lugar nenhum)
+const linkBold = (html) => html.replace(LINK_RE, (m, x) => `<b class="wl-txt">${x.split('|').pop().trim()}</b>`);
+
 function cardFace(c, answer) {
   if (c.type === 'cloze') {
-    const html = esc(c.front).replace(/\n/g, '<br>');
+    const html = linkBold(esc(c.front)).replace(/\n/g, '<br>');
     return answer ? S.clozeAnswer(html) : S.clozeQuestion(html);
   }
-  return esc(answer ? c.back : c.front).replace(/\n/g, '<br>');
+  return linkBold(esc(answer ? c.back : c.front)).replace(/\n/g, '<br>');
 }
 
 function cardItem(c) {
   const b = bookById(c.bookId);
   return `<div class="card card-item">
     <div class="q">${cardFace(c, false)}</div>
-    ${c.type === 'qa' ? `<div class="muted">${esc(c.back).slice(0, 160)}</div>` : ''}
+    ${c.type === 'qa' ? `<div class="muted">${esc(plainText(c.back)).slice(0, 160)}</div>` : ''}
     <div class="row between small muted" style="margin-top:6px">
       <span>${b ? esc(b.title) : ''} · próxima: ${c.due <= state.stats.today ? 'hoje' : fmtDate(c.due)}</span>
       <span class="row gap-s"><button class="icon-btn" data-action="editCard" data-id="${c.id}" aria-label="Editar">✏️</button>
@@ -1171,7 +1176,7 @@ clubsView.mount = async () => {
           <b>${nf(r.week)}</b></div>`).join('')}</div>
         <div class="small muted" style="margin:12px 0 4px">🖍️ Grifos do clube</div>
         ${posts.length ? `<div class="club-posts">${posts.map((p) => `<article class="club-post">
-          <div class="club-post-text">“${esc(p.text)}”</div>
+          <div class="club-post-text">“${linkBold(esc(p.text))}”</div>
           <div class="row between wrap gap-s"><span class="small muted">${esc(nameOf(p.user_id))} · ${esc(p.book_title || '')}${p.page ? ` · p. ${p.page}` : ''}</span>
             <span class="row gap-s">${p.user_id === me
               ? `<button class="icon-btn small" data-action="deleteClubPost" data-id="${p.id}" aria-label="Apagar">🗑️</button>`
@@ -1492,7 +1497,7 @@ const cloudActions = {
     openModal(`<div class="form"><h3>✨ ${cards.length} cards sugeridos</h3>
       <p class="hint" style="margin:0">Desmarque os que não quiser. Dá para editar depois.</p>
       <div class="imp-list ai-cards">${cards.map((c, i) => `<label class="check"><input type="checkbox" data-i="${i}" checked>
-        <span class="grow"><b>${cardFace(c, false)}</b>${c.type === 'qa' ? `<br><span class="small muted">${esc(c.back)}</span>` : ''}</span></label>`).join('')}</div>
+        <span class="grow"><b>${cardFace(c, false)}</b>${c.type === 'qa' ? `<br><span class="small muted">${linkBold(esc(c.back))}</span>` : ''}</span></label>`).join('')}</div>
       <div class="actions"><button type="button" class="btn ghost" data-action="close">Cancelar</button><button type="button" class="btn primary" id="ai-save">Salvar cards</button></div>
     </div>`, (root) => {
       $('#ai-save', root).onclick = async () => {
@@ -1511,7 +1516,7 @@ const cloudActions = {
   async aiLinks({ id }) {
     const n = noteById(id);
     const b = bookById(n.bookId);
-    const candidates = linkCandidates().map((c) => c.label).filter((l) => norm(l) !== norm(n.title) && norm(l) !== norm(b?.title));
+    const candidates = linkCandidates().map((c) => c.label).filter((l) => norm(l) !== norm(noteTitle(n)) && norm(l) !== norm(b?.title));
     toast('✨ Procurando conexões…');
     let res;
     try {
@@ -1913,7 +1918,7 @@ function linkCandidates() {
   const list = new Map();
   const put = (label, icon, hint) => { if (label && !list.has(norm(label))) list.set(norm(label), { label: label.trim(), icon, hint }); };
   state.books.forEach((b) => put(b.title, '📘', 'livro'));
-  state.notes.forEach((n) => put(n.title, '✍️', 'nota'));
+  state.notes.forEach((n) => put(noteTitle(n), '✍️', 'nota'));
   state.books.forEach((b) => { put(b.genre, '🏷️', 'tema'); put(b.subtheme, '🏷️', 'subtema'); });
   state.notes.forEach((n) => linksOf(n.text).forEach((l) => put(l, '💡', 'conceito')));
   return [...list.values()];
@@ -1983,12 +1988,13 @@ function noteForm(existing, { bookId, autoOCR, link } = {}) {
       <button type="button" class="btn small" id="ocr-fix" hidden>✨ Corrigir com IA</button>
       <img id="ocr-preview" alt="Pré-visualização dos trechos detectados" hidden>
     </div>
-    <label>Título (opcional) <input name="title" value="${esc(n.title)}" placeholder="ex: Normalização"><span class="hint">Com título, outras notas podem citar esta com [[título]].</span></label>
+    <label>Título (opcional) <input name="title" value="${esc(noteTitle(n))}" placeholder="ex: Normalização"><span class="hint">Com título, outras notas podem citar esta com [[título]].</span></label>
     <label>Texto
       <div class="textarea-wrap">
         <textarea name="text" rows="6" required placeholder="Escreva sua reflexão ou cole a citação… Use [[ ]] para conectar ideias.">${esc(n.text)}</textarea>
         <div class="suggest" id="link-suggest" hidden></div>
       </div>
+      <div class="note-preview" id="note-preview" hidden><span class="note-preview-label">Como vai ficar</span><div class="note-text"></div></div>
       <div class="row between"><span class="hint">Digite [[ para ligar a um livro, nota ou conceito.</span><button type="button" class="btn small ghost" id="insert-link">🔗 Ligar</button></div>
     </label>
     <div class="grid2">
@@ -2006,6 +2012,14 @@ function noteForm(existing, { bookId, autoOCR, link } = {}) {
     const img = $('#ocr-preview', root);
     const btns = root.querySelectorAll('[data-ocr]');
     $('#insert-link', root).onclick = attachLinkAutocomplete(form.text, $('#link-suggest', root));
+    // com [[ligações]] no texto, mostra a nota já formatada (os colchetes somem na leitura)
+    const preview = $('#note-preview', root);
+    const showPreview = () => {
+      preview.hidden = !linksOf(form.text.value).length;
+      if (!preview.hidden) preview.lastElementChild.innerHTML = renderText(form.text.value);
+    };
+    form.text.addEventListener('input', showPreview);
+    showPreview();
     let mode = 'highlight';
     btns.forEach((btn) => { btn.onclick = () => { mode = btn.dataset.ocr; file.value = ''; file.click(); }; });
     // a IA corrige erros de leitura do trecho recém-lido (foto tremida, pequena, com sombra)
@@ -2059,7 +2073,7 @@ function noteForm(existing, { bookId, autoOCR, link } = {}) {
       const fd = Object.fromEntries(new FormData(form));
       const note = existing ? { ...existing } : { id: uid(), createdAt: Date.now() };
       Object.assign(note, {
-        bookId: fd.bookId, title: fd.title.trim(), text: fd.text.trim(), page: Number(fd.page) || null, kind: fd.kind, source: fd.source,
+        bookId: fd.bookId, title: plainText(fd.title).trim(), text: fd.text.trim(), page: Number(fd.page) || null, kind: fd.kind, source: fd.source,
         tags: fd.tags.split(',').map((t) => t.trim().replace(/^#/, '')).filter(Boolean), updatedAt: Date.now(),
       });
       closeModal();
@@ -2078,7 +2092,7 @@ function cardForm({ note, card }) {
     type: 'cloze',
     front: plain,
     back: plain,
-    qaFront: n?.title ? `O que é ${n.title}?` : '',
+    qaFront: n?.title ? `O que é ${noteTitle(n)}?` : '',
   };
   openModal(`<form class="form" id="card-form">
     <h3>🧠 ${card ? 'Editar card' : 'Novo card de memorização'}</h3>
