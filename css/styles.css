@@ -55,13 +55,24 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font: 15px/1.55 "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
   padding-bottom: calc(76px + env(safe-area-inset-bottom));
   transition: background .25s, color .25s;
 }
 a { color: var(--accent); text-decoration: none; }
-h2 { font-size: 1.2rem; margin: 22px 0 10px; }
-h3 { font-size: 1rem; margin: 0 0 10px; }
+h1, h2, h3, .brand, .lv, .book-title, .note-title, .price { font-family: "Fraunces", Georgia, serif; font-optical-sizing: auto; letter-spacing: -.01em; }
+h2 { font-size: 1.35rem; font-weight: 600; margin: 24px 0 10px; }
+h3 { font-size: 1.05rem; font-weight: 600; margin: 0 0 10px; }
+h2 .ic, h3 .ic { color: var(--accent); }
+
+/* ícones de traço fino (Tabler) */
+.ic { width: 1.15em; height: 1.15em; flex: none; vertical-align: -.2em; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.ic-fill { fill: currentColor; }
+.ic-lg { width: 2.4em; height: 2.4em; stroke-width: 1.3; color: var(--accent); }
+.btn .ic { margin-right: 2px; }
+.icon-btn .ic { width: 1.3em; height: 1.3em; }
 img { max-width: 100%; }
 [hidden] { display: none !important; }
 mark { background: color-mix(in srgb, var(--gold) 45%, transparent); color: inherit; border-radius: 3px; padding: 0 2px; }
@@ -75,7 +86,7 @@ mark { background: color-mix(in srgb, var(--gold) 45%, transparent); color: inhe
   background: color-mix(in srgb, var(--bg) 88%, transparent);
   backdrop-filter: blur(10px);
 }
-.brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 1.1rem; color: var(--text); }
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 1.25rem; color: var(--text); }
 .brand img { border-radius: 7px; }
 
 .tabbar {
@@ -86,10 +97,12 @@ mark { background: color-mix(in srgb, var(--gold) 45%, transparent); color: inhe
 }
 .tabbar a {
   position: relative; flex: 1; max-width: 120px; display: flex; flex-direction: column; align-items: center; gap: 2px;
-  font-size: 1.2rem; color: var(--muted); padding: 4px 0; border-radius: 12px; filter: grayscale(1); opacity: .7;
+  color: var(--muted); padding: 5px 0 4px; border-radius: 12px;
 }
-.tabbar a span { font-size: .68rem; font-weight: 600; }
-.tabbar a.active { color: var(--accent); filter: none; opacity: 1; background: var(--accent-soft); }
+.tabbar a .ic { width: 23px; height: 23px; stroke-width: 1.5; }
+.tabbar a span { font-size: .68rem; font-weight: 600; letter-spacing: .01em; }
+.tabbar a.active { color: var(--accent); background: var(--accent-soft); }
+.tabbar a.active .ic { stroke-width: 1.9; }
 .tab-badge {
   position: absolute; top: 0; right: calc(50% - 22px); min-width: 18px; height: 18px; padding: 0 5px;
   border-radius: 99px; background: var(--danger); color: #fff; font-size: .65rem; line-height: 18px; text-align: center; filter: none;
@@ -119,7 +132,9 @@ mark { background: color-mix(in srgb, var(--gold) 45%, transparent); color: inhe
 .btn {
   appearance: none; border: 1px solid var(--border); background: var(--surface); color: var(--text);
   font: inherit; font-weight: 600; padding: 9px 14px; border-radius: 12px; cursor: pointer; white-space: nowrap;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
 }
+.btn.block { display: flex; }
 .btn:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
 .btn:active { transform: scale(.97); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
@@ -157,7 +172,7 @@ a.chip:hover { color: var(--accent); }
 
 /* herói / nível */
 .hero { background: linear-gradient(135deg, var(--hero-a), var(--hero-b)); border-color: transparent; }
-.lv { font-size: 1.15rem; font-weight: 700; margin-top: 2px; }
+.lv { font-size: 1.2rem; font-weight: 600; margin-top: 2px; }
 .xpbar { height: 10px; background: color-mix(in srgb, var(--surface) 70%, transparent); border-radius: 99px; overflow: hidden; margin: 12px 0 6px; }
 .xpbar > div { height: 100%; background: linear-gradient(90deg, var(--accent), var(--peach)); border-radius: inherit; transition: width .8s; }
 .streak {
@@ -176,7 +191,7 @@ a.chip:hover { color: var(--accent); }
 
 /* livros */
 .book { display: flex; align-items: center; gap: 12px; cursor: pointer; }
-.book-title { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.book-title { font-weight: 600; font-size: 1.05rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cover {
   width: 52px; height: 76px; object-fit: cover; border-radius: 6px; flex: none;
   background: var(--surface-2); box-shadow: 0 2px 6px rgba(0, 0, 0, .1);
@@ -209,7 +224,7 @@ a.chip:hover { color: var(--accent); }
 
 /* notas e links */
 .note { cursor: pointer; }
-.note-title { font-weight: 700; margin-bottom: 4px; }
+.note-title { font-weight: 600; margin-bottom: 4px; }
 .note-text { margin-bottom: 8px; overflow-wrap: anywhere; }
 .note.quote .note-text { font-family: Georgia, "Times New Roman", serif; font-size: 1.02rem; border-left: 3px solid var(--peach); padding-left: 10px; }
 .wl { background: var(--accent-soft); border-radius: 6px; padding: 0 4px; font-weight: 600; }

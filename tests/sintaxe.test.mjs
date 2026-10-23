@@ -30,3 +30,11 @@ test('service worker lista os arquivos que existem', () => {
   const list = sw.match(/const SHELL = \[([\s\S]*?)\];/)[1].match(/'([^']+)'/g).map((s) => s.slice(1, -1)).filter((p) => p !== './');
   for (const p of list) assert.doesNotThrow(() => readFileSync(join(root, p)), `sw.js lista ${p}, que não existe`);
 });
+
+test('todo ícone usado pelo app existe no sprite', () => {
+  const icons = readFileSync(join(root, 'js', 'icons.js'), 'utf8');
+  const sprite = readFileSync(join(root, 'icons', 'ui.svg'), 'utf8');
+  const names = new Set([...icons.matchAll(/'[^']+': '([a-z0-9-]+)'/g)].map((m) => m[1]));
+  const faltando = [...names].filter((n) => !sprite.includes(`<symbol id="${n}"`));
+  assert.deepEqual(faltando, []);
+});

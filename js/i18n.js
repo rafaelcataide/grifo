@@ -2,6 +2,7 @@
 // o que aparece na tela, nos avisos, nas janelas de confirmação e nas artes desenhadas em canvas.
 // Textos dos usuários (títulos, notas) não estão no dicionário e ficam como foram escritos.
 import { EN, EN_PATTERNS } from './i18n-en.js';
+import { iconize } from './icons.js';
 
 const KEY = 'grifo.lang';
 
@@ -19,6 +20,14 @@ export const LOCALE = lang === 'en' ? 'en-US' : 'pt-BR';
 
 export function setLang(l) {
   try { localStorage.setItem(KEY, l); } catch { /* sem armazenamento */ }
+}
+
+// Os rótulos começam com emoji ("📖 Registrar leitura"), que na tela vira ícone e sai do texto:
+// o dicionário vale também sem o emoji do começo.
+const LEAD_EMOJI = /^(?:[\p{Extended_Pictographic}←-⇿■-◿✓-✕]️?\s*)+/u;
+for (const [k, v] of Object.entries(EN)) {
+  const bare = k.replace(LEAD_EMOJI, '');
+  if (bare !== k && bare && !(bare in EN)) EN[bare] = v.replace(LEAD_EMOJI, '');
 }
 
 // textos que já estão em inglês (resultado de uma tradução) não são traduzidos de novo
@@ -52,6 +61,7 @@ function translateNode(node) {
     if (!p || SKIP.has(p.tagName) || p.closest('[data-no-tr]')) return;
     const t = tr(node.nodeValue);
     if (t !== node.nodeValue) node.nodeValue = t;
+    iconize(node);
     return;
   }
   if (node.nodeType !== 1 || SKIP.has(node.tagName) || node.closest?.('[data-no-tr]')) return;
@@ -65,10 +75,12 @@ function translateNode(node) {
   }
 }
 
+// Traduz (em inglês) e troca os emojis da interface por ícones (nos dois idiomas)
 export function startTranslating(root = document.body) {
-  if (lang !== 'en') return;
-  document.documentElement.lang = 'en';
-  document.title = tr(document.title);
+  if (lang === 'en') {
+    document.documentElement.lang = 'en';
+    document.title = tr(document.title);
+  }
   translateNode(root);
   new MutationObserver((list) => {
     for (const m of list) {
@@ -77,6 +89,7 @@ export function startTranslating(root = document.body) {
       else m.addedNodes.forEach(translateNode);
     }
   }).observe(root, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ATTRS });
+  if (lang !== 'en') return;
 
   // janelas nativas (confirmar, perguntar, avisar)
   for (const fn of ['confirm', 'prompt', 'alert']) {
