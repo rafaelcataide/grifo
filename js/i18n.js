@@ -40,6 +40,9 @@ export function tr(s, quiet = false) {
   if (!key || !/\p{L}/u.test(key) || OUTPUTS.has(key)) return s;
   const hit = EN[key];
   if (hit !== undefined) return s.replace(key, hit);
+  // "📷 Texto" com o dicionário só tendo "Texto": traduz e mantém o emoji
+  const bare = key.replace(LEAD_EMOJI, '');
+  if (bare !== key && EN[bare] !== undefined) return s.replace(bare, EN[bare]);
   for (const [re, out] of EN_PATTERNS) {
     const m = key.match(re);
     if (m) {

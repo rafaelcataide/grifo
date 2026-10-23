@@ -475,7 +475,7 @@ export function createGraph(canvas, data, { onSelect = () => {} } = {}) {
   requestAnimationFrame(frame);
 
   // Imagem do mapa para compartilhar (sempre em fundo escuro, que realça as cores)
-  function snapshot({ width = 1080, height = 1350, title = '', subtitle = '', handle = '' } = {}) {
+  function snapshot({ width = 1080, height = 1350, title = '', subtitle = '', handle = '', site = '' } = {}) {
     const c = document.createElement('canvas');
     c.width = width;
     c.height = height;
@@ -547,7 +547,12 @@ export function createGraph(canvas, data, { onSelect = () => {} } = {}) {
     x.fillText(subtitle, width / 2, 225);
     x.fillStyle = 'rgba(255,255,255,.6)';
     x.font = `600 30px ${SANS}`;
-    x.fillText(`Grifo${handle ? `  ·  ${handle}` : ''}`, width / 2, height - 70);
+    x.fillText(`Grifo${handle ? `  ·  ${handle}` : ''}`, width / 2, height - (site ? 84 : 70));
+    if (site) {
+      x.font = `500 22px ${SANS}`;
+      x.fillStyle = 'rgba(255,255,255,.5)';
+      x.fillText(site, width / 2, height - 50);
+    }
     return c;
   }
 

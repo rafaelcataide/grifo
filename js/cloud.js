@@ -26,6 +26,71 @@ export const onChange = (fn) => listeners.add(fn);
 const emit = () => listeners.forEach((fn) => fn());
 
 export const user = () => session?.user || null;
+
+// ---------------- convites ----------------
+// O link ?convite=CÓDIGO é guardado antes do login (a volta do Google chega sem ele) e usado logo depois.
+const INVITE_KEY = 'grifo.invite';
+const inviteListeners = new Set();
+export const onInvite = (fn) => inviteListeners.add(fn);
+export function pendingInvite() {
+  try { return localStorage.getItem(INVITE_KEY); } catch { return null; }
+}
+(function captureInvite() {
+  const params = new URLSearchParams(location.search);
+  const code = params.get('convite');
+  if (!code) return;
+  try { localStorage.setItem(INVITE_KEY, code.trim().slice(0, 20)); } catch { /* sem armazenamento */ }
+  params.delete('convite');
+  history.replaceState(null, '', location.pathname + (params.toString() ? `?${params}` : '') + location.hash);
+})();
+async function redeemPendingInvite(sb) {
+  const code = pendingInvite();
+  if (!code) return;
+  const { data, error } = await sb.rpc('redeem_invite', { code });
+  if (error) return; // tenta de novo no próximo login
+  try { localStorage.removeItem(INVITE_KEY); } catch { /* sem armazenamento */ }
+  if (data === 'ok') {
+    const { data: plan } = await sb.rpc('my_plan');
+    if (profile) profile.plan = plan || profile.plan;
+  }
+  inviteListeners.forEach((fn) => fn(data));
+}
+let invite = null;
+export async function myInvite(refresh = false) {
+  const sb = await client();
+  if (!sb || !user()) return null;
+  if (invite && !refresh) return invite;
+  const { data, error } = await sb.rpc('my_invite');
+  if (error) throw error;
+  invite = data;
+  return invite;
+}
+// endereço do app para divulgar (config.siteUrl ou o próprio endereço aberto)
+export const siteUrl = () => CONFIG.siteUrl || location.origin + location.pathname;
+export const inviteLink = (code) => `${siteUrl()}${code ? `?convite=${code}` : ''}`;
+
+// ---------------- eventos de uso e métricas ----------------
+// Só nome e poucos detalhes (ex.: tipo de arte), nunca conteúdo das notas
+export async function track(name, props = {}) {
+  try {
+    const sb = await client();
+    if (!sb || !user()) return;
+    await sb.from('events').insert({ name, props });
+  } catch { /* métrica nunca atrapalha o uso */ }
+}
+let admin = null;
+export async function isAdmin() {
+  const sb = await client();
+  if (!sb || !user()) return false;
+  if (admin === null) admin = !!(await sb.rpc('am_i_admin')).data;
+  return admin;
+}
+export async function adminMetrics() {
+  const sb = await client();
+  const { data, error } = await sb.rpc('admin_metrics');
+  if (error) throw error;
+  return data;
+}
 export const currentProfile = () => profile;
 
 export async function init() {
@@ -38,10 +103,10 @@ export async function init() {
   sb.auth.onAuthStateChange((_event, s) => {
     const changed = (s?.user?.id || null) !== (session?.user?.id || null);
     session = s;
-    if (changed) { profile = null; if (s) loadProfile().then(emit); }
+    if (changed) { profile = null; invite = null; admin = null; if (s) loadProfile().then(() => redeemPendingInvite(sb)).catch(() => {}).then(emit); }
     emit();
   });
-  if (session) await loadProfile();
+  if (session) { await loadProfile(); await redeemPendingInvite(sb).catch(() => {}); }
 }
 
 export async function signInWithGoogle() {

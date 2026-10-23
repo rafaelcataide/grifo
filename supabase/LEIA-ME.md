@@ -173,6 +173,16 @@ Os avisos restantes esperados são das funções que o próprio usuário logado 
 
 ---
 
+## 8. Convites e painel de métricas
+
+Rode `migrations/20261025_crescimento.sql` (já aplicado neste projeto). Ele cria:
+
+- **Convites:** cada conta tem um link `?convite=CÓDIGO` (em Conta → Convide amigos). Quem cria conta por ele e quem convidou ganham 30 dias de Plus (quem convida, no máximo 12 vezes). Só contas com até 3 dias podem usar um convite.
+- **Eventos de uso:** artes compartilhadas, convites enviados e visitas ao Plus, sem conteúdo das notas.
+- **Painel em `#/admin`:** usuários, ativação, retenção, compartilhamento, Plus e cadastros por semana. Só aparece para quem está na tabela `admins` (o e-mail do dono já foi incluído). Para dar acesso a outra pessoa: `insert into public.admins select id from auth.users where email = 'pessoa@exemplo.com';`
+
+O endereço que aparece nas artes e nos convites vem de `siteUrl` em `config.js`; troque quando tiver um domínio próprio.
+
 ## Segurança
 
 - A chave `anon` é pública por natureza; quem protege os dados são as regras **RLS** do `schema.sql`: cada pessoa só lê e grava os próprios registros.

@@ -12,6 +12,7 @@ import * as Importers from './importers.js';
 import * as Cloud from './cloud.js';
 import * as AI from './ai.js';
 import { CONFIG } from '../config.js';
+import { landingView } from './landing.js';
 
 const APP_VERSION = '2026.10.24';
 const DEFAULT_SETTINGS = { name: '', yearGoal: 12, dailyGoal: 20, dailyCards: 20, googleKey: '', handle: '' };
@@ -1108,7 +1109,9 @@ function accountView() {
   }
   const u = Cloud.user();
   if (!u) {
-    return `<section class="login">
+    return `<a href="#/" class="back">← Conhecer o Grifo</a>
+    ${Cloud.pendingInvite() ? '<p class="lp-invite">🎈 Convite aceito: ao criar sua conta, você ganha <b>1 mês de Grifo Plus</b>.</p>' : ''}
+    <section class="login">
       <img src="icons/icon.svg" alt="" width="84" height="84" class="login-logo">
       <h2>Grifo</h2>
       <p class="login-tag">leituras que ficam</p>
@@ -1150,6 +1153,8 @@ function accountView() {
     <div class="row gap-s wrap"><button class="btn primary">Salvar perfil</button>
       ${p.handle ? `<a class="btn" href="#/u/${esc(p.handle)}">Ver perfil</a><button type="button" class="btn" data-action="copyProfile">🔗 Copiar link</button>` : ''}</div>
   </form>
+  <section class="card" id="invite-card"><h3>🎁 Convide amigos</h3><p class="small muted" style="margin:0">Carregando seu convite…</p></section>
+  <div id="admin-link"></div>
   ${plan !== 'plus' ? '<a class="card wrapped-cta" href="#/plus"><span class="big-emoji">⭐</span><span class="grow"><b>Conheça o Grifo Plus</b><span class="small muted">IA na sua biblioteca, estilos extras e artes sem marca</span></span></a>' : ''}
   <section class="card form"><h3>✉️ Resumo semanal</h3>
     <label class="check"><input type="checkbox" data-weekly ${p.weekly_email ? 'checked' : ''}> Receber todo domingo um e-mail com minhas páginas, sequência e um grifo da semana</label>
@@ -1163,6 +1168,7 @@ function accountView() {
   <button class="btn danger ghost block" data-action="deleteAccount" style="margin-top:8px">Excluir minha conta</button>`;
 }
 accountView.mount = () => {
+  if (Cloud.user()) mountInvite();
   const ef = $('#email-form');
   if (ef) {
     let sent = false;
@@ -1405,6 +1411,7 @@ function plusView() {
     ['🎨', 'Estilos extras de arte', 'Noite e Sua foto nos posts de citação'],
     ['🏷️', 'Artes sem marca', 'Posts só com a sua assinatura'],
   ];
+  if (u && plan === 'free') Cloud.track('plus_view');
   return `<a href="#/conta" class="back">← Conta</a>
   <section class="card hero center plus-hero"><span class="onb-emoji">⭐</span><h2 style="margin:0">Grifo Plus</h2>
     <p class="muted" style="margin:4px 0 0">Seu segundo cérebro de leituras, com IA.</p>
@@ -1415,8 +1422,66 @@ function plusView() {
     : plan === 'plus' ? '<p class="nudge">✅ Você já é Plus. Obrigado por apoiar o Grifo!</p>'
     : !u ? '<a class="btn primary block" href="#/conta">Entrar para assinar</a>'
     : checkout ? `<a class="btn primary block" href="${esc(checkout)}" target="_blank" rel="noopener">Assinar o Plus</a><p class="hint center">Depois do pagamento, volte ao app: o plano é liberado em instantes.</p>`
-    : '<p class="nudge">As assinaturas abrem em breve.</p>'}`;
+    : '<p class="nudge">As assinaturas abrem em breve.</p>'}
+  ${u && plan === 'free' ? '<a class="card wrapped-cta" href="#/conta"><span class="big-emoji">🎁</span><span class="grow"><b>Ganhe Plus de graça</b><span class="small muted">Cada amigo que entrar pelo seu convite dá 1 mês de Plus para os dois</span></span></a>' : ''}`;
 }
+
+// ---------- convites ----------
+const inviteMsg = (link) => tr('Estou usando o Grifo para guardar o que grifo nos livros e revisar depois. Entre pelo meu convite e ganhe 1 mês de Plus:') + ` ${link}`;
+async function mountInvite() {
+  const box = $('#invite-card');
+  try {
+    const inv = await Cloud.myInvite();
+    if (!box?.isConnected || !inv) return;
+    const link = Cloud.inviteLink(inv.code);
+    const until = inv.plus_until && new Date(inv.plus_until) > new Date() ? new Date(inv.plus_until).toLocaleDateString(LOCALE) : '';
+    box.innerHTML = `<h3>🎁 Convide amigos</h3>
+      <p class="small">Cada pessoa que criar conta pelo seu link ganha <b>1 mês de Plus</b>, e você também (até 12 meses).</p>
+      <div class="invite-link"><code>${esc(link.replace(/^https?:\/\//, ''))}</code></div>
+      <div class="row gap-s wrap"><button class="btn primary" data-action="shareInvite">📤 Enviar convite</button><button class="btn" data-action="copyInvite">🔗 Copiar link</button></div>
+      <p class="small muted" style="margin:8px 0 0">${inv.invited ? `${inv.invited} ${inv.invited === 1 ? 'pessoa entrou' : 'pessoas entraram'} pelo seu convite.` : 'Ninguém entrou pelo seu convite ainda.'}${until ? ` Plus até ${until}.` : ''}</p>`;
+  } catch {
+    if (box?.isConnected) box.innerHTML = '<h3>🎁 Convide amigos</h3><p class="small muted" style="margin:0">Não foi possível carregar o convite agora.</p>';
+  }
+  if (await Cloud.isAdmin() && $('#admin-link')) $('#admin-link').innerHTML = '<a class="card wrapped-cta" href="#/admin"><span class="big-emoji">📊</span><span class="grow"><b>Painel de métricas</b><span class="small muted">Só você vê: usuários, ativação, retenção e convites</span></span></a>';
+}
+
+// ---------- apresentação (quem ainda não entrou) ----------
+const landing = () => landingView({ invite: !!Cloud.pendingInvite(), price: CONFIG.plusPriceLabel });
+
+// ---------- painel de métricas (admin) ----------
+function adminView() {
+  return `<a href="#/conta" class="back">← Conta</a><h2>Painel de métricas</h2>
+  <div id="admin-body"><p class="small muted">Carregando…</p></div>`;
+}
+adminView.mount = async () => {
+  const body = $('#admin-body');
+  if (!(await Cloud.isAdmin())) { body.innerHTML = empty('Este painel é só para administradores.'); return; }
+  let m;
+  try { m = await Cloud.adminMetrics(); } catch (e) { body.innerHTML = `<p class="nudge">Não foi possível carregar: ${esc(e.message)}</p>`; return; }
+  const pct = (ok, base) => (base ? `${Math.round((ok / base) * 100)}%` : '—');
+  const goal = (ok, base, target) => (base ? (ok / base >= target ? 'ok' : 'low') : '');
+  const stat = (v, label, cls = '') => `<div class="card stat ${cls}"><b>${v}</b><span>${label}</span></div>`;
+  const weeks = m.signups_by_week || [];
+  const max = Math.max(1, ...weeks.map((w) => w.n));
+  const events = Object.entries(m.events30 || {}).sort((a, b) => b[1] - a[1]);
+  body.innerHTML = `
+  <section class="grid3">${stat(nf(m.users), 'usuários')}${stat(nf(m.new_7d), 'novos em 7 dias')}${stat(nf(m.mau), 'ativos em 30 dias')}</section>
+  <section class="grid3">${stat(nf(m.dau), 'ativos hoje')}${stat(nf(m.wau), 'ativos na semana')}${stat(nf(m.referrals), 'entraram por convite')}</section>
+  <h3>Funil</h3>
+  <section class="card list">
+    <div class="row between li"><span><b>Ativação</b><br><span class="small muted">salvou a 1ª nota em até 24 h (contas dos últimos 30 dias) · meta 40%</span></span><b class="metric ${goal(m.activation.ok, m.activation.base, 0.4)}">${pct(m.activation.ok, m.activation.base)}</b></div>
+    <div class="row between li"><span><b>Retenção</b><br><span class="small muted">voltou a usar 7 dias depois de criar a conta · meta 25%</span></span><b class="metric ${goal(m.retention7.ok, m.retention7.base, 0.25)}">${pct(m.retention7.ok, m.retention7.base)}</b></div>
+    <div class="row between li"><span><b>Compartilhamento</b><br><span class="small muted">ativos que geraram arte em 30 dias · meta 15%</span></span><b class="metric ${goal(m.sharers30, m.mau, 0.15)}">${pct(m.sharers30, m.mau)}</b></div>
+    <div class="row between li"><span><b>Plus</b><br><span class="small muted">${nf(m.plus_paid)} pagantes · ${nf(m.plus_invite)} por convite · meta 2–5% dos ativos</span></span><b class="metric ${goal(m.plus_paid, m.mau, 0.02)}">${pct(m.plus_paid, m.mau)}</b></div>
+  </section>
+  <h3>Cadastros por semana</h3>
+  <section class="card">${weeks.length ? `<div class="weekbars">${weeks.map((w) => `<div class="wb"><span class="wb-n">${w.n}</span><i style="height:${Math.max(4, (w.n / max) * 100)}%"></i><span class="wb-l">${w.week.slice(8, 10)}/${w.week.slice(5, 7)}</span></div>`).join('')}</div>` : '<p class="small muted" style="margin:0">Sem cadastros nas últimas 8 semanas.</p>'}</section>
+  <h3>Eventos (30 dias)</h3>
+  <section class="card list">${events.length ? events.map(([k, n]) => `<div class="row between li"><span>${esc(EVENT_LABEL[k] || k)}</span><b>${nf(n)}</b></div>`).join('') : '<p class="small muted" style="margin:0">Nenhum evento ainda.</p>'}</section>
+  <p class="hint">Ativo = algum livro, nota, card ou leitura mudou no período. As porcentagens ficam mais confiáveis a partir de algumas dezenas de contas.</p>`;
+};
+const EVENT_LABEL = { share: 'Artes compartilhadas ou baixadas', invite_share: 'Convites enviados', invite_copy: 'Links de convite copiados', plus_view: 'Visitas à página do Plus' };
 
 const cloudActions = {
   loginGoogle: async () => {
@@ -1438,6 +1503,18 @@ const cloudActions = {
     render();
   },
   syncNow: () => runSync({ silent: false }),
+  async shareInvite() {
+    const inv = await Cloud.myInvite();
+    const link = Cloud.inviteLink(inv.code);
+    Cloud.track('invite_share');
+    if (navigator.share) navigator.share({ text: inviteMsg(link) }).catch(() => {});
+    else { await navigator.clipboard?.writeText(inviteMsg(link)); toast('Convite copiado. Agora é só colar para seus amigos.'); }
+  },
+  async copyInvite() {
+    const inv = await Cloud.myInvite();
+    Cloud.track('invite_copy');
+    try { await navigator.clipboard.writeText(Cloud.inviteLink(inv.code)); toast('🔗 Link de convite copiado'); } catch { prompt('Copie seu link de convite:', Cloud.inviteLink(inv.code)); }
+  },
   dailyMore: () => { dailyShift++; render(); },
   async noteToClub({ id }) {
     const n = noteById(id), b = bookById(n.bookId);
@@ -2298,6 +2375,13 @@ function downloadFile(file) {
 }
 
 // Pré-visualiza a(s) arte(s), troca estilo/formato e compartilha (Instagram, WhatsApp…) ou baixa
+// Texto que acompanha a arte: com conta, leva o link de convite; sem conta, o endereço do app
+async function shareText(text) {
+  let link = Cloud.siteUrl();
+  try { const inv = await Cloud.myInvite(); if (inv?.code) link = Cloud.inviteLink(inv.code); } catch { /* sem convite: endereço simples */ }
+  return `${text ? `${tr(text)}\n` : ''}${tr('Feito com Grifo:')} ${link}`;
+}
+
 function shareStudio({ title, groups = [], render, filename = 'grifo', text = '', photo = false }) {
   if (isPlus()) groups = [...groups, { key: 'brand', options: [{ id: 'on', label: '🏷️ Com marca Grifo' }, { id: 'off', label: 'Só minha assinatura' }] }];
   const renderArt = render;
@@ -2351,14 +2435,16 @@ function shareStudio({ title, groups = [], render, filename = 'grifo', text = ''
       };
     }
     $('#studio-dl', root).onclick = async () => {
+      Cloud.track('share', { kind: filename, via: 'download' });
       for (let i = 0; i < canvases.length; i++) downloadFile(await canvasFile(canvases[i], name(i)));
     };
     $('#studio-share', root).onclick = async () => {
       if (!canvases.length) return;
       const files = await Promise.all(canvases.map((c, i) => canvasFile(c, name(i))));
+      Cloud.track('share', { kind: filename, via: 'share' });
       if (navigator.canShare?.({ files })) {
         try {
-          await navigator.share({ files, text });
+          await navigator.share({ files, text: await shareText(text) });
         } catch (e) {
           if (e.name !== 'AbortError') toast('Não foi possível compartilhar. Use “Baixar”.', 'err');
         }
@@ -2432,7 +2518,7 @@ const shareActions = {
         await Share.ensureFonts();
         const [width, height] = Share.SIZES[v.format];
         const st = api.stats();
-        return api.snapshot({ width, height, title: 'Minha rede de ideias', subtitle: `${st.books} livros · ${st.themes} temas · ${st.links} conexões`, handle: state.settings.handle });
+        return api.snapshot({ width, height, title: 'Minha rede de ideias', subtitle: `${st.books} livros · ${st.themes} temas · ${st.links} conexões`, handle: state.settings.handle, site: Share.siteLabel() });
       },
     });
   },
@@ -2892,7 +2978,7 @@ document.addEventListener('submit', async (e) => {
 const routes = {
   '': home, livros: booksView, livro: bookDetail, notas: notesView, nota: noteDetail, conceito: conceptView,
   mapa: mapView, revisar: reviewView, stats: statsView, conquistas: achievementsView, ajustes: settingsView,
-  conta: accountView, u: publicProfileView, clubes: clubsView, perguntar: askView, plus: plusView,
+  conta: accountView, admin: adminView, u: publicProfileView, clubes: clubsView, perguntar: askView, plus: plusView,
   privacidade: privacyView, termos: termsView,
 };
 // páginas que qualquer pessoa pode abrir sem login
@@ -2910,7 +2996,7 @@ function render() {
     setTimeout(() => (acao === 'escanear' ? actions.scanBook() : acao === 'grifo' ? actions.scan({}) : null), 0);
   }
   document.body.classList.toggle('gated', gated);
-  let fn = gated ? accountView : routes[name] || home;
+  let fn = gated ? (name === 'conta' ? accountView : landing) : routes[name] || home;
   if (fn === home && (needsOnboarding() || (onbStep >= 2 && !state.settings.onboarded))) fn = onboarding;
   const keepScroll = view.dataset.route === location.hash;
   const y = scrollY;
@@ -2941,6 +3027,17 @@ window.addEventListener('hashchange', () => {
 
 applyTheme(currentTheme());
 startTranslating();
+Cloud.onInvite((r) => {
+  const msg = {
+    ok: '🎉 Convite aceito! Você ganhou 1 mês de Grifo Plus.',
+    old: 'Convites valem só para contas novas.',
+    invalid: 'Esse link de convite não é válido.',
+    self: 'Esse é o seu próprio convite 🙂',
+    already: 'Você já usou um convite.',
+  }[r];
+  if (msg) toast(msg, r === 'ok' ? 'gold' : '');
+  if (r === 'ok') render();
+});
 await Cloud.init().catch(() => {});
 await load();
 render();

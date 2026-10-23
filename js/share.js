@@ -1,5 +1,6 @@
 // Artes para Instagram desenhadas em <canvas>, no próprio aparelho (nada é enviado a servidor).
 import { LOCALE, tr } from './i18n.js';
+import { CONFIG } from '../config.js';
 import { ymd, parseYmd, addDays, levelInfo } from './game.js';
 
 export const SIZES = { story: [1080, 1920], feed: [1080, 1350] };
@@ -85,13 +86,21 @@ function linear(ctx, w, h, stops, angle = 'diag') {
   ctx.fillRect(0, 0, w, h);
 }
 
+// endereço curto do app, mostrado embaixo da marca (ex.: rafaelcataide.github.io/grifo)
+export const siteLabel = () => String(CONFIG.siteUrl || location.origin + location.pathname).replace(/^https?:\/\//, '').replace(/\/$/, '');
+
 function brand(ctx, w, h, { dark = false, handle = '' } = {}) {
   ctx.save();
   ctx.textAlign = 'center';
   ctx.fillStyle = dark ? 'rgba(255,255,255,.72)' : 'rgba(45,47,54,.62)';
   ctx.font = `600 30px ${SANS}`;
   const label = prefs.brand ? `Grifo${handle ? `  ·  ${handle}` : ''}` : handle;
-  if (label) ctx.fillText(label, w / 2, h - 70);
+  if (label) ctx.fillText(label, w / 2, prefs.brand ? h - 84 : h - 70);
+  if (prefs.brand) {
+    ctx.font = `500 22px ${SANS}`;
+    ctx.globalAlpha = 0.8;
+    ctx.fillText(siteLabel(), w / 2, h - 50);
+  }
   ctx.restore();
 }
 
