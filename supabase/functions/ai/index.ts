@@ -16,6 +16,8 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
 const anthropic = new Anthropic(); // lê ANTHROPIC_API_KEY dos segredos da função
+// contadores de uso: só a chave de serviço pode incrementá-los (usuários não chamam direto)
+const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -40,10 +42,10 @@ Deno.serve(async (req) => {
   }
   if (!TASK_NAMES.includes(task)) return json({ error: "tarefa desconhecida" }, 400);
 
-  const { data: used, error: quotaError } = await supabase.rpc("ai_quota_hit");
+  const { data: used, error: quotaError } = await admin.rpc("ai_quota_hit", { uid: user.id });
   if (quotaError) return json({ error: "falha ao registrar uso" }, 500);
   if (used > DAILY_LIMIT) return json({ error: "limite", message: `Limite de ${DAILY_LIMIT} pedidos de IA por dia atingido.` }, 429);
-  const { data: total, error: globalError } = await supabase.rpc("ai_global_hit");
+  const { data: total, error: globalError } = await admin.rpc("ai_global_hit");
   if (globalError) return json({ error: "falha ao registrar uso" }, 500);
   if (total > GLOBAL_DAILY_LIMIT) return json({ error: "limite", message: "A IA atingiu o limite de uso de hoje. Tente amanhã." }, 429);
 

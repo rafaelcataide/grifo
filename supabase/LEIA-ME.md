@@ -98,11 +98,42 @@ supabase functions deploy stripe-webhook --no-verify-jwt
 
 Quando alguém paga, o plano vira `plus` em instantes; se a assinatura for cancelada, volta para `free`.
 
+## 6. Proteções extras (recomendado antes de divulgar)
+
+**CAPTCHA no login por e-mail** (barra contas criadas por robôs; o login com Google não precisa):
+
+1. Em https://dash.cloudflare.com → **Turnstile → Add widget**: nome "Grifo", domínios `rafaelcataide.github.io` e `localhost`, modo **Managed**.
+2. Copie a **Site Key** (pública) para `config.js` → `turnstileSiteKey` e publique o app.
+3. Só depois disso, no Supabase: **Authentication → Attack Protection → Enable CAPTCHA protection**, provedor **Turnstile**, cole a **Secret Key**.
+
+A ordem importa: se o CAPTCHA for ligado no Supabase antes do app ter a Site Key, o login por e-mail para de funcionar.
+
+**Teto de gastos da IA** (três camadas):
+
+1. **Na Anthropic** (a mais importante): https://console.anthropic.com → **Settings → Limits** → defina um **limite mensal de gastos** (ex.: US$ 20). Ao atingir, a API para de cobrar.
+2. **Por pessoa por dia**: `AI_DAILY_LIMIT` (padrão 60 pedidos).
+3. **Do app inteiro por dia**: `AI_GLOBAL_DAILY_LIMIT` (padrão 500 pedidos somando todos os usuários):
+
+```bash
+npx supabase secrets set AI_GLOBAL_DAILY_LIMIT=200
+```
+
+**Google**: no Google Cloud, em **Tela de consentimento OAuth**, clique em **Publicar app**. Em modo "Teste" só os e-mails cadastrados como testadores conseguem entrar.
+
+**Conferir a segurança do banco** a qualquer momento:
+
+```bash
+npx supabase db advisors --linked
+```
+
+Os avisos restantes esperados são das funções que o próprio usuário logado chama (`push_records`, `join_club`, `my_plan`, `is_member`, `shares_club`) e o de senha vazada, que não se aplica (o app não usa senha).
+
 ---
 
 ## Segurança
 
 - A chave `anon` é pública por natureza; quem protege os dados são as regras **RLS** do `schema.sql`: cada pessoa só lê e grava os próprios registros.
-- O plano (`plan`) só pode ser alterado pelo servidor (função do Stripe ou SQL), nunca pelo app.
+- O plano (`plan`) só pode ser alterado pelo servidor (função do Stripe ou SQL), nunca pelo app, e nem é visível para outras pessoas (assim como o cliente do Stripe).
+- Os contadores de uso da IA só podem ser incrementados pela função do servidor.
 - As chaves pessoais (Google Livros, Anthropic do modo pessoal) **não** são enviadas à nuvem na sincronização.
 - O perfil público mostra só estatísticas e títulos de livros; notas e grifos nunca são publicados.
