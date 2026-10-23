@@ -114,6 +114,12 @@ mark { background: color-mix(in srgb, var(--gold) 45%, transparent); color: inhe
 }
 .row { display: flex; align-items: center; }
 .row.between { justify-content: space-between; }
+/* cabeçalhos de página: os botões descem para a linha de baixo quando não cabem ao lado do título */
+.row.between:has(> h2) { flex-wrap: wrap; column-gap: 12px; }
+.row.between > h2 { white-space: nowrap; }
+.row.between > h2 + .row { flex-wrap: wrap; margin-bottom: 4px; }
+.page-actions { margin: -2px 0 12px; }
+.page-actions .btn { flex: 1 1 auto; padding: 6px 8px; }
 .wrap { flex-wrap: wrap; }
 .gap { gap: 12px; }
 .gap-s { gap: 6px; }

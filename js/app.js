@@ -430,7 +430,8 @@ function booksView() {
     .filter((b) => (filter === 'all' || b.status === filter) && (purpose === 'all' || (b.purpose || 'hobby') === purpose))
     .sort((a, b) => (b.endDate || b.startDate || '').localeCompare(a.endDate || a.startDate || '') || b.createdAt - a.createdAt);
   const count = (st) => state.books.filter((b) => b.status === st).length;
-  return `<div class="row between"><h2>Meus livros</h2><div class="row gap-s"><button class="btn" data-action="recommend" title="Sugestões de leitura com IA">✨ O que ler</button><button class="btn" data-action="importFile" title="Importar do Kindle, Goodreads ou Skoob">⬆️</button><button class="btn" data-action="shareShelf">📸 Minha estante</button><button class="btn primary" data-action="newBook">➕ Novo</button></div></div>
+  return `<div class="row between"><h2>Meus livros</h2><button class="btn primary" data-action="newBook">➕ Novo</button></div>
+  <div class="row gap-s wrap page-actions"><button class="btn small" data-action="recommend" title="Sugestões de leitura com IA">✨ O que ler</button><button class="btn small" data-action="shareShelf" title="Arte da sua estante para o Instagram">📸 Estante</button><button class="btn small" data-action="importFile" title="Importar do Kindle, Goodreads ou Skoob">⬆️ Importar</button></div>
   <input class="search" type="search" placeholder="Buscar por título, autor, tema ou subtema…" data-filter-list="#book-list">
   <div class="tabs">
     ${[['all', `Todos (${state.books.length})`], ...Object.entries(STATUS).map(([k, v]) => [k, `${v} (${count(k)})`])]
