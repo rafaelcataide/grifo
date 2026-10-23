@@ -444,6 +444,15 @@ body.has-timer #toasts { bottom: calc(150px + env(safe-area-inset-bottom)); }
   * { transition: none !important; animation: none !important; }
 }
 
+/* sem login (com servidor): só a tela de entrada */
+body.gated .tabbar, body.gated #timer-bar, body.gated #account-btn, body.gated .topbar a[href="#/ajustes"], body.gated .topbar .brand { display: none !important; }
+body.gated { padding-bottom: 24px; }
+.login-logo { margin: 8px auto 0; border-radius: 20px; box-shadow: 0 8px 24px rgba(111, 127, 232, .3); }
+.login h2 { font-size: 2rem; letter-spacing: -.5px; }
+.login-tag { margin: -8px 0 4px; color: var(--muted); font-family: "Fraunces", Georgia, serif; font-style: italic; font-size: 1.1rem; }
+.login-points { list-style: none; padding: 0; margin: 4px 0 8px; display: grid; gap: 8px; text-align: left; }
+.login-points li { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; font-size: .92rem; }
+
 /* conta, login e social */
 .login { max-width: 420px; margin: 20px auto; text-align: center; display: grid; gap: 12px; }
 .login h2 { margin: 0; }

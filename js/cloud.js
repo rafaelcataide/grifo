@@ -129,7 +129,10 @@ export function sync() {
     if (!sb || !u) return false;
     const startedAt = Date.now();
     let meta = (await db.getKV('__sync')) || {};
-    if (meta.user !== u.id) meta = { user: u.id, cursor: EPOCH, lastPush: 0 }; // primeira vez nesta conta: envia tudo
+    // dados de OUTRA conta neste aparelho nunca vão para esta: limpa antes de baixar os desta conta
+    const switched = !!(meta.user && meta.user !== u.id);
+    if (switched) await db.wipeLocal();
+    if (meta.user !== u.id) meta = { user: u.id, cursor: EPOCH, lastPush: 0 }; // primeira vez nesta conta: envia o que for do aparelho
 
     // 1) puxar
     let applied = false;
@@ -188,7 +191,7 @@ export function sync() {
     await db.setKV('__sync', { user: u.id, cursor, lastPush: startedAt }, { track: false });
     lastSyncAt = Date.now();
     lastError = null;
-    return applied;
+    return applied || switched; // trocou de conta: o app recarrega mesmo sem nada novo na nuvem
   })().catch((e) => { lastError = e.message || String(e); throw e; })
     .finally(() => { syncing = null; emit(); });
   return syncing;

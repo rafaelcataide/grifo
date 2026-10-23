@@ -75,6 +75,13 @@ export const db = {
     if (track && SYNC_KV.includes(key)) await rawSetKV(`__ts:${key}`, Date.now());
   },
   tombstones: async () => (await getKV(TOMBS)) || [],
+  // Limpa o aparelho sem gerar lápides (ao sair da conta ou entrar com outra)
+  wipeLocal: async () => {
+    for (const s of STORES) await tx(s, 'readwrite', (st) => st.clear());
+    for (const k of [...SYNC_KV, TOMBS, '__sync', 'lastReminder', ...SYNC_KV.map((x) => `__ts:${x}`)]) {
+      await tx('kv', 'readwrite', (st) => st.delete(k));
+    }
+  },
   pruneTombstones: async (upTo) => rawSetKV(TOMBS, ((await getKV(TOMBS)) || []).filter((t) => t.ts > upTo)),
 };
 
