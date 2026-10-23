@@ -4,6 +4,7 @@
 
 const TESSERACT_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
 const MAX_SIDE = 2200;
+const MIN_SIDE = 1600;
 
 let scriptPromise, workerPromise, logger = null;
 
@@ -73,27 +74,48 @@ function findPassages(img) {
   const mask = new Uint8Array(gw * gh);
   for (let i = 0; i < mask.length; i++) mask[i] = count[i] > B * B * 0.25 ? 1 : 0;
 
-  // Fecha buracos deixados pelas letras: dilata 2 blocos na horizontal e 1 na vertical
-  const dil = new Uint8Array(gw * gh);
+  // Marca-texto forma faixas horizontais. Trechos curtos de cor em cada linha (borda colorida da página,
+  // ilustração vizinha, dedo) são descartados antes de procurar os blocos, para não "colarem" no grifo.
+  const minRun = Math.max(4, Math.round(gw * 0.06));
   for (let y = 0; y < gh; y++) {
-    for (let x = 0; x < gw; x++) {
-      if (!mask[y * gw + x]) continue;
-      for (let dy = -1; dy <= 1; dy++) {
-        const yy = y + dy;
-        if (yy < 0 || yy >= gh) continue;
-        for (let dx = -2; dx <= 2; dx++) {
-          const xx = x + dx;
-          if (xx >= 0 && xx < gw) dil[yy * gw + xx] = 1;
-        }
-      }
+    let x = 0;
+    while (x < gw) {
+      if (!mask[y * gw + x]) { x++; continue; }
+      let end = x;
+      // tolera falhas de 1 bloco dentro da faixa (letras escuras)
+      while (end + 1 < gw && (mask[y * gw + end + 1] || (end + 2 < gw && mask[y * gw + end + 2]))) end++;
+      if (end - x + 1 < minRun) for (let k = x; k <= end; k++) mask[y * gw + k] = 0;
+      x = end + 1;
     }
   }
 
-  // Componentes conectados = linhas grifadas
+  // Fecha os buracos deixados pelas letras. "lines" (só na horizontal) separa as linhas grifadas;
+  // "dil" (também 1 bloco na vertical) é o que se mantém da imagem, para não cortar acentos e "g", "p", "q".
+  const dilate = (src, rx, ry) => {
+    const out = new Uint8Array(gw * gh);
+    for (let y = 0; y < gh; y++) {
+      for (let x = 0; x < gw; x++) {
+        if (!src[y * gw + x]) continue;
+        for (let dy = -ry; dy <= ry; dy++) {
+          const yy = y + dy;
+          if (yy < 0 || yy >= gh) continue;
+          for (let dx = -rx; dx <= rx; dx++) {
+            const xx = x + dx;
+            if (xx >= 0 && xx < gw) out[yy * gw + xx] = 1;
+          }
+        }
+      }
+    }
+    return out;
+  };
+  const lines = dilate(mask, 2, 0);
+  const dil = dilate(lines, 0, 1);
+
+  // Componentes conectados = linhas (ou blocos de linhas coladas) grifadas
   const seen = new Uint8Array(gw * gh);
   const comps = [];
-  for (let start = 0; start < dil.length; start++) {
-    if (!dil[start] || seen[start]) continue;
+  for (let start = 0; start < lines.length; start++) {
+    if (!lines[start] || seen[start]) continue;
     const stack = [start];
     seen[start] = 1;
     let x0 = gw, y0 = gh, x1 = 0, y1 = 0, area = 0;
@@ -104,15 +126,16 @@ function findPassages(img) {
       if (x < x0) x0 = x; if (x > x1) x1 = x;
       if (y < y0) y0 = y; if (y > y1) y1 = y;
       for (const q of [p - 1, p + 1, p - gw, p + gw]) {
-        if (q < 0 || q >= dil.length || seen[q] || !dil[q]) continue;
+        if (q < 0 || q >= lines.length || seen[q] || !lines[q]) continue;
         if ((q === p - 1 && x === 0) || (q === p + 1 && x === gw - 1)) continue;
         seen[q] = 1;
         stack.push(q);
       }
     }
     const cw = (x1 - x0 + 1) * B, ch = (y1 - y0 + 1) * B;
-    // descarta ruído, manchas grandes (capa, mão) e formas que não parecem linha de texto
-    if (area < 8 || cw < w * 0.05 || ch > h * 0.25 || cw / ch < 1.5) continue;
+    // descarta ruído, faixas estreitas (borda colorida da página) e manchas que ocupam a foto (capa, ilustração).
+    // Vários parágrafos grifados em sequência podem formar um bloco alto: isso é aceito.
+    if (area < 4 || cw < w * 0.05 || cw / ch < 1.2 || cw * ch > w * h * 0.6) continue;
     comps.push({ x0: x0 * B, y0: y0 * B, x1: Math.min(w, (x1 + 1) * B), y1: Math.min(h, (y1 + 1) * B) });
   }
 
@@ -140,15 +163,47 @@ function canvasOf(w, h) {
   return c;
 }
 
+// Limpa cada linha (sobras da borda do grifo viram "|", "." ou uma letra solta no começo) e junta o texto
 function cleanText(t, keepParagraphs) {
-  let s = t.replace(/-\n(?=\p{Ll})/gu, '');
+  const lines = t.split('\n').map((l) => l
+    .replace(/[|~_«»¦]+/g, ' ')
+    .replace(/^[^\p{L}\p{N}"“(]+/u, '') // símbolos no começo
+    .replace(/^\p{Ll}\s+(?=\p{Lu})/u, '') // letra minúscula solta antes de palavra maiúscula ("q Portanto")
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim());
+  let s = lines.join('\n').replace(/-\n(?=\p{Ll})/gu, '');
   s = keepParagraphs ? s.replace(/([^\n])\n(?!\n)/g, '$1 ') : s.replace(/\s*\n\s*/g, ' ');
   return s
     .split('\n')
-    .map((l) => l.replace(/[|~_«»]+/g, '').replace(/[ \t]{2,}/g, ' ').trim())
     .filter((l) => (l.match(/\p{L}/gu) || []).length >= 2)
     .join('\n')
     .trim();
+}
+
+// Preto e branco pelo método de Otsu, só sobre o que não é fundo branco. O cinza das faixas
+// de marca-texto confunde o OCR (ele as trata como imagem); em preto e branco vira texto limpo.
+function binarize(canvas) {
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const im = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = im.data;
+  const hist = new Array(256).fill(0);
+  let n = 0;
+  for (let i = 0; i < d.length; i += 4) if (d[i] < 250) { hist[d[i]]++; n++; }
+  if (!n) return;
+  let sum = 0;
+  for (let t = 0; t < 256; t++) sum += t * hist[t];
+  let sumB = 0, wB = 0, best = -1, thr = 128;
+  for (let t = 0; t < 256; t++) {
+    wB += hist[t];
+    if (!wB) continue;
+    const wF = n - wB;
+    if (!wF) break;
+    sumB += t * hist[t];
+    const between = wB * wF * (sumB / wB - (sum - sumB) / wF) ** 2;
+    if (between > best) { best = between; thr = t; }
+  }
+  for (let i = 0; i < d.length; i += 4) d[i] = d[i + 1] = d[i + 2] = d[i] < thr ? 0 : 255;
+  ctx.putImageData(im, 0, 0);
 }
 
 function preview(source, w, h, boxes) {
@@ -175,10 +230,14 @@ function preview(source, w, h, boxes) {
 export async function runOCR(file, mode, onProgress = () => {}) {
   onProgress('Preparando imagem');
   const bmp = await createImageBitmap(file);
-  const scale = Math.min(1, MAX_SIDE / Math.max(bmp.width, bmp.height));
+  // Fotos grandes são reduzidas; imagens pequenas (prints, fotos comprimidas por apps de mensagem)
+  // são ampliadas, porque o OCR erra muito com letras de poucos pixels.
+  const side = Math.max(bmp.width, bmp.height);
+  const scale = side > MAX_SIDE ? MAX_SIDE / side : side < MIN_SIDE ? Math.min(4, MIN_SIDE / side) : 1;
   const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
   const src = canvasOf(w, h);
   const sctx = src.getContext('2d', { willReadFrequently: true });
+  sctx.imageSmoothingQuality = 'high';
   sctx.drawImage(bmp, 0, 0, w, h);
   const img = sctx.getImageData(0, 0, w, h);
 
@@ -213,6 +272,8 @@ export async function runOCR(file, mode, onProgress = () => {}) {
   octx.putImageData(proc, 0, 0);
 
   const worker = await getWorker();
+  // grifo: cada recorte é um bloco de texto (modo 6); página inteira: detecção automática de colunas (modo 3)
+  await worker.setParameters({ tessedit_pageseg_mode: mode === 'highlight' ? '6' : '3' });
   const texts = [];
   try {
     for (let k = 0; k < boxes.length; k++) {
@@ -222,7 +283,9 @@ export async function runOCR(file, mode, onProgress = () => {}) {
       const cw = Math.min(w, b.x1 + pad) - x0, ch = Math.min(h, b.y1 + pad) - y0;
       const crop = canvasOf(cw, ch);
       crop.getContext('2d').drawImage(out, x0, y0, cw, ch, 0, 0, cw, ch);
+      if (mode === 'highlight') binarize(crop);
       logger = (msg, p) => onProgress(boxes.length > 1 ? `${msg} (trecho ${k + 1}/${boxes.length})` : msg, p);
+      globalThis.__ocrDebug?.push(crop); // inspeção em testes: o que exatamente vai para o OCR
       const { data } = await worker.recognize(crop);
       const t = cleanText(data.text, mode === 'page');
       if (t) texts.push(t);

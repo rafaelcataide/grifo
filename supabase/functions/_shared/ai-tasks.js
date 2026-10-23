@@ -81,6 +81,57 @@ Recebe uma nota e a lista de pontos já existentes (livros, notas com título, t
     },
     build: ({ question, notes }) => `<notas>\n${notes.slice(0, 80).map((n) => `<nota id="${n.id}" livro="${clip(n.book, 120)}" autor="${clip(n.author, 80)}"${n.page ? ` pagina="${n.page}"` : ''}>\n${clip(n.text, 900)}\n</nota>`).join('\n')}\n</notas>\n\nPergunta: ${clip(question, 500)}`,
   },
+
+  // Corrige erros de OCR de um trecho fotografado, sem mudar o que o autor escreveu
+  fixocr: {
+    effort: 'low',
+    system: `Você corrige texto extraído por OCR de páginas de livros em português do Brasil.
+- Corrija só erros de leitura: letras trocadas ("nívol" → "nível"), palavras quebradas ou coladas, acentos perdidos, pontuação ruidosa e sobras soltas nas bordas (como "|", letras isoladas sem sentido).
+- Não reescreva, não resuma, não modernize e não complete frases: mantenha as palavras e a ordem do autor.
+- Se um trecho começar ou terminar no meio de uma frase, mantenha assim.
+- Se não der para ter certeza de uma palavra, escolha a mais provável pelo contexto.`,
+    schema: {
+      type: 'object',
+      properties: { text: { type: 'string' } },
+      required: ['text'],
+      additionalProperties: false,
+    },
+    build: ({ text, book }) => `${book ? `Livro: ${clip(book, 150)}\n\n` : ''}<ocr>\n${clip(text, 6000)}\n</ocr>`,
+  },
+
+  // Sugere próximas leituras a partir do que a pessoa leu, avaliou e grifou
+  recommend: {
+    effort: 'medium',
+    system: `Você recomenda livros, em português do Brasil, com base no histórico de leitura de uma pessoa.
+- Sugira 5 livros reais e conhecidos que NÃO estejam na lista de livros que ela já tem.
+- Prefira livros com edição em português quando existirem; use o título em português nesse caso.
+- Em "why", explique em 1 ou 2 frases a ligação com o que ela leu ou grifou (cite o livro ou a ideia), sem elogios vagos.
+- Equilibre: ao menos uma sugestão que aprofunde o tema mais lido e uma que traga um tema vizinho, novo para ela.
+- Em "purpose", classifique como "hobby", "professional" ou "academic".`,
+    schema: {
+      type: 'object',
+      properties: {
+        books: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string' },
+              author: { type: 'string' },
+              theme: { type: 'string' },
+              purpose: { type: 'string', enum: ['hobby', 'professional', 'academic'] },
+              why: { type: 'string' },
+            },
+            required: ['title', 'author', 'theme', 'purpose', 'why'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['books'],
+      additionalProperties: false,
+    },
+    build: ({ read, highlights, owned, focus }) => `<lidos>\n${read.slice(0, 60).map((b) => `- ${clip(b.title, 120)} — ${clip(b.author, 80)}${b.theme ? ` [${clip(b.theme, 60)}]` : ''}${b.rating ? ` nota ${b.rating}/5` : ''}`).join('\n')}\n</lidos>\n\n<grifos_marcantes>\n${highlights.slice(0, 15).map((h) => `- "${clip(h, 300)}"`).join('\n')}\n</grifos_marcantes>\n\n<ja_tem>\n${owned.slice(0, 300).map((t) => `- ${clip(t, 120)}`).join('\n')}\n</ja_tem>${focus ? `\n\nFoco pedido: ${clip(focus, 200)}` : ''}`,
+  },
 };
 
 export const TASK_NAMES = Object.keys(TASKS);

@@ -1661,6 +1661,7 @@ function noteForm(existing, { bookId, autoOCR, link } = {}) {
       </div>
       <input type="file" accept="image/*" hidden id="ocr-file">
       <div id="ocr-status" class="small muted">Fotografe ou escolha uma imagem da página. O texto grifado vira nota.</div>
+      <button type="button" class="btn small" id="ocr-fix" hidden>✨ Corrigir com IA</button>
       <img id="ocr-preview" alt="Pré-visualização dos trechos detectados" hidden>
     </div>
     <label>Título (opcional) <input name="title" value="${esc(n.title)}" placeholder="ex: Normalização"><span class="hint">Com título, outras notas podem citar esta com [[título]].</span></label>
@@ -1688,6 +1689,25 @@ function noteForm(existing, { bookId, autoOCR, link } = {}) {
     $('#insert-link', root).onclick = attachLinkAutocomplete(form.text, $('#link-suggest', root));
     let mode = 'highlight';
     btns.forEach((btn) => { btn.onclick = () => { mode = btn.dataset.ocr; file.value = ''; file.click(); }; });
+    // a IA corrige erros de leitura do trecho recém-lido (foto tremida, pequena, com sombra)
+    const fixBtn = $('#ocr-fix', root);
+    let lastOcr = '';
+    fixBtn.onclick = async () => {
+      fixBtn.disabled = true;
+      fixBtn.textContent = '✨ Corrigindo…';
+      try {
+        const { text } = await aiRun('fixocr', { text: lastOcr, book: bookById(form.bookId.value)?.title || '' });
+        if (text) {
+          form.text.value = form.text.value.includes(lastOcr) ? form.text.value.replace(lastOcr, text) : text;
+          lastOcr = text;
+          status.textContent = '✨ Texto corrigido pela IA. Confira antes de salvar.';
+        }
+      } catch (e) {
+        if (e.message) toast(esc(e.message), 'err');
+      }
+      fixBtn.disabled = false;
+      fixBtn.textContent = '✨ Corrigir com IA';
+    };
     file.onchange = async () => {
       const f = file.files[0];
       if (!f) return;
@@ -1705,6 +1725,8 @@ function noteForm(existing, { bookId, autoOCR, link } = {}) {
           form.source.value = 'ocr';
           form.kind.value = 'quote';
           status.textContent = `✔ ${r.regions ? `${r.regions} trecho(s) grifado(s) lido(s)` : 'Texto lido'} — revise e corrija antes de salvar.`;
+          lastOcr = r.text;
+          fixBtn.hidden = false;
         }
       } catch (err) {
         status.textContent = `Erro no OCR: ${err.message}`;
