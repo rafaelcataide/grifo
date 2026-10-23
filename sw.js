@@ -1,5 +1,5 @@
 // Service worker: app funciona offline depois da primeira visita.
-const CACHE = 'grifo-v8';
+const CACHE = 'grifo-v9';
 const SHELL = [
   './', 'index.html', 'css/styles.css', 'manifest.webmanifest',
   'js/app.js', 'js/db.js', 'js/game.js', 'js/ocr.js', 'js/charts.js', 'js/graph.js', 'js/srs.js', 'js/share.js', 'js/scanner.js', 'js/importers.js', 'js/cloud.js', 'js/ai.js', 'config.js', 'supabase/functions/_shared/ai-tasks.js',
@@ -7,7 +7,8 @@ const SHELL = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // cache: 'reload' busca direto no servidor, sem reaproveitar cópias antigas do navegador
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
@@ -24,9 +25,10 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
 
   // Arquivos do app: rede primeiro (pega atualizações), cache como reserva.
+  // "no-cache" revalida com o servidor: o GitHub Pages manda o navegador guardar arquivos por 10 min.
   if (url.origin === location.origin) {
     e.respondWith(
-      fetch(req)
+      fetch(req.mode === 'navigate' ? req : new Request(req, { cache: 'no-cache' }))
         .then((res) => {
           const copy = res.clone();
           caches.open(CACHE).then((c) => c.put(req, copy));
