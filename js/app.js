@@ -173,6 +173,7 @@ function applyTheme(mode) {
     const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
     document.querySelector('meta[name="theme-color"]').content = bg;
     graphApi?.recolor();
+    $('#graph-legend')?.querySelectorAll('[data-island] .dot').forEach((d, i) => { d.style.background = graphApi?.groups()[i]?.color; });
   });
 }
 
@@ -588,46 +589,45 @@ function conceptView(raw) {
 // ---------- mapa mental ----------
 let graphApi = null;
 
-function graphData({ purpose = 'all', showNotes = true } = {}) {
+// Dados do mapa: cada tema é uma ilha (grupo) com seus livros e subtemas; as ligações das notas
+// vão do livro para a ideia citada; as próprias notas ficam guardadas para aparecer ao tocar no livro.
+function graphData({ purpose = 'all' } = {}) {
   const nodes = new Map();
   const links = new Map();
+  const groups = new Map();
   const node = (id, label, type, extra = {}) => { if (!nodes.has(id)) nodes.set(id, { id, label, type, ...extra }); return id; };
   const link = (a, b) => { if (a && b && a !== b) links.set(a < b ? `${a}|${b}` : `${b}|${a}`, { source: a, target: b }); };
   const books = state.books.filter((b) => purpose === 'all' || (b.purpose || 'hobby') === purpose);
   const ids = new Set(books.map((b) => b.id));
 
   for (const b of books) {
-    const bid = node(`b:${b.id}`, b.title, 'book', { purpose: b.purpose || 'hobby', href: `#/livro/${b.id}` });
-    if (!b.genre) continue;
-    const tid = node(`c:${norm(b.genre)}`, b.genre, 'theme', { href: conceptHref(b.genre) });
-    if (b.subtheme) {
-      const sid = node(`c:${norm(b.subtheme)}`, b.subtheme, 'subtheme', { href: conceptHref(b.subtheme) });
-      link(bid, sid);
-      link(sid, tid);
-    } else link(bid, tid);
+    const group = b.genre ? norm(b.genre) : '';
+    if (group && !groups.has(group)) groups.set(group, { key: group, label: b.genre, href: conceptHref(b.genre) });
+    const bid = node(`b:${b.id}`, b.title, 'book', { purpose: b.purpose || 'hobby', href: `#/livro/${b.id}`, group });
+    if (b.subtheme && norm(b.subtheme) !== group) link(bid, node(`c:${norm(b.subtheme)}`, b.subtheme, 'subtheme', { href: conceptHref(b.subtheme), group }));
   }
   for (const n of state.notes) {
     if (!ids.has(n.bookId)) continue;
-    const from = showNotes ? node(`n:${n.id}`, noteLabel(n), 'note', { href: `#/nota/${n.id}` }) : `b:${n.bookId}`;
-    if (showNotes) link(from, `b:${n.bookId}`);
-    for (const t of n.tags || []) link(from, node(`c:${norm(t)}`, `#${t}`, 'tag', { href: conceptHref(t) }));
+    const bid = `b:${n.bookId}`;
+    node(`n:${n.id}`, noteLabel(n), 'note', { href: `#/nota/${n.id}`, parent: bid });
+    for (const t of n.tags || []) link(bid, node(`c:${norm(t)}`, `#${t}`, 'tag', { href: conceptHref(t) }));
     for (const l of linksOf(n.text)) {
       const r = resolveLink(l);
-      if (r.type === 'book' && !nodes.has(r.node)) continue; // livro filtrado
-      if (r.type === 'note' && !showNotes) { link(from, `b:${noteById(r.node.slice(2))?.bookId}`); continue; }
-      if (r.type === 'concept') node(r.node, l, 'concept', { href: r.href });
-      link(from, r.node);
+      if (r.type === 'book') { if (nodes.has(r.node)) link(bid, r.node); continue; } // livro filtrado fica de fora
+      if (r.type === 'note') { link(bid, `b:${noteById(r.node.slice(2))?.bookId}`); continue; }
+      if (groups.has(norm(l))) continue; // [[Tema]]: o livro já está na ilha do tema
+      node(r.node, l, 'concept', { href: r.href });
+      link(bid, r.node);
     }
   }
-  return { nodes: [...nodes.values()], links: [...links.values()].filter((l) => nodes.has(l.source) && nodes.has(l.target)) };
+  return { nodes: [...nodes.values()], groups: [...groups.values()], links: [...links.values()].filter((l) => nodes.has(l.source) && nodes.has(l.target)) };
 }
 
-const TYPE_LABEL = { book: 'Livro', theme: 'Tema', subtheme: 'Subtema', tag: 'Tag', note: 'Nota', concept: 'Conceito' };
+const TYPE_LABEL = { book: 'Livro', theme: 'Tema', subtheme: 'Subtema', tag: 'Tag', note: 'Nota', concept: 'Ideia' };
 
 function mapView() {
   const purpose = sessionStorage.getItem('mapPurpose') || 'all';
-  const showNotes = sessionStorage.getItem('mapNotes') !== '0';
-  const d = graphData({ purpose, showNotes });
+  const d = graphData({ purpose });
   return `${seg([['#/notas', '✍️ Notas', 'list'], ['#/mapa', '🕸️ Mapa', 'map'], ['#/perguntar', '✨ Perguntar', 'ask']], 'map')}
   <div class="filters">
     <input type="search" class="search" id="graph-search" placeholder="Encontrar no mapa…">
@@ -635,52 +635,55 @@ function mapView() {
       <option value="all">Todas as finalidades</option>
       ${Object.entries(PURPOSE).map(([k, p]) => `<option value="${k}" ${purpose === k ? 'selected' : ''}>${p.icon} ${p.label}</option>`).join('')}
     </select>
-    <label class="toggle"><input type="checkbox" id="graph-notes" ${showNotes ? 'checked' : ''}> mostrar notas</label>
   </div>
   ${d.nodes.length ? `<section class="card graph-wrap">
-    <canvas id="graph" aria-label="Mapa mental de livros, temas, notas e conceitos"></canvas>
+    <canvas id="graph" aria-label="Mapa de ideias: cada tema é uma ilha com seus livros"></canvas>
     <div class="graph-tools">
       <button type="button" data-graph="in" aria-label="Aproximar">＋</button>
       <button type="button" data-graph="out" aria-label="Afastar">－</button>
       <button type="button" data-graph="fit" aria-label="Enquadrar tudo">⤢</button>
       <button type="button" data-graph="photo" aria-label="Compartilhar mapa como imagem" title="Compartilhar como imagem">📸</button>
     </div>
-    <div class="legend-row">
-      <span><i class="dot" style="background:var(--c-hobby)"></i>Hobby</span>
-      <span><i class="dot" style="background:var(--c-pro)"></i>Profissional</span>
-      <span><i class="dot" style="background:var(--c-acad)"></i>Acadêmico</span>
-      <span><i class="dot" style="background:var(--c-theme)"></i>Tema</span>
-      <span><i class="dot" style="background:var(--c-sub)"></i>Subtema</span>
-      <span><i class="dot" style="background:var(--c-concept)"></i>Conceito</span>
-      <span><i class="dot" style="background:var(--c-tag)"></i>Tag</span>
-      <span><i class="dot" style="background:var(--c-note)"></i>Nota</span>
+    <div class="legend-row" id="graph-legend"></div>
+    <div class="legend-row legend-shapes">
+      <span><i class="dot"></i>Livro</span>
+      <span><i class="dot ring"></i>Subtema</span>
+      <span><i class="dot diamond"></i>Ideia que liga livros</span>
     </div>
   </section>
-  <section class="card" id="graph-panel"><p class="small muted" style="margin:0">Toque num ponto para ver as conexões. Arraste para mover, use dois dedos (ou a roda do mouse) para zoom.</p></section>
-  <p class="small muted">${d.nodes.length} pontos · ${d.links.length} conexões</p>`
-    : empty('O mapa aparece quando você cadastrar livros com tema e subtema e criar notas com [[ligações]].', '<button class="btn primary" data-action="newBook">Adicionar livro</button>')}`;
+  <section class="card" id="graph-panel"><p class="small muted" style="margin:0">Cada ilha é um tema. Toque num livro para ver as notas dele, ou numa ilha para ver o tema. Arraste para mover; use dois dedos (ou a roda do mouse) para zoom.</p></section>`
+    : empty('O mapa aparece quando você cadastrar livros com tema e criar notas com [[ligações]].', '<button class="btn primary" data-action="newBook">Adicionar livro</button>')}`;
 }
 mapView.mount = (arg) => {
   const canvas = $('#graph');
   const purposeSel = $('#graph-purpose');
-  const notesChk = $('#graph-notes');
   purposeSel.onchange = () => { sessionStorage.setItem('mapPurpose', purposeSel.value); render(); };
-  notesChk.onchange = () => { sessionStorage.setItem('mapNotes', notesChk.checked ? '1' : '0'); render(); };
   if (!canvas) return;
   const panel = $('#graph-panel');
   const purpose = sessionStorage.getItem('mapPurpose') || 'all';
-  const showNotes = sessionStorage.getItem('mapNotes') !== '0';
-  graphApi = createGraph(canvas, graphData({ purpose, showNotes }), {
+  graphApi = createGraph(canvas, graphData({ purpose }), {
     onSelect(n, near) {
-      if (!n) { panel.innerHTML = '<p class="small muted" style="margin:0">Toque num ponto para ver as conexões.</p>'; return; }
-      const order = ['theme', 'subtheme', 'book', 'concept', 'tag', 'note'];
+      if (!n) { panel.innerHTML = '<p class="small muted" style="margin:0">Toque num livro para ver as notas dele, ou numa ilha para ver o tema.</p>'; return; }
+      const order = ['subtheme', 'book', 'concept', 'tag', 'note'];
       near.sort((a, b) => order.indexOf(a.type) - order.indexOf(b.type));
+      const notes = near.filter((x) => x.type === 'note');
+      const others = near.filter((x) => x.type !== 'note');
+      const chip = (x) => `<a class="chip" href="${x.href}">${esc(TYPE_LABEL[x.type])}: ${esc(x.label.length > 40 ? `${x.label.slice(0, 39)}…` : x.label)}</a>`;
+      const count = n.type === 'theme' ? `${others.length} na ilha` : `${others.length} ${others.length === 1 ? 'conexão' : 'conexões'}`;
       panel.innerHTML = `<div class="row between gap"><div><span class="chip">${TYPE_LABEL[n.type]}</span><h3 style="margin:4px 0 0">${esc(n.label)}</h3></div>
         <a class="btn small primary" href="${n.href}">Abrir</a></div>
-        <div class="small muted" style="margin:10px 0 4px">${near.length} ${near.length === 1 ? 'conexão' : 'conexões'}</div>
-        <div class="chips">${near.map((x) => `<a class="chip" href="${x.href}">${esc(TYPE_LABEL[x.type])}: ${esc(x.label.length > 40 ? `${x.label.slice(0, 39)}…` : x.label)}</a>`).join('')}</div>`;
+        ${others.length ? `<div class="small muted" style="margin:10px 0 4px">${count}</div><div class="chips">${others.map(chip).join('')}</div>` : ''}
+        ${notes.length ? `<div class="small muted" style="margin:10px 0 4px">${notes.length} ${notes.length === 1 ? 'nota' : 'notas'}</div><div class="chips">${notes.map(chip).join('')}</div>` : ''}`;
     },
   });
+  $('#graph-legend').innerHTML = graphApi.groups().map((g) => `<a href="#" data-island="${esc(g.key)}"><i class="dot" style="background:${g.color}"></i>${esc(g.label)}</a>`).join('')
+    || '<span class="muted">Dê um tema aos livros para formar as ilhas.</span>';
+  $('#graph-legend').onclick = (e) => {
+    const a = e.target.closest('[data-island]');
+    if (!a) return;
+    e.preventDefault();
+    graphApi.selectById(`g:${a.dataset.island}`);
+  };
   view.querySelectorAll('[data-graph]').forEach((b) => {
     b.onclick = () => ({ in: () => graphApi.zoom(1.3), out: () => graphApi.zoom(1 / 1.3), fit: () => graphApi.fit(), photo: () => actions.shareMap() })[b.dataset.graph]();
   });
@@ -2305,7 +2308,7 @@ const shareActions = {
         await Share.ensureFonts();
         const [width, height] = Share.SIZES[v.format];
         const st = api.stats();
-        return api.snapshot({ width, height, title: 'Minha rede de ideias', subtitle: `${st.books} livros · ${st.nodes} ideias · ${st.links} conexões`, handle: state.settings.handle });
+        return api.snapshot({ width, height, title: 'Minha rede de ideias', subtitle: `${st.books} livros · ${st.themes} temas · ${st.links} conexões`, handle: state.settings.handle });
       },
     });
   },

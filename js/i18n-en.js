@@ -119,7 +119,7 @@ export const EN = {
   'Subtemas': 'Subthemes', 'Conceito': 'Concept', 'Tag': 'Tag',
 
   // ---------- mapa e perguntar ----------
-  'Encontrar no mapa…': 'Find on the map…', 'mostrar notas': 'show notes', 'Aproximar': 'Zoom in', 'Afastar': 'Zoom out',
+  'Encontrar no mapa…': 'Find on the map…', 'mostrar notas': 'show notes', 'Livro': 'Book', 'Subtema': 'Subtheme', 'Ideia': 'Idea', 'Ideia que liga livros': 'Idea linking books', 'Dê um tema aos livros para formar as ilhas.': 'Give your books a theme to form the islands.', 'Cada ilha é um tema. Toque num livro para ver as notas dele, ou numa ilha para ver o tema. Arraste para mover; use dois dedos (ou a roda do mouse) para zoom.': 'Each island is a theme. Tap a book to see its notes, or an island to see the theme. Drag to move; pinch (or use the mouse wheel) to zoom.', 'Toque num livro para ver as notas dele, ou numa ilha para ver o tema.': 'Tap a book to see its notes, or an island to see the theme.', 'O mapa aparece quando você cadastrar livros com tema e criar notas com [[ligações]].': 'The map appears once you add books with a theme and write notes with [[links]].', 'Aproximar': 'Zoom in', 'Afastar': 'Zoom out',
   'Enquadrar tudo': 'Fit all', 'Compartilhar mapa como imagem': 'Share map as image', 'Compartilhar como imagem': 'Share as image',
   'Mapa mental de livros, temas, notas e conceitos': 'Mind map of books, themes, notes and concepts',
   'Toque num ponto para ver as conexões. Arraste para mover, use dois dedos (ou a roda do mouse) para zoom.': 'Tap a point to see its connections. Drag to move, use two fingers (or the mouse wheel) to zoom.',
@@ -379,6 +379,10 @@ const MES = { jan: 'Jan', fev: 'Feb', mar: 'Mar', abr: 'Apr', mai: 'May', jun: '
 const plural = (n, one, many) => `${n} ${Number(String(n).replace(/\D/g, '')) === 1 ? one : many}`;
 
 export const EN_PATTERNS = [
+  // mapa de ideias
+  [/^(\d+) na ilha$/, '$1 on the island'],
+  [/^(\d+) notas?$/, (m) => `${m[1]} ${m[1] === '1' ? 'note' : 'notes'}`],
+  [/^([\d.,]+) livros · ([\d.,]+) temas · ([\d.,]+) conexões$/, '$1 books · $2 themes · $3 links'],
   // saudações, nível e XP
   [/^(Bom dia|Boa tarde|Boa noite), (.+)$/, (m, t) => `${t(m[1])}, ${m[2]}`],
   [/^(✅ |🔒 )?Nível (\d+) · (.+)$/, (m, t) => `${m[1] || ''}Level ${m[2]} · ${t(m[3])}`],
