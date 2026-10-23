@@ -1,0 +1,10 @@
+{
+  "name": "grifo",
+  "version": "1.0.0",
+  "description": "Grifo: leituras que ficam. Grifos com OCR, ideias conectadas, cards e gamificação (PWA)",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "icons": "node tools/gerar-icones.js"
+  }
+}

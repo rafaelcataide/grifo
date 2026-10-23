@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f7f6f2">
+  <meta name="description" content="Grifo: leituras que ficam. Fotografe seus grifos, conecte ideias e memorize o que leu.">
+  <title>Grifo</title>
+  <script>
+    // aplica o tema escolhido antes de pintar a tela (evita piscar)
+    try {
+      const t = localStorage.getItem('theme');
+      if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+    } catch {}
+  </script>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&family=Inter:wght@400;600;800&display=swap">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a href="#/" class="brand"><img src="icons/icon.svg" alt="" width="28" height="28"> Grifo</a>
+    <div class="row gap-s">
+      <button class="icon-btn" data-action="toggleTheme" id="theme-btn" aria-label="Alternar tema claro/escuro">🌓</button>
+      <a href="#/conta" class="icon-btn" id="account-btn" aria-label="Conta">👤</a>
+      <a href="#/ajustes" class="icon-btn" aria-label="Ajustes">⚙️</a>
+    </div>
+  </header>
+
+  <main id="view" class="container"></main>
+
+  <div id="timer-bar" class="timer-bar" hidden></div>
+
+  <nav class="tabbar">
+    <a href="#/" data-tab="">🏠<span>Início</span></a>
+    <a href="#/livros" data-tab="livros">📚<span>Livros</span></a>
+    <a href="#/notas" data-tab="notas">🕸️<span>Ideias</span></a>
+    <a href="#/revisar" data-tab="revisar">🧠<span>Revisar</span><b class="tab-badge" id="due-badge" hidden></b></a>
+    <a href="#/stats" data-tab="progresso">📊<span>Progresso</span></a>
+  </nav>
+
+  <dialog id="modal"><div id="modal-body"></div></dialog>
+  <div id="toasts" aria-live="polite"></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
