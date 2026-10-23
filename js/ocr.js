@@ -164,7 +164,7 @@ function canvasOf(w, h) {
 }
 
 // Limpa cada linha (sobras da borda do grifo viram "|", "." ou uma letra solta no começo) e junta o texto
-function cleanText(t, keepParagraphs) {
+export function cleanText(t, keepParagraphs) {
   const lines = t.split('\n').map((l) => l
     .replace(/[|~_«»¦]+/g, ' ')
     .replace(/^[^\p{L}\p{N}"“(]+/u, '') // símbolos no começo

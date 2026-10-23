@@ -1,4 +1,5 @@
 import { db, uid, STORES } from './db.js';
+import { LINK_RE, esc, norm, nf, linksOf, plainText } from './util.js';
 import * as G from './game.js';
 import * as C from './charts.js';
 import * as S from './srs.js';
@@ -37,7 +38,6 @@ const THEMES = {
   Autoajuda: ['Produtividade', 'Desenvolvimento pessoal'],
 };
 const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-const LINK_RE = /\[\[([^[\]\n]+?)\]\]/g;
 
 const state = {
   books: [], sessions: [], notes: [], cards: [], reviews: [],
@@ -50,9 +50,6 @@ const view = $('#view');
 const modal = $('#modal');
 const modalBody = $('#modal-body');
 
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const norm = (s) => String(s ?? '').trim().toLowerCase();
-const nf = (n) => Number(n || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
 const fmtDate = (s) => (s ? G.parseYmd(s).toLocaleDateString('pt-BR') : '');
 const bookById = (id) => state.books.find((b) => b.id === id);
 const noteById = (id) => state.notes.find((n) => n.id === id);
@@ -64,7 +61,6 @@ const purposeChip = (b) => { const p = PURPOSE[b.purpose || 'hobby']; return `<s
 const seg = (items, active) => `<nav class="seg">${items.map(([href, label, key]) => `<a href="${href}" class="${key === active ? 'active' : ''}">${label}</a>`).join('')}</nav>`;
 
 // ---------------- links [[ ]] ----------------
-const linksOf = (text) => [...String(text || '').matchAll(LINK_RE)].map((m) => m[1].split('|')[0].trim()).filter(Boolean);
 
 function resolveLink(name) {
   const k = norm(name);
@@ -2187,7 +2183,6 @@ function shareStudio({ title, groups = [], render, filename = 'grifo', text = ''
   });
 }
 
-const plainText = (t) => String(t || '').replace(LINK_RE, (m, x) => x.split('|').pop());
 
 const shareActions = {
   postNote({ id }) {
