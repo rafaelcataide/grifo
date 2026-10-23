@@ -2614,8 +2614,15 @@ const OPEN_ROUTES = ['u', 'privacidade', 'termos'];
 const TAB_OF = { livro: 'livros', nota: 'notas', conceito: 'notas', mapa: 'notas', perguntar: 'notas', stats: 'progresso', conquistas: 'progresso', clubes: 'progresso' };
 
 function render() {
-  const [, name = '', arg] = location.hash.slice(1).split('/');
+  const [hashPath, query = ''] = location.hash.slice(1).split('?');
+  const [, name = '', arg] = hashPath.split('/');
   const gated = Cloud.enabled() && !Cloud.user() && !OPEN_ROUTES.includes(name);
+  // atalhos do ícone do app (manifest): #/livros?acao=escanear, #/notas?acao=grifo
+  const acao = new URLSearchParams(query).get('acao');
+  if (acao && !gated) {
+    history.replaceState(null, '', `${location.pathname}${location.search}#${hashPath}`);
+    setTimeout(() => (acao === 'escanear' ? actions.scanBook() : acao === 'grifo' ? actions.scan({}) : null), 0);
+  }
   document.body.classList.toggle('gated', gated);
   let fn = gated ? accountView : routes[name] || home;
   if (fn === home && (needsOnboarding() || (onbStep >= 2 && !state.settings.onboarded))) fn = onboarding;
