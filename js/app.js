@@ -586,34 +586,122 @@ function conceptView(raw) {
   ${notes.length ? notes.map((n) => noteCard(n)).join('') : empty(`Nenhuma nota liga para [[${esc(name)}]] ainda.`)}`;
 }
 
-// ---------- mapa mental ----------
 // ---------- filtros por finalidade, tema, autor e livro (mapa e revisão) ----------
 // Cada tela guarda os seus na sessão; as opções de um filtro se ajustam aos outros já escolhidos.
+// Cada filtro é um campo de texto: ao digitar, a lista mostra só as opções que combinam.
 const SCOPE_FIELDS = ['purpose', 'theme', 'author', 'book'];
 function getScope(key) {
   try { return JSON.parse(sessionStorage.getItem(key)) || {}; } catch { return {}; }
 }
 const scopeActive = (f) => SCOPE_FIELDS.some((k) => f[k]);
+// "Fulano; Beltrano" ou "Fulano & Beltrano": cada autor conta separado no filtro
+const authorsOf = (b) => String(b.author || '').split(/\s*[;&]\s*/).map((a) => a.trim()).filter(Boolean);
 function bookInScope(b, f, skip = '') {
   return (!f.purpose || skip === 'purpose' || (b.purpose || 'hobby') === f.purpose)
     && (!f.theme || skip === 'theme' || norm(b.genre || '') === f.theme)
-    && (!f.author || skip === 'author' || norm(b.author || '') === f.author)
+    && (!f.author || skip === 'author' || authorsOf(b).some((a) => norm(a) === f.author))
     && (!f.book || skip === 'book' || b.id === f.book);
 }
+function scopeOptions(key, field) {
+  const f = getScope(key);
+  const pool = state.books.filter((b) => bookInScope(b, f, field));
+  const uniq = (pairs) => [...new Map(pairs.filter(([v]) => v).map((p) => [p[0], p])).values()].sort((a, b) => a[1].localeCompare(b[1], LOCALE));
+  if (field === 'purpose') return Object.entries(PURPOSE).map(([k, p]) => [k, tr(p.label)]);
+  if (field === 'theme') return uniq(pool.map((b) => [norm(b.genre || ''), b.genre]));
+  if (field === 'author') return uniq(pool.flatMap((b) => authorsOf(b).map((a) => [norm(a), a])));
+  return uniq(pool.map((b) => [b.id, b.title]));
+}
+const SCOPE_ALL = { purpose: 'Todas as finalidades', theme: 'Todos os temas', author: 'Todos os autores', book: 'Todos os livros' };
 function scopeFilters(key) {
   const f = getScope(key);
-  const pool = (field) => state.books.filter((b) => bookInScope(b, f, field));
-  const uniq = (pairs) => [...new Map(pairs.filter(([v]) => v).map((p) => [p[0], p])).values()].sort((a, b) => a[1].localeCompare(b[1], LOCALE));
-  const sel = (field, all, list) => `<select class="search" data-scope="${key}" data-field="${field}" aria-label="${all}"><option value="">${all}</option>${list.map(([v, l]) => `<option value="${esc(v)}" ${f[field] === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+  const combo = (field) => {
+    const cur = f[field] ? scopeOptions(key, field).find(([v]) => v === f[field])?.[1] || '' : '';
+    return `<div class="combo${cur ? ' set' : ''}" data-scope="${key}" data-field="${field}">
+      <input class="search" type="text" placeholder="${SCOPE_ALL[field]}" value="${esc(cur)}" autocomplete="off" aria-label="${SCOPE_ALL[field]}" role="combobox" aria-expanded="false">
+      ${cur ? `<button type="button" class="combo-clear" aria-label="Tirar este filtro">✕</button>` : ''}
+      <ul class="combo-list" role="listbox" hidden></ul>
+    </div>`;
+  };
   return `<div class="scope-filters">
-    ${sel('purpose', 'Todas as finalidades', Object.entries(PURPOSE).map(([k, p]) => [k, `${p.icon} ${p.label}`]))}
-    ${sel('theme', 'Todos os temas', uniq(pool('theme').map((b) => [norm(b.genre || ''), b.genre])))}
-    ${sel('author', 'Todos os autores', uniq(pool('author').map((b) => [norm(b.author || ''), b.author])))}
-    ${sel('book', 'Todos os livros', uniq(pool('book').map((b) => [b.id, b.title])))}
+    ${SCOPE_FIELDS.map(combo).join('')}
     ${scopeActive(f) ? `<button class="btn small ghost" data-action="clearScope" data-key="${key}">✕ Limpar filtros</button>` : ''}
   </div>`;
 }
+function applyScope(key, field, value) {
+  const f = { ...getScope(key), [field]: value };
+  // o livro escolhido sai do filtro se não combinar mais com tema/autor/finalidade
+  if (f.book && !(bookById(f.book) && bookInScope(bookById(f.book), f, 'book'))) delete f.book;
+  for (const k of SCOPE_FIELDS) if (!f[k]) delete f[k];
+  sessionStorage.setItem(key, JSON.stringify(f));
+  render();
+}
 
+// Lista do filtro: abre ao tocar, filtra ao digitar, escolhe com toque, setas + Enter; Esc fecha
+function comboRender(box) {
+  const input = box.querySelector('input');
+  const list = box.querySelector('.combo-list');
+  const { scope, field } = box.dataset;
+  const q = norm(input.value);
+  const cur = getScope(scope)[field] || '';
+  const curLabel = scopeOptions(scope, field).find(([v]) => v === cur)?.[1] || '';
+  // com a opção escolhida ainda escrita no campo, mostra todas; ao digitar, só as que combinam
+  const typed = q && q !== norm(curLabel);
+  const opts = scopeOptions(scope, field).filter(([, l]) => !typed || norm(l).includes(q));
+  list.innerHTML = [['', SCOPE_ALL[field]], ...opts].map(([v, l], i) => `<li role="option" data-v="${esc(v)}" class="${v === cur ? 'cur' : ''}${i === (typed && opts.length ? 1 : 0) ? ' hi' : ''}">${esc(l)}</li>`).join('')
+    + (typed && !opts.length ? '<li class="none">Nada encontrado</li>' : '');
+  list.hidden = false;
+  input.setAttribute('aria-expanded', 'true');
+}
+function comboClose(box, restore = true) {
+  const list = box.querySelector('.combo-list');
+  const input = box.querySelector('input');
+  list.hidden = true;
+  input.setAttribute('aria-expanded', 'false');
+  if (restore) {
+    const { scope, field } = box.dataset;
+    const cur = getScope(scope)[field];
+    input.value = cur ? scopeOptions(scope, field).find(([v]) => v === cur)?.[1] || '' : '';
+  }
+}
+document.addEventListener('focusin', (e) => { const box = e.target.closest?.('.combo'); if (box) { e.target.select?.(); comboRender(box); } });
+document.addEventListener('focusout', (e) => { const box = e.target.closest?.('.combo'); if (box) setTimeout(() => { if (!box.contains(document.activeElement)) comboClose(box); }, 120); });
+document.addEventListener('input', (e) => { const box = e.target.closest?.('.combo'); if (box) comboRender(box); });
+// o "✕" do campo tira só esse filtro
+document.addEventListener('click', (e) => {
+  const x = e.target.closest?.('.combo-clear');
+  if (!x) return;
+  const box = x.closest('.combo');
+  applyScope(box.dataset.scope, box.dataset.field, '');
+});
+document.addEventListener('mousedown', (e) => {
+  const li = e.target.closest?.('.combo-list li[data-v]');
+  if (!li) return;
+  e.preventDefault(); // não tira o foco antes de escolher
+  const box = li.closest('.combo');
+  applyScope(box.dataset.scope, box.dataset.field, li.dataset.v);
+});
+document.addEventListener('keydown', (e) => {
+  const box = e.target.closest?.('.combo');
+  if (!box) return;
+  const items = [...box.querySelectorAll('.combo-list li[data-v]')];
+  const i = items.findIndex((li) => li.classList.contains('hi'));
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (box.querySelector('.combo-list').hidden) { comboRender(box); return; }
+    const next = items[Math.max(0, Math.min(items.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))];
+    items.forEach((li) => li.classList.toggle('hi', li === next));
+    next?.scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    const pick = items[i];
+    if (pick) applyScope(box.dataset.scope, box.dataset.field, pick.dataset.v);
+  } else if (e.key === 'Escape') {
+    comboClose(box);
+    e.target.blur();
+  }
+});
+
+// ---------- mapa mental ----------
 let graphApi = null;
 
 // Dados do mapa: cada tema é uma ilha (grupo) com seus livros e subtemas; as ligações das notas
@@ -2763,16 +2851,6 @@ document.addEventListener('input', (e) => {
 });
 
 document.addEventListener('change', async (e) => {
-  if (e.target.dataset.scope) {
-    const key = e.target.dataset.scope;
-    const f = { ...getScope(key), [e.target.dataset.field]: e.target.value };
-    // o livro escolhido sai do filtro se não combinar mais com tema/autor/finalidade
-    if (f.book && !(bookById(f.book) && bookInScope(bookById(f.book), f, 'book'))) delete f.book;
-    for (const k of SCOPE_FIELDS) if (!f[k]) delete f[k];
-    sessionStorage.setItem(key, JSON.stringify(f));
-    render();
-    return;
-  }
   if (e.target.dataset.bookFilter) {
     const v = e.target.value;
     document.querySelectorAll(`${e.target.dataset.bookFilter} [data-book]`).forEach((el) => { el.hidden = v && el.dataset.book !== v; });

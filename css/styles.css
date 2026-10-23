@@ -281,6 +281,22 @@ a.chip:hover { color: var(--accent); }
 .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
 .scope-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
 .scope-filters select { margin: 0; min-width: 0; }
+/* filtro com busca: campo de texto + lista que abre embaixo */
+.combo { position: relative; min-width: 0; }
+.combo input { width: 100%; margin: 0; }
+.combo.set input { border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.combo.set input { padding-right: 34px; }
+.combo-clear { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); border: 0; background: none; color: var(--muted); font-size: .95rem; width: 30px; height: 30px; border-radius: 8px; cursor: pointer; }
+.combo-clear:hover { background: var(--surface-2); color: var(--text); }
+.combo-list {
+  position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 4px); margin: 0; padding: 4px; list-style: none;
+  max-height: 260px; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow), 0 8px 24px rgba(0, 0, 0, .12);
+}
+.combo-list li { padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: .9rem; overflow-wrap: anywhere; }
+.combo-list li:first-child { color: var(--muted); }
+.combo-list li.hi, .combo-list li:hover { background: var(--surface-2); }
+.combo-list li.cur { font-weight: 700; color: var(--accent); }
+.combo-list li.none { color: var(--muted); cursor: default; }
 .scope-filters .btn { grid-column: 1 / -1; justify-self: start; }
 @media (min-width: 640px) { .scope-filters { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .filters select, .filters input[type="search"] { flex: 1 1 140px; margin: 0; }
