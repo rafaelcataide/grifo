@@ -1,4 +1,5 @@
 // Artes para Instagram desenhadas em <canvas>, no próprio aparelho (nada é enviado a servidor).
+import { LOCALE, tr } from './i18n.js';
 import { ymd, parseYmd, addDays, levelInfo } from './game.js';
 
 export const SIZES = { story: [1080, 1920], feed: [1080, 1350] };
@@ -47,6 +48,7 @@ function wrap(ctx, text, maxW) {
 
 // Maior fonte em que o texto cabe na caixa; se nem a mínima couber, corta com reticências
 function fitText(ctx, text, { maxW, maxH, max = 88, min = 30, font, lh = 1.32 }) {
+  text = tr(String(text));
   for (let s = max; s >= min; s -= 2) {
     ctx.font = font(s);
     const lines = wrap(ctx, text, maxW);
@@ -612,7 +614,7 @@ function slideFrame(ctx, w, h, i, n, d, dark = false) {
 function bigNumber(ctx, value, x, y, size, color = '#2d2f36') {
   ctx.fillStyle = color;
   ctx.font = `800 ${size}px ${SANS}`;
-  ctx.fillText(Number(value).toLocaleString('pt-BR'), x, y);
+  ctx.fillText(Number(value).toLocaleString(LOCALE), x, y);
 }
 
 function centerLines(ctx, text, y, { maxW, maxH, max, min, font, color, lh }) {
@@ -656,7 +658,7 @@ export async function wrappedSlides(state, { period = 'month', name = '', handle
       centerLines(ctx, 'páginas', 900, { maxW: w - 200, maxH: 120, max: 80, min: 60, font: (s) => `600 ${s}px ${SERIF}`, color: ink });
       const facts = [
         `≈ ${Math.max(1, Math.round(d.pages / 96))}× O Pequeno Príncipe inteiro`,
-        `uma pilha de papel de ${(d.pages * 0.005).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} cm`,
+        `uma pilha de papel de ${(d.pages * 0.005).toLocaleString(LOCALE, { maximumFractionDigits: 1 })} cm`,
       ];
       if (d.speed) facts.push(`≈ ${Math.round(d.pages / d.speed / 60)} horas de leitura`);
       let y = 1150;
@@ -767,7 +769,7 @@ export async function wrappedSlides(state, { period = 'month', name = '', handle
         emoji(ctx, ic, x + tw / 2, y + 90, 80);
         ctx.fillStyle = ink;
         ctx.font = `800 110px ${SANS}`;
-        ctx.fillText(typeof v === 'number' ? v.toLocaleString('pt-BR') : v, x + tw / 2, y + 255);
+        ctx.fillText(typeof v === 'number' ? v.toLocaleString(LOCALE) : v, x + tw / 2, y + 255);
         ctx.fillStyle = soft;
         ctx.font = `400 30px ${SANS}`;
         ctx.fillText(label, x + tw / 2, y + 320);
@@ -811,7 +813,7 @@ export async function wrappedSlides(state, { period = 'month', name = '', handle
         ctx.textAlign = 'left';
         ctx.fillStyle = ink;
         ctx.font = `800 84px ${SANS}`;
-        const num = v.toLocaleString('pt-BR');
+        const num = v.toLocaleString(LOCALE);
         ctx.fillText(num, 330, y + 15);
         const nw = ctx.measureText(num).width;
         ctx.fillStyle = soft;
@@ -845,7 +847,7 @@ export async function wrappedSlides(state, { period = 'month', name = '', handle
     centerLines(ctx, `Nível ${lv.level} · ${lv.title}`, 990, { maxW: w - 160, maxH: 260, max: 90, min: 50, font: (s) => `600 ${s}px ${SERIF}`, color: '#ffffff', lh: 1.12 });
     ctx.fillStyle = '#f0b590';
     ctx.font = `800 64px ${SANS}`;
-    ctx.fillText(`${xp.toLocaleString('pt-BR')} XP`, w / 2, 1280);
+    ctx.fillText(`${xp.toLocaleString(LOCALE)} XP`, w / 2, 1280);
     ctx.fillStyle = 'rgba(255,255,255,.7)';
     ctx.font = `italic 400 48px ${SERIF}`;
     ctx.fillText('Que venha o próximo capítulo.', w / 2, 1500);

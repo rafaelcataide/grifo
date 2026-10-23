@@ -146,7 +146,9 @@ export function buildParams(task, input) {
     betas: [FALLBACK_BETA],
     fallbacks: 'default',
     output_config: { effort: t.effort, format: { type: 'json_schema', schema: t.schema } },
-    system: t.system,
+    system: input?.lang === 'en' ? `${t.system}
+
+The user's app is in English: write every text field of your answer in English (keep book quotes in their original language).` : t.system,
     messages: [{ role: 'user', content: t.build(input) }],
   };
 }

@@ -1,3 +1,4 @@
+import { LOCALE, tr, lang, setLang, startTranslating } from './i18n.js';
 import { db, uid, STORES } from './db.js';
 import { LINK_RE, esc, norm, nf, linksOf, plainText } from './util.js';
 import * as G from './game.js';
@@ -50,7 +51,7 @@ const view = $('#view');
 const modal = $('#modal');
 const modalBody = $('#modal-body');
 
-const fmtDate = (s) => (s ? G.parseYmd(s).toLocaleDateString('pt-BR') : '');
+const fmtDate = (s) => (s ? G.parseYmd(s).toLocaleDateString(LOCALE) : '');
 const bookById = (id) => state.books.find((b) => b.id === id);
 const noteById = (id) => state.notes.find((n) => n.id === id);
 const stars = (n) => (n > 0 ? `<span class="stars">${'★'.repeat(n)}<span class="off">${'★'.repeat(5 - n)}</span></span>` : '');
@@ -243,7 +244,7 @@ function noteCard(n, showBook = true) {
     <div class="note-text">${renderText(n.text)}</div>
     <div class="row between wrap gap-s">
       <div class="small muted">
-        ${showBook && b ? `<a href="#/livro/${b.id}">${esc(b.title)}</a> · ` : ''}${n.page ? `pág. ${n.page} · ` : ''}${new Date(n.createdAt).toLocaleDateString('pt-BR')}
+        ${showBook && b ? `<a href="#/livro/${b.id}">${esc(b.title)}</a> · ` : ''}${n.page ? `pág. ${n.page} · ` : ''}${new Date(n.createdAt).toLocaleDateString(LOCALE)}
         ${n.source === 'ocr' ? '<span class="chip">📷 OCR</span>' : ''}
         ${cards ? `<span class="chip">🧠 ${cards}</span>` : ''}
         ${(n.tags || []).map((t) => `<a class="chip tag" href="${conceptHref(t)}">#${esc(t)}</a>`).join('')}
@@ -866,6 +867,9 @@ function settingsView() {
     <span class="grow"><b>${u ? esc(Cloud.currentProfile()?.display_name || u.email) : Cloud.enabled() ? 'Entrar com Google' : 'Modo pessoal'}</b>
     <span class="small muted" style="display:block">${u ? `☁️ Sincronizado ${ago(Cloud.syncStatus().lastSyncAt)}` : Cloud.enabled() ? 'Salve na nuvem e use em vários aparelhos' : 'Dados só neste aparelho · todos os recursos liberados'}</span></span>
     <span class="muted">›</span></a>
+  <section class="card form"><h3>🌐 Idioma · Language</h3>
+    <div class="radio-pills">${[['pt', '🇧🇷 Português'], ['en', '🇺🇸 English']].map(([k, l]) => `<input type="radio" name="lang" id="lg-${k}" value="${k}" ${lang === k ? 'checked' : ''} data-lang-pick><label for="lg-${k}" data-no-tr>${l}</label>`).join('')}</div>
+  </section>
   <section class="card form"><h3>Aparência</h3>
     <div class="radio-pills">${Object.entries(THEME_LABEL).map(([k, v]) => `<input type="radio" name="theme" id="th-${k}" value="${k}" ${theme === k ? 'checked' : ''} data-theme-pick><label for="th-${k}">${THEME_ICON[k]} ${v.split(' (')[0]}</label>`).join('')}</div>
     <p class="hint">O botão ${THEME_ICON[theme]} no topo alterna entre automático, claro e escuro.</p>
@@ -1247,7 +1251,7 @@ async function aiRun(task, input) {
   if (st === 'plus') { location.hash = '#/plus'; throw new Error(''); }
   if (st === 'key') { location.hash = '#/ajustes'; throw new Error('Cadastre sua chave da API da Anthropic em Ajustes → IA.'); }
   try {
-    return await AI.run(task, input, state.settings);
+    return await AI.run(task, { ...input, lang }, state.settings);
   } catch (e) {
     if (e.code === 'plus') { location.hash = '#/plus'; throw new Error(''); }
     throw e;
@@ -2220,7 +2224,7 @@ const shareActions = {
         return Share.shelfCard({
           books, style: v.style, format: v.format, handle: state.settings.handle,
           heading: v.period === 'year' ? `Minha estante ${year}` : 'Minha estante',
-          subheading: `${books.length} ${books.length === 1 ? 'livro' : 'livros'} · ${pages.toLocaleString('pt-BR')} páginas${pLabel}`,
+          subheading: `${books.length} ${books.length === 1 ? 'livro' : 'livros'} · ${pages.toLocaleString(LOCALE)} páginas${pLabel}`,
         });
       },
     });
@@ -2667,6 +2671,7 @@ document.addEventListener('change', async (e) => {
     document.querySelectorAll(`${e.target.dataset.bookFilter} [data-book]`).forEach((el) => { el.hidden = v && el.dataset.book !== v; });
   }
   if (e.target.matches('[data-theme-pick]')) applyTheme(e.target.value);
+  if (e.target.matches('[data-lang-pick]')) { setLang(e.target.value); location.reload(); }
   if (e.target.matches('[data-weekly]')) {
     try {
       await Cloud.setWeeklyEmail(e.target.checked);
@@ -2750,6 +2755,7 @@ window.addEventListener('hashchange', () => {
 });
 
 applyTheme(currentTheme());
+startTranslating();
 await Cloud.init().catch(() => {});
 await load();
 render();

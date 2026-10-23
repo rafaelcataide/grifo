@@ -1,4 +1,5 @@
 // Gráficos leves em SVG/HTML, sem bibliotecas externas.
+import { LOCALE, tr } from './i18n.js';
 import { ymd, parseYmd } from './game.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -50,10 +51,10 @@ export function heatmap(dayMap, weeks = 18) {
       const v = dayMap.get(key) || 0;
       const lvl = v === 0 ? 0 : v < 10 ? 1 : v < 25 ? 2 : v < 50 ? 3 : 4;
       const x = left + w * (cs + g), y = top + d * (cs + g);
-      cells += `<rect x="${x}" y="${y}" width="${cs}" height="${cs}" rx="3" class="hm h${lvl}${key === todayStr ? ' today' : ''}"><title>${dt.toLocaleDateString('pt-BR')}: ${v} pág.</title></rect>`;
+      cells += `<rect x="${x}" y="${y}" width="${cs}" height="${cs}" rx="3" class="hm h${lvl}${key === todayStr ? ' today' : ''}"><title>${dt.toLocaleDateString(LOCALE)}: ${v} pág.</title></rect>`;
       if (d === 0 && dt.getMonth() !== lastMonth) {
         lastMonth = dt.getMonth();
-        labels += `<text x="${x}" y="10" class="bar-lbl">${dt.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')}</text>`;
+        labels += `<text x="${x}" y="10" class="bar-lbl">${dt.toLocaleDateString(LOCALE, { month: 'short' }).replace('.', '')}</text>`;
       }
     }
   }
