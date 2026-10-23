@@ -98,7 +98,50 @@ supabase functions deploy stripe-webhook --no-verify-jwt
 
 Quando alguém paga, o plano vira `plus` em instantes; se a assinatura for cancelada, volta para `free`.
 
-## 6. Proteções extras (recomendado antes de divulgar)
+## 6. Notificações, e-mail semanal e exclusão de conta
+
+**Funções** (já publicadas no projeto do Grifo; num projeto novo, publique-as):
+
+```bash
+npx supabase functions deploy delete-account --use-api
+```
+
+```bash
+npx supabase functions deploy push-daily --use-api --no-verify-jwt
+```
+
+```bash
+npx supabase functions deploy weekly-email --use-api --no-verify-jwt
+```
+
+**Notificações (Web Push).** Gere um par de chaves com `npx web-push generate-vapid-keys`, coloque a pública em `config.js` → `vapidPublicKey` e a privada nos segredos:
+
+```bash
+npx supabase secrets set VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... VAPID_SUBJECT=https://seu-site/ CRON_SECRET=um-texto-aleatorio-longo
+```
+
+Depois, no SQL Editor, agende a função a cada 15 minutos (troque o projeto e o segredo):
+
+```sql
+select cron.schedule('grifo-push-daily', '*/15 * * * *', $$
+  select net.http_post(
+    url := 'https://SEU-PROJETO.supabase.co/functions/v1/push-daily',
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', 'O-MESMO-CRON_SECRET'),
+    body := '{}'::jsonb, timeout_milliseconds := 55000);
+$$);
+```
+
+**Resumo semanal por e-mail.** Crie uma conta no https://resend.com, verifique um domínio seu (ex.: `grifo.app`) e configure:
+
+```bash
+npx supabase secrets set RESEND_API_KEY=re_... EMAIL_FROM="Grifo <resumo@seu-dominio>"
+```
+
+E agende para domingo 9h (horário de Brasília = 12h UTC) do mesmo jeito, com o nome `grifo-weekly-email`, a URL `.../functions/v1/weekly-email` e o horário `0 12 * * 0`. Sem `RESEND_API_KEY`, a função não envia nada.
+
+**Ver sugestões e erros dos usuários:** no Supabase, **Table Editor → feedback** e **client_errors**.
+
+## 7. Proteções extras (recomendado antes de divulgar)
 
 **CAPTCHA no login por e-mail** (barra contas criadas por robôs; o login com Google não precisa):
 

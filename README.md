@@ -18,7 +18,7 @@ App web instalável (PWA) para Android, iPhone e desktop. Funciona offline e, se
 
 **Notas**
 - Escrita manual: citação ou reflexão, com página e tags
-- **OCR de grifos**: fotografe a página e o app detecta o marca-texto (amarelo, verde, rosa, azul, laranja), apaga o resto e lê só os trechos grifados (Tesseract.js, em português)
+- **OCR de grifos**: fotografe a página e o app detecta o marca-texto (amarelo, verde, rosa, azul, laranja), ignora bordas coloridas e ilustrações, e lê só os trechos grifados (Tesseract.js, em português); **✨ Corrigir com IA** arruma erros de leitura
 - Modo "Página inteira" para livros sem grifo
 - **Grifos do Kindle**: importe o arquivo *My Clippings.txt*
 - Busca, filtro por livro, compartilhar citação
@@ -38,17 +38,22 @@ App web instalável (PWA) para Android, iPhone e desktop. Funciona offline e, se
 - ✨ **Pergunte à sua biblioteca**: respostas tiradas só das suas notas, com as fontes citadas
 - ✨ **Cards automáticos** a partir de grifos (de uma nota ou do livro inteiro)
 - ✨ **Conexões sugeridas** entre ideias de livros diferentes
+- ✨ **O que ler a seguir**: 5 recomendações a partir do que você leu, avaliou e grifou
+- ✨ **Corrigir com IA** o texto lido por OCR
 - No modo pessoal usa a sua chave da Anthropic; com servidor, vem pelo plano Plus
 
 **Conta, nuvem e social** (com o servidor configurado)
 - Login com **Google** ou código por e-mail; sincronização automática entre aparelhos
-- **Clubes de leitura** com código de convite, ranking semanal e meta coletiva do mês
+- **Clubes de leitura** com código de convite, ranking semanal, meta coletiva do mês, **livro lido em conjunto** e **grifos compartilhados** entre os membros
 - **Perfil público** com link compartilhável (sem notas nem grifos)
 - **Grifo Plus**: IA, estilos extras de arte e artes sem marca; pagamento via Stripe
 
 **Hábito**
 - Tela de **boas-vindas** em 3 passos (metas → primeiro livro → primeiro grifo)
-- **Lembretes** diários (notificação no app instalado e evento no calendário do celular) e contador no ícone do app
+- **🖍️ Grifos do dia**: 3 trechos de livros diferentes voltam todo dia (favoritos aparecem mais)
+- **Lembretes** diários: com conta, notificação enviada pelo servidor (Web Push) mesmo com o app fechado; sem conta, aviso do app instalado; e evento no calendário do celular
+- **Resumo semanal por e-mail** (opcional, aos domingos)
+- Contador de cards no ícone do app e atalhos ao segurar o ícone (Escanear livro, Capturar grifo, Revisar)
 
 **Análises**
 - Livros e páginas lidas, páginas/dia, páginas/hora, dias por livro
@@ -72,8 +77,13 @@ App web instalável (PWA) para Android, iPhone e desktop. Funciona offline e, se
 - 📖 **Lendo agora / Terminei!** com capa, progresso e sequência
 - Assinatura opcional (@seuperfil) no rodapé; “Compartilhar” abre Instagram/WhatsApp no celular
 
-**Aparência**
+**Aparência e idiomas**
 - Paleta suave e botão no topo para alternar entre automático, claro e escuro
+- **Português e inglês** (automático pelo navegador ou em Ajustes → Idioma)
+
+**Privacidade e suporte**
+- Política de privacidade e termos de uso; **excluir conta** e **baixar meus dados** (LGPD)
+- **Enviar sugestão** de dentro do app e registro automático de erros
 
 ## Como rodar no computador
 
@@ -87,15 +97,24 @@ Abra http://localhost:5180.
 
 ## Como instalar no Android
 
-O PWA precisa de **HTTPS** para ser instalado. O jeito mais simples é publicar a pasta de graça:
+O app está publicado em **https://rafaelcataide.github.io/grifo/** (GitHub Pages; cada envio para a branch `main` atualiza o site em cerca de um minuto).
 
-1. **GitHub Pages**: crie um repositório, envie os arquivos e ative *Settings → Pages* (branch `main`, pasta raiz). Ou **Netlify Drop**: arraste a pasta em https://app.netlify.com/drop.
-2. No celular, abra o endereço no Chrome → menu ⋮ → **Instalar app** (ou "Adicionar à tela inicial").
-3. Pronto: abre em tela cheia, com ícone próprio, e funciona offline.
+1. No celular, abra o endereço no Chrome → menu ⋮ → **Instalar app** (ou "Adicionar à tela inicial").
+2. Pronto: abre em tela cheia, com ícone próprio, e funciona offline.
+
+Para publicar na **Play Store**, veja [PLAY-STORE.md](PLAY-STORE.md).
 
 Para testar rápido na rede de casa (sem instalar): rode `npm start` e abra no celular o endereço "na rede local" que aparece no terminal. Tudo funciona, menos a instalação e o modo offline.
 
 > Para gerar um APK de verdade depois, dá para empacotar este mesmo PWA com o [PWABuilder](https://www.pwabuilder.com) (Trusted Web Activity), sem reescrever nada.
+
+## Testes
+
+```bash
+npm test
+```
+
+Testes de XP, níveis, sequência, medalhas, repetição espaçada, importação, ISBN, OCR e IA, e compilação de todos os arquivos. Rodam também no GitHub Actions a cada envio.
 
 ## Backup
 
@@ -107,6 +126,8 @@ Com conta, tudo fica salvo na nuvem automaticamente. No modo pessoal os dados fi
 index.html            casca do app
 css/styles.css        visual (tema claro/escuro automático)
 js/app.js             telas, formulários e rotas
+js/util.js            utilidades de texto ([[ligações]], escape, números)
+js/i18n.js            idiomas (js/i18n-en.js: dicionário em inglês)
 js/db.js              IndexedDB
 js/game.js            estatísticas, XP, níveis, medalhas e desafios
 js/ocr.js             detecção de marca-texto + Tesseract
@@ -119,9 +140,11 @@ js/importers.js       Kindle, Goodreads, Skoob/CSV
 js/cloud.js           login, sincronização, perfil e clubes (Supabase)
 js/ai.js              IA: servidor ou chave pessoal
 config.js             endereço do Supabase e link do Plus
-supabase/             banco (schema.sql), funções "ai" e "stripe-webhook" e o passo a passo
+supabase/             banco (schema.sql + migrations/), funções (ai, push-daily, weekly-email,
+                      delete-account, stripe-webhook) e o passo a passo (LEIA-ME.md)
+tests/                testes automáticos (node --test)
 sw.js                 cache offline
 manifest.webmanifest  instalação como app
 server.js             servidor local sem dependências
-tools/gerar-icones.js gera icons/icon-192.png e icon-512.png
+tools/gerar-icones.js gera os ícones e a imagem de prévia de link (icons/og.png)
 ```
