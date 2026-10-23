@@ -252,6 +252,45 @@ export async function clubMembers(clubId) {
   return profiles || [];
 }
 
+// ---------------- conta: exclusão, erros e sugestões ----------------
+export async function deleteAccount() {
+  const sb = await client();
+  const { error } = await sb.functions.invoke('delete-account', { body: { confirm: 'EXCLUIR' } });
+  if (error) {
+    let body = null;
+    try { body = await error.context?.json(); } catch { /* sem corpo */ }
+    throw new Error(body?.message || 'Não foi possível excluir a conta agora.');
+  }
+  await sb.auth.signOut({ scope: 'local' }).catch(() => {});
+  session = null;
+  profile = null;
+  emit();
+}
+
+// Registra erros do app para você ver no painel (sem dados de leitura; no máx. 5 por sessão)
+let errorsSent = 0;
+const seenErrors = new Set();
+export async function reportError(message, stack, version) {
+  if (!enabled() || errorsSent >= 5) return;
+  const key = `${message}|${(stack || '').slice(0, 120)}`;
+  if (seenErrors.has(key)) return;
+  seenErrors.add(key);
+  errorsSent++;
+  try {
+    const sb = await client();
+    await sb.from('client_errors').insert({
+      message: String(message).slice(0, 500), stack: String(stack || '').slice(0, 4000),
+      url: location.hash.slice(0, 300), user_agent: navigator.userAgent.slice(0, 300), version,
+    });
+  } catch { /* sem rede: ignora */ }
+}
+
+export async function sendFeedback(kind, message, version) {
+  const sb = await client();
+  const { error } = await sb.from('feedback').insert({ kind, message, version });
+  if (error) throw error;
+}
+
 // ---------------- IA pelo servidor ----------------
 export async function invokeAI(task, input) {
   const sb = await client();

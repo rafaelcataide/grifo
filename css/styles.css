@@ -455,6 +455,11 @@ body.gated { padding-bottom: 24px; }
 
 .captcha { min-height: 65px; display: flex; justify-content: center; }
 
+.legal h3 { margin-top: 18px; }
+.legal ul { padding-left: 20px; }
+.legal li { margin: 6px 0; }
+.legal p, .legal li { line-height: 1.55; }
+
 /* conta, login e social */
 .login { max-width: 420px; margin: 20px auto; text-align: center; display: grid; gap: 12px; }
 .login h2 { margin: 0; }

@@ -11,6 +11,7 @@ import * as Cloud from './cloud.js';
 import * as AI from './ai.js';
 import { CONFIG } from '../config.js';
 
+const APP_VERSION = '2026.10.24';
 const DEFAULT_SETTINGS = { name: '', yearGoal: 12, dailyGoal: 20, dailyCards: 20, googleKey: '', handle: '' };
 const STATUS = { reading: 'Lendo', want: 'Quero ler', finished: 'Lido', abandoned: 'Abandonado' };
 const PURPOSE = {
@@ -860,6 +861,12 @@ function settingsView() {
     <li><b>Cards:</b> no botão 🧠 de uma nota, crie pergunta e resposta ou selecione palavras para virar lacuna.</li>
     <li><b>OCR:</b> fotografe a página de frente, com boa luz. Marca-texto amarelo, verde, rosa, azul ou laranja são detectados.</li>
   </ul></section>
+  <section class="card"><h3>💬 Fale com a gente</h3>
+    <p class="small muted">Encontrou um problema ou tem uma ideia? Sua mensagem chega direto para quem faz o Grifo.</p>
+    <div class="quick" style="margin:0"><button class="btn" data-action="feedback">✉️ Enviar sugestão</button>
+      <a class="btn ghost" href="#/privacidade">Privacidade</a><a class="btn ghost" href="#/termos">Termos</a></div>
+    <p class="hint">Versão ${APP_VERSION}</p>
+  </section>
   <button class="btn danger ghost block" data-action="wipe">Apagar todos os dados</button>`;
 }
 
@@ -935,6 +942,7 @@ function accountView() {
         <button class="btn block" id="email-btn" style="margin-top:0">Receber código por e-mail</button>
       </form>
       <p class="hint">É grátis. Seus livros e notas ficam na sua conta, em qualquer aparelho.</p>
+      <p class="hint">Ao entrar, você concorda com os <a href="#/termos">Termos de uso</a> e a <a href="#/privacidade">Política de privacidade</a>.</p>
     </section>`;
   }
   const p = Cloud.currentProfile() || {};
@@ -959,7 +967,13 @@ function accountView() {
       ${p.handle ? `<a class="btn" href="#/u/${esc(p.handle)}">Ver perfil</a><button type="button" class="btn" data-action="copyProfile">🔗 Copiar link</button>` : ''}</div>
   </form>
   ${plan !== 'plus' ? '<a class="card wrapped-cta" href="#/plus"><span class="big-emoji">⭐</span><span class="grow"><b>Conheça o Grifo Plus</b><span class="small muted">IA na sua biblioteca, estilos extras e artes sem marca</span></span></a>' : ''}
-  <button class="btn ghost block" data-action="logout">Sair da conta</button>`;
+  <section class="card"><h3>🔒 Seus dados</h3>
+    <p class="small muted">Você pode baixar uma cópia de tudo ou apagar sua conta. Ao excluir, livros, notas, cards, perfil e participação em clubes são apagados para sempre (clubes que você criou também).</p>
+    <div class="quick" style="margin:0"><button class="btn" data-action="export">⬇️ Baixar meus dados</button>
+      <a class="btn ghost" href="#/privacidade">Política de privacidade</a></div>
+  </section>
+  <button class="btn ghost block" data-action="logout">Sair da conta</button>
+  <button class="btn danger ghost block" data-action="deleteAccount" style="margin-top:8px">Excluir minha conta</button>`;
 }
 accountView.mount = () => {
   const ef = $('#email-form');
@@ -1221,6 +1235,46 @@ const cloudActions = {
     render();
   },
   syncNow: () => runSync({ silent: false }),
+  async deleteAccount() {
+    const typed = prompt('Isso apaga sua conta e TODOS os seus dados para sempre, inclusive na nuvem. Para confirmar, digite EXCLUIR:');
+    if (typed?.trim().toUpperCase() !== 'EXCLUIR') return;
+    try {
+      await Cloud.deleteAccount();
+      await db.wipeLocal();
+      await load();
+      onbStep = 1;
+      location.hash = '#/';
+      render();
+      toast('Sua conta e seus dados foram excluídos.');
+    } catch (e) {
+      toast(esc(e.message), 'err');
+    }
+  },
+  feedback() {
+    if (Cloud.enabled() && !Cloud.user()) { location.hash = '#/conta'; return; }
+    openModal(`<form class="form" id="fb-form"><h3>✉️ Enviar sugestão</h3>
+      <div class="radio-pills">${[['sugestao', '💡 Ideia'], ['problema', '🐞 Problema'], ['elogio', '💜 Elogio']].map(([k, l], i) => `<input type="radio" name="kind" id="fb-${k}" value="${k}" ${i ? '' : 'checked'}><label for="fb-${k}">${l}</label>`).join('')}</div>
+      <textarea name="message" rows="5" required minlength="3" maxlength="4000" placeholder="Conte o que aconteceu ou o que você gostaria de ver no Grifo…"></textarea>
+      <div class="actions"><button type="button" class="btn ghost" data-action="close">Cancelar</button><button class="btn primary">Enviar</button></div>
+    </form>`, (root) => {
+      const f = $('#fb-form', root);
+      f.onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = Object.fromEntries(new FormData(f));
+        if (!Cloud.enabled()) {
+          location.href = `mailto:${CONFIG.contactEmail}?subject=${encodeURIComponent('Grifo: ' + fd.kind)}&body=${encodeURIComponent(fd.message)}`;
+          return closeModal();
+        }
+        try {
+          await Cloud.sendFeedback(fd.kind, fd.message.trim(), APP_VERSION);
+          closeModal();
+          toast('Obrigado! Sua mensagem foi enviada 💜');
+        } catch (err) {
+          toast(`Não foi possível enviar: ${esc(err.message)}`, 'err');
+        }
+      };
+    });
+  },
   async copyProfile() {
     const h = Cloud.currentProfile()?.handle;
     if (!h) return;
@@ -1322,6 +1376,65 @@ const cloudActions = {
     });
   },
 };
+
+// ---------- privacidade e termos (LGPD) ----------
+function legalBack() {
+  return Cloud.user() || !Cloud.enabled() ? '<a href="#/ajustes" class="back">← Ajustes</a>' : '<a href="#/" class="back">← Entrar</a>';
+}
+const contactLine = () => (CONFIG.contactEmail
+  ? `pelo e-mail <a href="mailto:${esc(CONFIG.contactEmail)}">${esc(CONFIG.contactEmail)}</a> ou pelo botão “Enviar sugestão” em Ajustes`
+  : 'pelo botão “Enviar sugestão” em Ajustes');
+
+function privacyView() {
+  return `${legalBack()}<article class="card legal">
+  <h2>Política de privacidade</h2>
+  <p class="small muted">Atualizada em 24/10/2026 · Grifo — leituras que ficam</p>
+  <h3>O que coletamos</h3>
+  <ul>
+    <li><b>Conta:</b> nome, e-mail e foto do seu perfil Google (ou só o e-mail, no login por código).</li>
+    <li><b>Suas leituras:</b> livros, sessões de leitura, notas, grifos, cards, revisões, metas e conquistas que você registra.</li>
+    <li><b>Fotos de páginas:</b> são lidas no próprio aparelho para extrair o texto grifado e <b>não são enviadas</b> nem guardadas.</li>
+    <li><b>Erros do app:</b> mensagem técnica, tela e navegador, para corrigirmos falhas. Não inclui suas notas.</li>
+  </ul>
+  <h3>Para que usamos</h3>
+  <ul>
+    <li>Guardar e sincronizar seus dados entre seus aparelhos.</li>
+    <li>Mostrar estatísticas, metas e conquistas para você.</li>
+    <li>Recursos opcionais: perfil público e clubes (só o que você escolher mostrar) e IA (apenas quando você pede).</li>
+  </ul>
+  <h3>Com quem compartilhamos</h3>
+  <ul>
+    <li><b>Supabase:</b> hospeda o banco de dados e o login.</li>
+    <li><b>Google:</b> login com sua conta Google.</li>
+    <li><b>Anthropic (Claude):</b> quando você usa a IA, o texto das notas envolvidas é enviado para gerar a resposta. A Anthropic não usa esses dados para treinar modelos pela API.</li>
+    <li><b>Stripe:</b> pagamentos do Grifo Plus, se você assinar.</li>
+    <li><b>Cloudflare Turnstile:</b> verificação anti-robô no login por e-mail.</li>
+    <li><b>Buscas de livros:</b> o título ou ISBN pesquisado é enviado à BrasilAPI, Google Livros e Open Library.</li>
+  </ul>
+  <p>Não vendemos seus dados e não usamos publicidade.</p>
+  <h3>O que é público</h3>
+  <p>Nada, a menos que você ative o perfil público. Nele aparecem só nome, foto, nível, metas, temas e títulos de livros. Notas e grifos nunca são publicados. Colegas de clube veem seu nome e suas páginas da semana.</p>
+  <h3>Seus direitos (LGPD)</h3>
+  <p>Você pode acessar, baixar, corrigir e apagar seus dados a qualquer momento em <b>Conta → Seus dados</b>. Ao excluir a conta, tudo é apagado definitivamente dos nossos servidores. Dúvidas: ${contactLine()}.</p>
+  </article>`;
+}
+
+function termsView() {
+  return `${legalBack()}<article class="card legal">
+  <h2>Termos de uso</h2>
+  <p class="small muted">Atualizados em 24/10/2026</p>
+  <ul>
+    <li>O Grifo organiza suas leituras pessoais. Você é responsável pelo conteúdo que registra e compartilha.</li>
+    <li>Trechos de livros são para seu estudo pessoal; ao compartilhar citações, respeite os direitos dos autores (citações curtas, com a fonte).</li>
+    <li>O plano grátis pode ter limites. O Grifo Plus é uma assinatura que você pode cancelar quando quiser; o acesso continua até o fim do período pago.</li>
+    <li>A IA pode errar: confira respostas, cards e correções antes de confiar nelas.</li>
+    <li>Podemos suspender contas usadas para abuso (spam, automação, tentativa de acesso a dados de outros).</li>
+    <li>O serviço é oferecido “como está”. Faça backups (Conta → Baixar meus dados).</li>
+    <li>Contato: ${contactLine()}.</li>
+  </ul>
+  <p><a href="#/privacidade">Leia também a Política de privacidade</a>.</p>
+  </article>`;
+}
 
 // ---------------- modais ----------------
 function datalist(id, values) {
@@ -2398,12 +2511,15 @@ const routes = {
   '': home, livros: booksView, livro: bookDetail, notas: notesView, nota: noteDetail, conceito: conceptView,
   mapa: mapView, revisar: reviewView, stats: statsView, conquistas: achievementsView, ajustes: settingsView,
   conta: accountView, u: publicProfileView, clubes: clubsView, perguntar: askView, plus: plusView,
+  privacidade: privacyView, termos: termsView,
 };
+// páginas que qualquer pessoa pode abrir sem login
+const OPEN_ROUTES = ['u', 'privacidade', 'termos'];
 const TAB_OF = { livro: 'livros', nota: 'notas', conceito: 'notas', mapa: 'notas', perguntar: 'notas', stats: 'progresso', conquistas: 'progresso', clubes: 'progresso' };
 
 function render() {
   const [, name = '', arg] = location.hash.slice(1).split('/');
-  const gated = Cloud.enabled() && !Cloud.user() && name !== 'u';
+  const gated = Cloud.enabled() && !Cloud.user() && !OPEN_ROUTES.includes(name);
   document.body.classList.toggle('gated', gated);
   let fn = gated ? accountView : routes[name] || home;
   if (fn === home && (needsOnboarding() || (onbStep >= 2 && !state.settings.onboarded))) fn = onboarding;
@@ -2453,6 +2569,8 @@ Cloud.onChange(() => {
   render();
 });
 if (Cloud.user()) runSync();
+window.addEventListener('error', (e) => { if (e.message) Cloud.reportError(e.message, e.error?.stack, APP_VERSION); });
+window.addEventListener('unhandledrejection', (e) => Cloud.reportError(String(e.reason?.message || e.reason), e.reason?.stack, APP_VERSION));
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') scheduleSync(500); });
 setInterval(() => scheduleSync(0), 5 * 60 * 1000);
 

@@ -10,4 +10,7 @@ export const CONFIG = {
   // Grifo Plus (opcional): link de pagamento do Stripe (Payment Link) e o preço exibido
   plusCheckoutUrl: '',      // ex.: 'https://buy.stripe.com/xxxx'
   plusPriceLabel: 'R$ 9,90/mês',
+
+  // Contato mostrado na política de privacidade (LGPD). Vazio = só o botão "Enviar sugestão".
+  contactEmail: '',
 };
