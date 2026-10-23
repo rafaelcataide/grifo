@@ -125,7 +125,8 @@ mark { background: color-mix(in srgb, var(--gold) 45%, transparent); color: inhe
 .gap-s { gap: 6px; }
 .grow { flex: 1; min-width: 0; }
 .center { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; }
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.form input, .form select { min-width: 0; }
 .grid2 > .card { margin-bottom: 0; }
 .grid2 + * { margin-top: 12px; }
 .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
@@ -208,6 +209,10 @@ a.chip:hover { color: var(--accent); }
 }
 .cover.lg { width: 96px; height: 140px; font-size: 1.6rem; }
 .cover.sm { width: 34px; height: 50px; font-size: .9rem; }
+.cover-pick { display: flex; gap: 12px; align-items: flex-start; }
+.cover-pick .cover { width: 60px; height: 88px; }
+.cover-pick-label { font-size: .82rem; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+.cover-pick input[type=url] { margin-top: 8px; width: 100%; }
 .detail-head { display: flex; gap: 16px; align-items: flex-start; margin: 8px 0 14px; }
 .detail-head h2 { margin: 0 0 4px; }
 .back { display: inline-block; margin: 4px 0; font-weight: 600; }

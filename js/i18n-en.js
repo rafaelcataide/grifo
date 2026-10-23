@@ -54,6 +54,7 @@ export const EN = {
   // ---------- livros ----------
   'Meus livros': 'My books', '➕ Novo': '➕ New', '✨ O que ler': '✨ What to read',
   'Sugestões de leitura com IA': 'AI reading suggestions', 'Importar do Kindle, Goodreads ou Skoob': 'Import from Kindle, Goodreads or Skoob',
+  'Capa': 'Cover', '✕ Remover': '✕ Remove', '📷 Enviar foto da capa': '📷 Upload cover photo', 'ou cole o link de uma imagem': 'or paste an image link', 'Não consegui abrir essa imagem.': "Couldn't open that image.",
   '📸 Minha estante': '📸 My shelf', '📸 Estante': '📸 Shelf', 'Arte da sua estante para o Instagram': 'Art of your shelf for Instagram', 'Buscar por título, autor, tema ou subtema…': 'Search by title, author, theme or subtheme…',
   'Lendo': 'Reading', 'Quero ler': 'Want to read', 'Lido': 'Read', 'Abandonado': 'Abandoned',
   'Todas as finalidades': 'All purposes', 'Hobby': 'Hobby', 'Profissional': 'Professional', 'Acadêmico': 'Academic',

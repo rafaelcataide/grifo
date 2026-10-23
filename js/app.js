@@ -1656,11 +1656,40 @@ function bookForm(existing, opts = {}) {
       <label>Término <input name="endDate" type="date" value="${b.endDate || ''}"></label>
     </div>
     <label>Avaliação ${starInput(b.rating)}</label>
-    <label>URL da capa <input name="cover" type="url" value="${esc(b.cover)}"></label>
+    <div class="cover-pick">
+      <span id="cover-prev">${cover({ title: '?', ...b }, 'sm')}</span>
+      <div class="grow">
+        <div class="cover-pick-label">Capa</div>
+        <div class="row gap-s wrap">
+          <button type="button" class="btn small" id="cover-upload">📷 Enviar foto da capa</button>
+          <button type="button" class="btn small ghost" id="cover-clear"${b.cover ? '' : ' hidden'}>✕ Remover</button>
+        </div>
+        <input type="file" id="cover-file" accept="image/*" hidden>
+        <input name="cover" type="hidden" value="${esc(b.cover || '')}">
+        <input id="cover-url" type="url" placeholder="ou cole o link de uma imagem" value="${b.cover?.startsWith('data:') ? '' : esc(b.cover || '')}">
+      </div>
+    </div>
     <div class="actions"><button type="button" class="btn ghost" data-action="close">Cancelar</button><button class="btn primary">Salvar</button></div>
   </form>`, (root) => {
     const form = $('#book-form', root);
     const results = $('#lookup-results', root);
+    // Capa: da busca, de um link colado ou de uma foto (reduzida aqui no aparelho)
+    const setCover = (src) => {
+      form.cover.value = src;
+      if (!src.startsWith('data:') && $('#cover-url', root).value.trim() !== src) $('#cover-url', root).value = src;
+      if (src.startsWith('data:')) $('#cover-url', root).value = '';
+      $('#cover-prev', root).innerHTML = cover({ ...b, title: form.title.value || b.title || '?', cover: src }, 'sm');
+      $('#cover-clear', root).hidden = !src;
+    };
+    $('#cover-url', root).oninput = (e) => setCover(e.target.value.trim());
+    $('#cover-clear', root).onclick = () => setCover('');
+    $('#cover-upload', root).onclick = () => $('#cover-file', root).click();
+    $('#cover-file', root).onchange = async (e) => {
+      const f = e.target.files[0];
+      e.target.value = '';
+      if (!f) return;
+      try { setCover(await coverFromFile(f)); } catch { toast('Não consegui abrir essa imagem.'); }
+    };
     form.genre.oninput = () => { $('#subthemes-wrap', root).innerHTML = datalist('subthemes', subthemeOptions(form.genre.value)); };
     let found = [];
     const doLookup = async () => {
@@ -1731,7 +1760,8 @@ function bookForm(existing, opts = {}) {
       const item = e.target.closest('.lookup-item');
       if (!item) return;
       const r = found[item.dataset.i];
-      for (const k of ['title', 'author', 'pages', 'isbn', 'cover']) if (r[k]) form[k].value = r[k];
+      for (const k of ['title', 'author', 'pages', 'isbn']) if (r[k]) form[k].value = r[k];
+      if (r.cover) setCover(r.cover);
       if (r.category && !form.subtheme.value) form.subtheme.value = r.category;
       results.innerHTML = '';
     };
@@ -1753,6 +1783,18 @@ function bookForm(existing, opts = {}) {
       if (!existing && !onboardingNow) location.hash = `#/livro/${book.id}`;
     };
   });
+}
+
+// Foto da capa → JPEG pequeno (até 320×480) guardado no próprio livro, para caber na sincronização
+async function coverFromFile(file) {
+  const bmp = await createImageBitmap(file);
+  const scale = Math.min(1, 320 / bmp.width, 480 / bmp.height);
+  const c = document.createElement('canvas');
+  c.width = Math.round(bmp.width * scale);
+  c.height = Math.round(bmp.height * scale);
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  bmp.close?.();
+  return c.toDataURL('image/jpeg', 0.8);
 }
 
 // Busca em várias bases, da mais forte para livros brasileiros até a mais genérica.
