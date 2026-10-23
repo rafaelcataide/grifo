@@ -2836,6 +2836,18 @@ window.addEventListener('unhandledrejection', (e) => Cloud.reportError(String(e.
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') scheduleSync(500); });
 setInterval(() => scheduleSync(0), 5 * 60 * 1000);
 
+// Atualizações: o celular costuma devolver a aba da memória sem recarregar. Ao voltar para o app,
+// procura uma versão nova; quando ela assume, recarrega sozinho (ou avisa, se houver algo aberto).
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
+  }).catch(() => {});
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloading) return;
+    const busy = $('#modal')?.open || document.activeElement?.matches?.('input, textarea');
+    if (!busy) { reloading = true; location.reload(); return; }
+    toast('Nova versão do Grifo disponível · <u>toque para atualizar</u>', '', () => location.reload());
+  });
 }
