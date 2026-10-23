@@ -86,8 +86,8 @@ async function loadProfile() {
     ({ data } = await sb.from('profiles').insert(row).select(PROFILE_COLS).maybeSingle());
     data ||= { ...row, is_public: false, stats: {} };
   }
-  const { data: plan } = await sb.rpc('my_plan');
-  profile = { ...data, plan: plan || 'free' };
+  const [{ data: plan }, { data: weekly }] = await Promise.all([sb.rpc('my_plan'), sb.rpc('my_weekly_email')]);
+  profile = { ...data, plan: plan || 'free', weekly_email: !!weekly };
   return profile;
 }
 
@@ -95,7 +95,7 @@ export async function updateProfile(patch) {
   const sb = await client();
   const { data, error } = await sb.from('profiles').update({ ...patch, updated_at: new Date().toISOString() }).eq('user_id', user().id).select(PROFILE_COLS).maybeSingle();
   if (error) throw error;
-  profile = { ...data, plan: profile?.plan || 'free' };
+  profile = { ...data, plan: profile?.plan || 'free', weekly_email: !!profile?.weekly_email };
   emit();
   return data;
 }
@@ -210,7 +210,7 @@ export async function publishStats(stats) {
   if (same) return;
   const sb = await client();
   const { data } = await sb.from('profiles').update({ stats, updated_at: new Date().toISOString() }).eq('user_id', user().id).select(PROFILE_COLS).maybeSingle();
-  if (data) profile = { ...data, plan: profile.plan };
+  if (data) profile = { ...data, plan: profile.plan, weekly_email: profile.weekly_email };
 }
 
 // ---------------- clubes ----------------
@@ -250,6 +250,13 @@ export async function clubMembers(clubId) {
   const ids = members.map((m) => m.user_id);
   const { data: profiles } = await sb.from('profiles').select('user_id,handle,display_name,avatar_url,stats').in('user_id', ids);
   return profiles || [];
+}
+
+export async function setWeeklyEmail(on) {
+  const sb = await client();
+  const { error } = await sb.rpc('set_weekly_email', { on_off: !!on });
+  if (error) throw error;
+  if (profile) profile.weekly_email = !!on;
 }
 
 // ---------------- notificações pelo servidor (Web Push) ----------------

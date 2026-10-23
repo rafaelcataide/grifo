@@ -1017,6 +1017,9 @@ function accountView() {
       ${p.handle ? `<a class="btn" href="#/u/${esc(p.handle)}">Ver perfil</a><button type="button" class="btn" data-action="copyProfile">🔗 Copiar link</button>` : ''}</div>
   </form>
   ${plan !== 'plus' ? '<a class="card wrapped-cta" href="#/plus"><span class="big-emoji">⭐</span><span class="grow"><b>Conheça o Grifo Plus</b><span class="small muted">IA na sua biblioteca, estilos extras e artes sem marca</span></span></a>' : ''}
+  <section class="card form"><h3>✉️ Resumo semanal</h3>
+    <label class="check"><input type="checkbox" data-weekly ${p.weekly_email ? 'checked' : ''}> Receber todo domingo um e-mail com minhas páginas, sequência e um grifo da semana</label>
+  </section>
   <section class="card"><h3>🔒 Seus dados</h3>
     <p class="small muted">Você pode baixar uma cópia de tudo ou apagar sua conta. Ao excluir, livros, notas, cards, perfil e participação em clubes são apagados para sempre (clubes que você criou também).</p>
     <div class="quick" style="margin:0"><button class="btn" data-action="export">⬇️ Baixar meus dados</button>
@@ -2568,6 +2571,15 @@ document.addEventListener('change', async (e) => {
     document.querySelectorAll(`${e.target.dataset.bookFilter} [data-book]`).forEach((el) => { el.hidden = v && el.dataset.book !== v; });
   }
   if (e.target.matches('[data-theme-pick]')) applyTheme(e.target.value);
+  if (e.target.matches('[data-weekly]')) {
+    try {
+      await Cloud.setWeeklyEmail(e.target.checked);
+      toast(e.target.checked ? '✉️ Você vai receber o resumo aos domingos' : 'Resumo semanal desativado');
+    } catch (err) {
+      e.target.checked = !e.target.checked;
+      toast(`Não foi possível salvar: ${esc(err.message)}`, 'err');
+    }
+  }
   if (e.target.id === 'rem-on' || e.target.id === 'rem-time') {
     await saveReminder($('#rem-on').checked, $('#rem-time').value || '20:00');
     if (e.target.id === 'rem-on') toast(e.target.checked ? '⏰ Lembrete ativado' : 'Lembrete desativado');

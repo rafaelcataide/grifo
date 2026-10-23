@@ -21,19 +21,20 @@ function chunk(type, data) {
   return Buffer.concat([len, td, crc]);
 }
 
-function png(size, pixel) {
-  const row = size * 4 + 1;
-  const raw = Buffer.alloc(row * size);
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const [r, g, b] = pixel((x + 0.5) / size, (y + 0.5) / size, 1 / size);
+function png(size, pixel, height = size) {
+  const width = size;
+  const row = width * 4 + 1;
+  const raw = Buffer.alloc(row * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const [r, g, b] = pixel((x + 0.5) / width, (y + 0.5) / height, 1 / width, 1 / height);
       const o = y * row + 1 + x * 4;
       raw[o] = r; raw[o + 1] = g; raw[o + 2] = b; raw[o + 3] = 255;
     }
   }
   const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(size, 0);
-  ihdr.writeUInt32BE(size, 4);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
   ihdr[8] = 8; ihdr[9] = 6;
   return Buffer.concat([
     Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
@@ -89,3 +90,21 @@ for (const size of [192, 512]) {
   fs.writeFileSync(path.join(out, `icon-${size}.png`), png(size, pixel));
   console.log(`icons/icon-${size}.png`);
 }
+
+// Imagem de prévia de link (WhatsApp, Instagram, X…): 1200×630, o desenho do ícone grande no centro.
+// O texto da prévia vem das tags og:title/og:description do index.html.
+const OG_W = 1200, OG_H = 630, ICON = 470;
+function ogPixel(u, v, su, sv) {
+  const acc = [0, 0, 0];
+  const n = 3;
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      const px = (u + ((i + 0.5) / n - 0.5) * su) * OG_W, py = (v + ((j + 0.5) / n - 0.5) * sv) * OG_H;
+      const c = shape(((px - (OG_W - ICON) / 2) / ICON) * 512, ((py - (OG_H - ICON) / 2) / ICON) * 512);
+      acc[0] += c[0]; acc[1] += c[1]; acc[2] += c[2];
+    }
+  }
+  return acc.map((c) => Math.round(c / (n * n)));
+}
+fs.writeFileSync(path.join(out, 'og.png'), png(OG_W, ogPixel, OG_H));
+console.log('icons/og.png');
