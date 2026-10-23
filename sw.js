@@ -1,5 +1,5 @@
 // Service worker: app funciona offline depois da primeira visita.
-const CACHE = 'grifo-v13';
+const CACHE = 'grifo-v14';
 const SHELL = [
   './', 'index.html', 'css/styles.css', 'manifest.webmanifest',
   'js/app.js', 'js/db.js', 'js/game.js', 'js/ocr.js', 'js/charts.js', 'js/graph.js', 'js/srs.js', 'js/share.js', 'js/scanner.js', 'js/importers.js', 'js/cloud.js', 'js/ai.js', 'config.js', 'supabase/functions/_shared/ai-tasks.js',
@@ -74,6 +74,8 @@ async function checkReminder(force = false) {
   const settings = (await idbReq('kv', 'readonly', (s) => s.get('settings'))) || {};
   const rem = settings.reminder || {};
   if (!force && !rem.enabled) return;
+  // com conta, o servidor já manda o aviso (Web Push): não repetir aqui
+  if (!force && (await idbReq('kv', 'readonly', (s) => s.get('pushActive')))) return;
   const today = ymd();
   if (!force && (await idbReq('kv', 'readonly', (s) => s.get('lastReminder'))) === today) return;
   const [h, m] = String(rem.time || '20:00').split(':').map(Number);
@@ -105,6 +107,15 @@ async function checkReminder(force = false) {
   });
   if (!force) await idbReq('kv', 'readwrite', (s) => s.put(today, 'lastReminder'));
 }
+
+// Aviso enviado pelo servidor (função push-daily)
+self.addEventListener('push', (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch { d = { body: e.data?.text() }; }
+  e.waitUntil(self.registration.showNotification(d.title || 'Grifo', {
+    body: d.body || '', icon: 'icons/icon-192.png', badge: 'icons/icon-192.png', tag: 'estante-lembrete', data: { url: d.url || './#/' },
+  }));
+});
 
 self.addEventListener('periodicsync', (e) => {
   if (e.tag === 'estante-lembrete') e.waitUntil(checkReminder());

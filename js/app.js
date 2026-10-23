@@ -284,6 +284,55 @@ function levelCard() {
 }
 
 // ---------------- telas ----------------
+// ---------- grifos do dia ----------
+// Todo dia, 3 trechos de livros diferentes voltam para você (como o Readwise). A escolha é fixa no dia,
+// favoritos aparecem com mais frequência, e "Ver outros" sorteia de novo.
+let dailyShift = 0;
+const dayHash = (s) => [...s].reduce((a, c) => (Math.imul(a, 31) + c.charCodeAt(0)) >>> 0, 2166136261);
+
+function dailyHighlights(count = 3) {
+  const pool = state.notes.filter((n) => {
+    const len = plainText(n.text).length;
+    return len >= 20 && len <= 700 && bookById(n.bookId);
+  });
+  const key = `${G.ymd()}#${dailyShift}`;
+  const ranked = pool
+    .map((n) => ({ n, r: (dayHash(key + n.id) / 4294967296) / (n.fav ? 2.5 : 1) }))
+    .sort((a, b) => a.r - b.r)
+    .map((x) => x.n);
+  const out = [], books = new Set();
+  for (const n of ranked) {
+    if (books.has(n.bookId) && ranked.length > count) continue;
+    out.push(n);
+    books.add(n.bookId);
+    if (out.length === count) break;
+  }
+  return out;
+}
+
+function dailyCard() {
+  const list = dailyHighlights();
+  if (!list.length) return '';
+  return `<section class="card daily">
+    <div class="row between"><h3 style="margin:0">🖍️ Grifos do dia</h3>
+      ${state.notes.length > 3 ? '<button class="btn small ghost" data-action="dailyMore">↻ Ver outros</button>' : ''}</div>
+    ${list.map((n) => {
+      const b = bookById(n.bookId);
+      return `<article class="daily-item">
+        <a class="daily-text" href="#/nota/${n.id}">“${esc(plainText(n.text))}”</a>
+        <div class="row between wrap gap-s">
+          <span class="small muted">${esc(b.title)}${b.author ? ` · ${esc(b.author)}` : ''}${n.page ? ` · p. ${n.page}` : ''}</span>
+          <span class="row gap-s">
+            <button class="icon-btn small" data-action="toggleFav" data-id="${n.id}" title="${n.fav ? 'Tirar dos favoritos' : 'Favoritar: aparece mais nos grifos do dia'}" aria-label="Favoritar">${n.fav ? '💜' : '🤍'}</button>
+            <button class="icon-btn small" data-action="postNote" data-id="${n.id}" title="Criar post" aria-label="Criar post">📸</button>
+            <button class="icon-btn small" data-action="newCard" data-id="${n.id}" title="Criar card" aria-label="Criar card">🧠</button>
+          </span>
+        </div>
+      </article>`;
+    }).join('')}
+  </section>`;
+}
+
 // ---------- boas-vindas (primeiro uso) ----------
 let onbStep = 1;
 
@@ -354,6 +403,7 @@ function home() {
     <div class="card center">${C.ring(s.pagesToday / set.dailyGoal)}<div class="small"><b>${s.pagesToday}</b> / ${set.dailyGoal} páginas hoje</div></div>
     <div class="card center">${C.ring(s.finishedThisYear / set.yearGoal)}<div class="small"><b>${s.finishedThisYear}</b> / ${set.yearGoal} livros em ${s.year}</div></div>
   </section>
+  ${dailyCard()}
   ${s.dueCards ? `<a class="card due-card" href="#/revisar"><span class="big-emoji">🧠</span>
     <div class="grow"><b>${s.dueCards} ${s.dueCards === 1 ? 'card' : 'cards'} para revisar</b><div class="small muted">Leva poucos minutos e fixa o que você leu.</div></div>
     <span class="btn small primary">Revisar</span></a>` : ''}
@@ -1227,6 +1277,7 @@ const cloudActions = {
     } catch {
       if (!confirm('Não foi possível sincronizar agora. Se sair, as alterações feitas offline neste aparelho serão perdidas. Sair mesmo assim?')) return;
     }
+    await Cloud.removePush();
     await db.wipeLocal();
     await Cloud.signOut();
     await load();
@@ -1235,10 +1286,18 @@ const cloudActions = {
     render();
   },
   syncNow: () => runSync({ silent: false }),
+  dailyMore: () => { dailyShift++; render(); },
+  async toggleFav({ id }) {
+    const n = noteById(id);
+    await persist('notes', { ...n, fav: !n.fav });
+    render();
+    scheduleSync();
+  },
   async deleteAccount() {
     const typed = prompt('Isso apaga sua conta e TODOS os seus dados para sempre, inclusive na nuvem. Para confirmar, digite EXCLUIR:');
     if (typed?.trim().toUpperCase() !== 'EXCLUIR') return;
     try {
+      await Cloud.removePush();
       await Cloud.deleteAccount();
       await db.wipeLocal();
       await load();
@@ -2120,14 +2179,39 @@ const shareActions = {
 function reminderSupport() {
   if (!('Notification' in window)) return 'Este navegador não mostra notificações. Use “Adicionar ao calendário”.';
   if (Notification.permission === 'denied') return 'As notificações estão bloqueadas para este site nas configurações do navegador.';
+  if (pushAvailable()) return 'Com sua conta, o lembrete é enviado pelo servidor e chega mesmo com o app fechado: sequência, cards para revisar ou o seu grifo do dia.';
   return 'Os avisos automáticos funcionam com o app instalado no Android (Chrome), uma vez por dia após o horário. Para garantir, adicione também ao calendário do celular.';
 }
+
+const pushAvailable = () => !!(Cloud.user() && CONFIG.vapidPublicKey && 'PushManager' in window && 'serviceWorker' in navigator);
+const vapidKey = (b64) => Uint8Array.from(atob((b64 + '='.repeat((4 - (b64.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
 
 async function saveReminder(enabled, time) {
   state.settings = { ...state.settings, reminder: { enabled, time } };
   await db.setKV('settings', state.settings);
+  if (enabled && 'Notification' in window && Notification.permission === 'default') await Notification.requestPermission();
+  const granted = 'Notification' in window && Notification.permission === 'granted';
+
+  // 1) Com conta: notificação enviada pelo servidor (confiável, mesmo com o app fechado)
+  if (pushAvailable()) {
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo';
+      if (enabled && granted) {
+        sub ||= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidKey(CONFIG.vapidPublicKey) });
+        await Cloud.savePush(sub, { tz, time, enabled: true });
+      } else if (sub) {
+        await Cloud.savePush(sub, { tz, time, enabled: false });
+      }
+      await db.setKV('pushActive', enabled && granted, { track: false }); // o service worker não repete o aviso local
+      return;
+    } catch {
+      toast('Não consegui ativar as notificações pelo servidor; usando o aviso do aparelho.', 'err');
+    }
+  }
+  // 2) Sem conta: o navegador acorda o app periodicamente (Chrome no Android, com o app instalado)
   if (!enabled) return;
-  if ('Notification' in window && Notification.permission === 'default') await Notification.requestPermission();
   try {
     const reg = await navigator.serviceWorker?.ready;
     if (reg && 'periodicSync' in reg) {

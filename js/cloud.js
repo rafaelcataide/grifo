@@ -252,6 +252,27 @@ export async function clubMembers(clubId) {
   return profiles || [];
 }
 
+// ---------------- notificações pelo servidor (Web Push) ----------------
+export async function savePush(subscription, { tz, time, enabled }) {
+  const sb = await client();
+  const j = subscription.toJSON();
+  const { error } = await sb.from('push_subscriptions')
+    .upsert({ endpoint: j.endpoint, p256dh: j.keys.p256dh, auth: j.keys.auth, tz, remind_time: time, enabled }, { onConflict: 'endpoint' });
+  if (error) throw error;
+}
+
+// Ao sair da conta, este aparelho para de receber os avisos dela
+export async function removePush() {
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration();
+    const sub = await reg?.pushManager?.getSubscription();
+    if (!sub) return;
+    const sb = await client();
+    await sb.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
+    await sub.unsubscribe();
+  } catch { /* sem rede: a inscrição expira sozinha quando falhar no envio */ }
+}
+
 // ---------------- conta: exclusão, erros e sugestões ----------------
 export async function deleteAccount() {
   const sb = await client();

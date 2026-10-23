@@ -11,6 +11,9 @@ export const CONFIG = {
   plusCheckoutUrl: '',      // ex.: 'https://buy.stripe.com/xxxx'
   plusPriceLabel: 'R$ 9,90/mês',
 
+  // Notificações pelo servidor (Web Push): chave pública VAPID. A privada fica nos segredos do Supabase.
+  vapidPublicKey: 'BAhy9Vh7RB6IzNVvEQTW1uzcwkas_v4hRst-x7A6LQOczJ6Hd5KLLlZlYD7FzocPWApuSGzgeW_WHAX8jC53pTE',
+
   // Contato mostrado na política de privacidade (LGPD). Vazio = só o botão "Enviar sugestão".
   contactEmail: '',
 };

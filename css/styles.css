@@ -374,6 +374,15 @@ body.has-timer { padding-bottom: calc(140px + env(safe-area-inset-bottom)); }
 body.has-timer #toasts { bottom: calc(150px + env(safe-area-inset-bottom)); }
 .book-actions { display: flex; gap: 6px; flex: none; }
 
+/* grifos do dia */
+.daily { display: grid; gap: 12px; background: linear-gradient(180deg, color-mix(in srgb, #ffd66b 14%, var(--surface)), var(--surface)); }
+.daily-item { display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid var(--border); }
+.daily-item:first-of-type { border-top: 0; padding-top: 0; }
+.daily-text {
+  color: var(--text); font-family: "Fraunces", Georgia, serif; font-size: 1.02rem; line-height: 1.5;
+  display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden;
+}
+
 /* boas-vindas */
 .onb { max-width: 460px; margin: 24px auto; text-align: center; display: grid; gap: 10px; }
 .onb h2 { margin: 0; font-size: 1.5rem; }
