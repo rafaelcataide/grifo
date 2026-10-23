@@ -51,9 +51,9 @@ export async function signInWithGoogle() {
   if (error) throw error;
 }
 
-export async function sendEmailCode(email) {
+export async function sendEmailCode(email, captchaToken) {
   const sb = await client();
-  const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+  const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: true, captchaToken } });
   if (error) throw error;
 }
 
@@ -72,24 +72,30 @@ export async function signOut() {
 }
 
 // ---------------- perfil e plano ----------------
+// Só estas colunas são legíveis; o plano de cada um vem da função my_plan()
+const PROFILE_COLS = 'user_id,handle,display_name,avatar_url,is_public,stats,updated_at';
+
 async function loadProfile() {
   const sb = await client();
   const u = user();
   if (!sb || !u) return null;
-  const { data } = await sb.from('profiles').select('*').eq('user_id', u.id).maybeSingle();
-  if (data) { profile = data; return data; }
-  const meta = u.user_metadata || {};
-  const row = { user_id: u.id, display_name: meta.full_name || meta.name || (u.email || '').split('@')[0], avatar_url: meta.avatar_url || meta.picture || null };
-  const { data: created } = await sb.from('profiles').insert(row).select().maybeSingle();
-  profile = created || { ...row, plan: 'free', is_public: false, stats: {} };
+  let { data } = await sb.from('profiles').select(PROFILE_COLS).eq('user_id', u.id).maybeSingle();
+  if (!data) {
+    const meta = u.user_metadata || {};
+    const row = { user_id: u.id, display_name: meta.full_name || meta.name || (u.email || '').split('@')[0], avatar_url: meta.avatar_url || meta.picture || null };
+    ({ data } = await sb.from('profiles').insert(row).select(PROFILE_COLS).maybeSingle());
+    data ||= { ...row, is_public: false, stats: {} };
+  }
+  const { data: plan } = await sb.rpc('my_plan');
+  profile = { ...data, plan: plan || 'free' };
   return profile;
 }
 
 export async function updateProfile(patch) {
   const sb = await client();
-  const { data, error } = await sb.from('profiles').update({ ...patch, updated_at: new Date().toISOString() }).eq('user_id', user().id).select().maybeSingle();
+  const { data, error } = await sb.from('profiles').update({ ...patch, updated_at: new Date().toISOString() }).eq('user_id', user().id).select(PROFILE_COLS).maybeSingle();
   if (error) throw error;
-  profile = data;
+  profile = { ...data, plan: profile?.plan || 'free' };
   emit();
   return data;
 }
@@ -203,8 +209,8 @@ export async function publishStats(stats) {
   const same = JSON.stringify(profile.stats || {}) === JSON.stringify(stats);
   if (same) return;
   const sb = await client();
-  const { data } = await sb.from('profiles').update({ stats, updated_at: new Date().toISOString() }).eq('user_id', user().id).select().maybeSingle();
-  if (data) profile = data;
+  const { data } = await sb.from('profiles').update({ stats, updated_at: new Date().toISOString() }).eq('user_id', user().id).select(PROFILE_COLS).maybeSingle();
+  if (data) profile = { ...data, plan: profile.plan };
 }
 
 // ---------------- clubes ----------------

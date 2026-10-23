@@ -930,6 +930,7 @@ function accountView() {
       <div class="divider"><span>ou</span></div>
       <form class="form" id="email-form">
         <label>E-mail <input type="email" name="email" required placeholder="voce@gmail.com" autocomplete="email"></label>
+        ${CONFIG.turnstileSiteKey ? '<div id="captcha" class="captcha"></div>' : ''}
         <div id="code-row" hidden><label>Código recebido por e-mail <input name="code" inputmode="numeric" autocomplete="one-time-code" placeholder="123456" maxlength="10"></label></div>
         <button class="btn block" id="email-btn" style="margin-top:0">Receber código por e-mail</button>
       </form>
@@ -964,13 +965,17 @@ accountView.mount = () => {
   const ef = $('#email-form');
   if (ef) {
     let sent = false;
+    const captcha = CONFIG.turnstileSiteKey ? mountCaptcha($('#captcha')) : null;
     ef.onsubmit = async (e) => {
       e.preventDefault();
       const btn = $('#email-btn');
       btn.disabled = true;
       try {
         if (!sent) {
-          await Cloud.sendEmailCode(ef.email.value.trim());
+          const token = captcha ? await captcha.token() : undefined;
+          if (captcha && !token) throw new Error('Confirme que você não é um robô.');
+          await Cloud.sendEmailCode(ef.email.value.trim(), token);
+          captcha?.reset();
           sent = true;
           $('#code-row').hidden = false;
           ef.code.focus();
@@ -1000,6 +1005,33 @@ accountView.mount = () => {
     };
   }
 };
+
+// CAPTCHA (Cloudflare Turnstile) para o cadastro por e-mail: barra criação de contas por robôs
+let turnstileScript = null;
+function mountCaptcha(el) {
+  let widgetId = null, token = null, waiting = [];
+  turnstileScript ||= new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.append(s);
+  });
+  turnstileScript.then(() => {
+    if (!el.isConnected) return;
+    widgetId = window.turnstile.render(el, {
+      sitekey: CONFIG.turnstileSiteKey,
+      language: 'pt-br',
+      theme: document.documentElement.dataset.theme === 'dark' ? 'dark' : 'auto',
+      callback: (t) => { token = t; waiting.forEach((r) => r(t)); waiting = []; },
+      'expired-callback': () => { token = null; },
+    });
+  }).catch(() => { el.textContent = 'Não foi possível carregar a verificação. Use “Continuar com Google”.'; });
+  return {
+    token: () => (token ? Promise.resolve(token) : new Promise((r) => { waiting.push(r); setTimeout(() => r(null), 15000); })),
+    reset: () => { token = null; if (widgetId !== null) window.turnstile.reset(widgetId); },
+  };
+}
 
 // ---------- perfil público ----------
 function publicProfileView(handle) {

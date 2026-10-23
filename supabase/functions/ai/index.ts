@@ -5,6 +5,8 @@ import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import { buildParams, parseResult, TASK_NAMES } from "../_shared/ai-tasks.js";
 
 const DAILY_LIMIT = Number(Deno.env.get("AI_DAILY_LIMIT") ?? "60");
+// teto somando todos os usuários: mesmo com muitas contas, o gasto diário tem limite
+const GLOBAL_DAILY_LIMIT = Number(Deno.env.get("AI_GLOBAL_DAILY_LIMIT") ?? "500");
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -26,8 +28,8 @@ Deno.serve(async (req) => {
   if (!user) return json({ error: "faça login" }, 401);
 
   if (Deno.env.get("AI_FOR_ALL") !== "true") {
-    const { data: profile } = await supabase.from("profiles").select("plan").eq("user_id", user.id).maybeSingle();
-    if (profile?.plan !== "plus") return json({ error: "plus", message: "A IA faz parte do Grifo Plus." }, 402);
+    const { data: plan } = await supabase.rpc("my_plan");
+    if (plan !== "plus") return json({ error: "plus", message: "A IA faz parte do Grifo Plus." }, 402);
   }
 
   let task: string, input: unknown;
@@ -41,6 +43,9 @@ Deno.serve(async (req) => {
   const { data: used, error: quotaError } = await supabase.rpc("ai_quota_hit");
   if (quotaError) return json({ error: "falha ao registrar uso" }, 500);
   if (used > DAILY_LIMIT) return json({ error: "limite", message: `Limite de ${DAILY_LIMIT} pedidos de IA por dia atingido.` }, 429);
+  const { data: total, error: globalError } = await supabase.rpc("ai_global_hit");
+  if (globalError) return json({ error: "falha ao registrar uso" }, 500);
+  if (total > GLOBAL_DAILY_LIMIT) return json({ error: "limite", message: "A IA atingiu o limite de uso de hoje. Tente amanhã." }, 429);
 
   try {
     const message = await anthropic.beta.messages.create(buildParams(task, input));
