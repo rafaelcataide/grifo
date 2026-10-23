@@ -57,7 +57,7 @@ export const EN = {
   'Como vai ficar': 'Preview', 'Nova versão do Grifo disponível ·': 'New Grifo version available ·', 'toque para atualizar': 'tap to update', 'Capa': 'Cover', '✕ Remover': '✕ Remove', '📷 Enviar foto da capa': '📷 Upload cover photo', 'ou cole o link de uma imagem': 'or paste an image link', 'Não consegui abrir essa imagem.': "Couldn't open that image.",
   '📸 Minha estante': '📸 My shelf', '📸 Estante': '📸 Shelf', 'Arte da sua estante para o Instagram': 'Art of your shelf for Instagram', 'Buscar por título, autor, tema ou subtema…': 'Search by title, author, theme or subtheme…',
   'Lendo': 'Reading', 'Quero ler': 'Want to read', 'Lido': 'Read', 'Abandonado': 'Abandoned',
-  'Todas as finalidades': 'All purposes', 'Hobby': 'Hobby', 'Profissional': 'Professional', 'Acadêmico': 'Academic',
+  'Todas as finalidades': 'All purposes', 'Todos os temas': 'All themes', 'Todos os autores': 'All authors', 'Todos os livros': 'All books', '✕ Limpar filtros': '✕ Clear filters', 'Nenhum livro com esses filtros.': 'No books match these filters.', 'cards no filtro': 'cards in filter', 'Nada para hoje neste filtro. Os cards voltam no momento certo.': 'Nothing due today in this filter. Cards come back at the right time.', 'Nenhum card com esses filtros.': 'No cards match these filters.', 'Hobby': 'Hobby', 'Profissional': 'Professional', 'Acadêmico': 'Academic',
   '🎈 Hobby': '🎈 Hobby', '💼 Profissional': '💼 Professional', '🎓 Acadêmico': '🎓 Academic',
   'Nenhum livro aqui ainda.': 'No books here yet.', 'Autor desconhecido': 'Unknown author',
   'Novo livro': 'New book', 'Editar livro': 'Edit book', 'Buscar título ou ISBN para preencher…': 'Search title or ISBN to fill in…',
@@ -380,6 +380,7 @@ const plural = (n, one, many) => `${n} ${Number(String(n).replace(/\D/g, '')) ==
 
 export const EN_PATTERNS = [
   // mapa de ideias
+  [/^Cards no filtro \((\d+)\)$/, 'Cards in filter ($1)'],
   [/^(\d+) na ilha$/, '$1 on the island'],
   [/^(\d+) notas?$/, (m) => `${m[1]} ${m[1] === '1' ? 'note' : 'notes'}`],
   [/^([\d.,]+) livros · ([\d.,]+) temas · ([\d.,]+) conexões$/, '$1 books · $2 themes · $3 links'],

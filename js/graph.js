@@ -24,7 +24,8 @@ const trunc = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 export function createGraph(canvas, data, { onSelect = () => {} } = {}) {
   const ctx = canvas.getContext('2d');
-  const groups = data.groups.map((g, i) => ({ ...g, i }));
+  // g.i escolhe a cor da ilha; vem pronto do app (fixo por tema) ou segue a ordem
+  const groups = data.groups.map((g, i) => ({ ...g, i: g.color >= 0 ? g.color : i }));
   const gByKey = new Map(groups.map((g) => [g.key, g]));
   const all = data.nodes.map((n) => ({ ...n, x: 0, y: 0, vx: 0, vy: 0 }));
   const byId = new Map(all.map((n) => [n.id, n]));

@@ -587,22 +587,52 @@ function conceptView(raw) {
 }
 
 // ---------- mapa mental ----------
+// ---------- filtros por finalidade, tema, autor e livro (mapa e revisão) ----------
+// Cada tela guarda os seus na sessão; as opções de um filtro se ajustam aos outros já escolhidos.
+const SCOPE_FIELDS = ['purpose', 'theme', 'author', 'book'];
+function getScope(key) {
+  try { return JSON.parse(sessionStorage.getItem(key)) || {}; } catch { return {}; }
+}
+const scopeActive = (f) => SCOPE_FIELDS.some((k) => f[k]);
+function bookInScope(b, f, skip = '') {
+  return (!f.purpose || skip === 'purpose' || (b.purpose || 'hobby') === f.purpose)
+    && (!f.theme || skip === 'theme' || norm(b.genre || '') === f.theme)
+    && (!f.author || skip === 'author' || norm(b.author || '') === f.author)
+    && (!f.book || skip === 'book' || b.id === f.book);
+}
+function scopeFilters(key) {
+  const f = getScope(key);
+  const pool = (field) => state.books.filter((b) => bookInScope(b, f, field));
+  const uniq = (pairs) => [...new Map(pairs.filter(([v]) => v).map((p) => [p[0], p])).values()].sort((a, b) => a[1].localeCompare(b[1], LOCALE));
+  const sel = (field, all, list) => `<select class="search" data-scope="${key}" data-field="${field}" aria-label="${all}"><option value="">${all}</option>${list.map(([v, l]) => `<option value="${esc(v)}" ${f[field] === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+  return `<div class="scope-filters">
+    ${sel('purpose', 'Todas as finalidades', Object.entries(PURPOSE).map(([k, p]) => [k, `${p.icon} ${p.label}`]))}
+    ${sel('theme', 'Todos os temas', uniq(pool('theme').map((b) => [norm(b.genre || ''), b.genre])))}
+    ${sel('author', 'Todos os autores', uniq(pool('author').map((b) => [norm(b.author || ''), b.author])))}
+    ${sel('book', 'Todos os livros', uniq(pool('book').map((b) => [b.id, b.title])))}
+    ${scopeActive(f) ? `<button class="btn small ghost" data-action="clearScope" data-key="${key}">✕ Limpar filtros</button>` : ''}
+  </div>`;
+}
+
 let graphApi = null;
 
 // Dados do mapa: cada tema é uma ilha (grupo) com seus livros e subtemas; as ligações das notas
 // vão do livro para a ideia citada; as próprias notas ficam guardadas para aparecer ao tocar no livro.
-function graphData({ purpose = 'all' } = {}) {
+// cor de cada tema: posição na lista de todos os temas da biblioteca, para não mudar com os filtros
+const themeIndex = (key) => [...new Set(state.books.map((b) => norm(b.genre || '')).filter(Boolean))].sort().indexOf(key);
+
+function graphData(scope = {}) {
   const nodes = new Map();
   const links = new Map();
   const groups = new Map();
   const node = (id, label, type, extra = {}) => { if (!nodes.has(id)) nodes.set(id, { id, label, type, ...extra }); return id; };
   const link = (a, b) => { if (a && b && a !== b) links.set(a < b ? `${a}|${b}` : `${b}|${a}`, { source: a, target: b }); };
-  const books = state.books.filter((b) => purpose === 'all' || (b.purpose || 'hobby') === purpose);
+  const books = state.books.filter((b) => bookInScope(b, scope));
   const ids = new Set(books.map((b) => b.id));
 
   for (const b of books) {
     const group = b.genre ? norm(b.genre) : '';
-    if (group && !groups.has(group)) groups.set(group, { key: group, label: b.genre, href: conceptHref(b.genre) });
+    if (group && !groups.has(group)) groups.set(group, { key: group, label: b.genre, href: conceptHref(b.genre), color: themeIndex(group) });
     const bid = node(`b:${b.id}`, b.title, 'book', { purpose: b.purpose || 'hobby', href: `#/livro/${b.id}`, group });
     if (b.subtheme && norm(b.subtheme) !== group) link(bid, node(`c:${norm(b.subtheme)}`, b.subtheme, 'subtheme', { href: conceptHref(b.subtheme), group }));
   }
@@ -626,16 +656,11 @@ function graphData({ purpose = 'all' } = {}) {
 const TYPE_LABEL = { book: 'Livro', theme: 'Tema', subtheme: 'Subtema', tag: 'Tag', note: 'Nota', concept: 'Ideia' };
 
 function mapView() {
-  const purpose = sessionStorage.getItem('mapPurpose') || 'all';
-  const d = graphData({ purpose });
+  const scope = getScope('mapScope');
+  const d = graphData(scope);
   return `${seg([['#/notas', '✍️ Notas', 'list'], ['#/mapa', '🕸️ Mapa', 'map'], ['#/perguntar', '✨ Perguntar', 'ask']], 'map')}
-  <div class="filters">
-    <input type="search" class="search" id="graph-search" placeholder="Encontrar no mapa…">
-    <select class="search" id="graph-purpose">
-      <option value="all">Todas as finalidades</option>
-      ${Object.entries(PURPOSE).map(([k, p]) => `<option value="${k}" ${purpose === k ? 'selected' : ''}>${p.icon} ${p.label}</option>`).join('')}
-    </select>
-  </div>
+  <input type="search" class="search" id="graph-search" placeholder="Encontrar no mapa…" style="margin-bottom:8px">
+  ${scopeFilters('mapScope')}
   ${d.nodes.length ? `<section class="card graph-wrap">
     <canvas id="graph" aria-label="Mapa de ideias: cada tema é uma ilha com seus livros"></canvas>
     <div class="graph-tools">
@@ -652,16 +677,13 @@ function mapView() {
     </div>
   </section>
   <section class="card" id="graph-panel"><p class="small muted" style="margin:0">Cada ilha é um tema. Toque num livro para ver as notas dele, ou numa ilha para ver o tema. Arraste para mover; use dois dedos (ou a roda do mouse) para zoom.</p></section>`
-    : empty('O mapa aparece quando você cadastrar livros com tema e criar notas com [[ligações]].', '<button class="btn primary" data-action="newBook">Adicionar livro</button>')}`;
+    : scopeActive(scope) ? empty('Nenhum livro com esses filtros.') : empty('O mapa aparece quando você cadastrar livros com tema e criar notas com [[ligações]].', '<button class="btn primary" data-action="newBook">Adicionar livro</button>')}`;
 }
 mapView.mount = (arg) => {
   const canvas = $('#graph');
-  const purposeSel = $('#graph-purpose');
-  purposeSel.onchange = () => { sessionStorage.setItem('mapPurpose', purposeSel.value); render(); };
   if (!canvas) return;
   const panel = $('#graph-panel');
-  const purpose = sessionStorage.getItem('mapPurpose') || 'all';
-  graphApi = createGraph(canvas, graphData({ purpose }), {
+  graphApi = createGraph(canvas, graphData(getScope('mapScope')), {
     onSelect(n, near) {
       if (!n) { panel.innerHTML = '<p class="small muted" style="margin:0">Toque num livro para ver as notas dele, ou numa ilha para ver o tema.</p>'; return; }
       const order = ['subtheme', 'book', 'concept', 'tag', 'note'];
@@ -716,6 +738,16 @@ function cardItem(c) {
     </div></div>`;
 }
 
+// cards dentro do filtro da revisão (pelo livro do card ou da nota de origem)
+function reviewCards() {
+  const f = getScope('reviewScope');
+  if (!scopeActive(f)) return [...state.cards];
+  return state.cards.filter((c) => {
+    const b = bookById(c.bookId || noteById(c.noteId)?.bookId);
+    return b && bookInScope(b, f);
+  });
+}
+
 function reviewView() {
   const s = state.stats;
   if (review && review.queue.length) {
@@ -738,18 +770,22 @@ function reviewView() {
   }
   const finished = review && review.done > 0;
   review = null;
-  const cards = [...state.cards].sort((a, b) => a.due.localeCompare(b.due));
+  const scope = getScope('reviewScope');
+  const cards = reviewCards().sort((a, b) => a.due.localeCompare(b.due));
+  const due = cards.filter((c) => c.due <= s.today).length;
+  const filtered = scopeActive(scope);
   return `<h2>Revisar</h2>
+  ${state.cards.length ? scopeFilters('reviewScope') : ''}
   ${finished ? '<section class="card center"><span class="big-emoji">🎉</span><b>Revisão concluída!</b><span class="small muted">Os cards voltam no momento certo para você não esquecer.</span></section>' : ''}
   <section class="grid3">
-    <div class="card stat"><b>${s.dueCards}</b><span>para hoje</span></div>
-    <div class="card stat"><b>${s.cards}</b><span>cards no total</span></div>
+    <div class="card stat"><b>${due}</b><span>para hoje</span></div>
+    <div class="card stat"><b>${cards.length}</b><span>${filtered ? 'cards no filtro' : 'cards no total'}</span></div>
     <div class="card stat"><b>${s.reviews ? `${Math.round(s.retention * 100)}%` : '—'}</b><span>acertos</span></div>
   </section>
-  ${s.dueCards ? `<button class="btn primary block" data-action="startReview" style="margin:0 0 12px">🧠 Revisar ${Math.min(s.dueCards, state.settings.dailyCards)} cards agora</button>`
-    : `<p class="nudge">${s.cards ? 'Tudo em dia! Volte amanhã para a próxima rodada.' : 'Crie cards a partir das suas notas (botão 🧠) para memorizar o que leu.'}</p>`}
+  ${due ? `<button class="btn primary block" data-action="startReview" style="margin:0 0 12px">🧠 Revisar ${Math.min(due, state.settings.dailyCards)} cards agora</button>`
+    : `<p class="nudge">${filtered && cards.length ? 'Nada para hoje neste filtro. Os cards voltam no momento certo.' : filtered ? 'Nenhum card com esses filtros.' : s.cards ? 'Tudo em dia! Volte amanhã para a próxima rodada.' : 'Crie cards a partir das suas notas (botão 🧠) para memorizar o que leu.'}</p>`}
   <p class="small muted">Cada card volta num intervalo que cresce conforme você acerta (repetição espaçada, como no Anki). +${G.XP.review} XP por revisão.</p>
-  <h3>Todos os cards (${cards.length})</h3>
+  <h3>${filtered ? 'Cards no filtro' : 'Todos os cards'} (${cards.length})</h3>
   ${cards.length ? cards.map(cardItem).join('') : empty('Nenhum card ainda.', '<a class="btn" href="#/notas">Ir para as notas</a>')}`;
 }
 
@@ -2625,10 +2661,11 @@ const actions = {
   },
   startReview: () => {
     const today = G.ymd();
-    const due = state.cards.filter((c) => c.due <= today).sort((a, b) => a.due.localeCompare(b.due) || a.createdAt - b.createdAt);
+    const due = reviewCards().filter((c) => c.due <= today).sort((a, b) => a.due.localeCompare(b.due) || a.createdAt - b.createdAt);
     review = { queue: due.slice(0, state.settings.dailyCards).map((c) => c.id), revealed: false, done: 0 };
     render();
   },
+  clearScope: ({ key }) => { sessionStorage.removeItem(key); render(); },
   stopReview: () => { review = review && { ...review, queue: [] }; render(); },
   reveal: () => { review.revealed = true; render(); },
   grade: ({ g }) => gradeCard(Number(g)),
@@ -2726,6 +2763,16 @@ document.addEventListener('input', (e) => {
 });
 
 document.addEventListener('change', async (e) => {
+  if (e.target.dataset.scope) {
+    const key = e.target.dataset.scope;
+    const f = { ...getScope(key), [e.target.dataset.field]: e.target.value };
+    // o livro escolhido sai do filtro se não combinar mais com tema/autor/finalidade
+    if (f.book && !(bookById(f.book) && bookInScope(bookById(f.book), f, 'book'))) delete f.book;
+    for (const k of SCOPE_FIELDS) if (!f[k]) delete f[k];
+    sessionStorage.setItem(key, JSON.stringify(f));
+    render();
+    return;
+  }
   if (e.target.dataset.bookFilter) {
     const v = e.target.value;
     document.querySelectorAll(`${e.target.dataset.bookFilter} [data-book]`).forEach((el) => { el.hidden = v && el.dataset.book !== v; });

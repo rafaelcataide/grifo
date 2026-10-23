@@ -279,6 +279,10 @@ a.chip:hover { color: var(--accent); }
 .legend-shapes .dot.diamond { background: #c99a2e; border-radius: 1px; transform: rotate(45deg) scale(.85); }
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: -1px; }
 .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+.scope-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+.scope-filters select { margin: 0; min-width: 0; }
+.scope-filters .btn { grid-column: 1 / -1; justify-self: start; }
+@media (min-width: 640px) { .scope-filters { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .filters select, .filters input[type="search"] { flex: 1 1 140px; margin: 0; }
 .toggle { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; color: var(--muted); }
 
