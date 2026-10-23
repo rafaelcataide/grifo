@@ -136,9 +136,11 @@ test('IA: formato do pedido (modelo, saída estruturada, fallback) e recusa', ()
   for (const task of TASK_NAMES) {
     const input = { notes: [], note: { text: 'x' }, candidates: [], question: 'q', text: 't', read: [], highlights: [], owned: [] };
     const p = buildParams(task, input);
-    assert.equal(p.model, 'claude-opus-5-5');
+    assert.ok(['claude-haiku-5-5', 'claude-sonnet-5-5'].includes(p.model));
     assert.equal(p.output_config.format.type, 'json_schema');
-    assert.equal(p.fallbacks, 'default');
+    // fallback no servidor só existe no Sonnet; no Haiku o parâmetro é recusado
+    if (p.model === 'claude-sonnet-5-5') assert.equal(p.fallbacks, 'default');
+    else assert.equal(p.fallbacks, undefined);
     assert.ok(p.output_config.effort);
     assert.equal(typeof p.messages[0].content, 'string');
   }

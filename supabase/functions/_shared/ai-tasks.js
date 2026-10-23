@@ -1,7 +1,11 @@
 // Tarefas de IA do Grifo. Usado pela função "ai" do Supabase (com a chave no servidor)
 // e pelo app no modo pessoal (com a chave do próprio usuário). Um único lugar para prompts e formatos.
 
-export const MODEL = 'claude-opus-5-5';
+// Modelo por tarefa, pelo custo: Haiku (o mais barato) para o que só trabalha sobre o texto enviado;
+// Sonnet para o que pede síntese entre muitas notas ou conhecer livros reais.
+export const HAIKU = 'claude-haiku-5-5';
+export const SONNET = 'claude-sonnet-5-5';
+// O Haiku não tem fallback no servidor (o parâmetro é recusado); só o Sonnet o usa.
 const FALLBACK_BETA = 'server-side-fallback-2026-07-01';
 
 const clip = (s, n) => (String(s || '').length > n ? `${String(s).slice(0, n)}…` : String(s || ''));
@@ -9,6 +13,7 @@ const clip = (s, n) => (String(s || '').length > n ? `${String(s).slice(0, n)}�
 const TASKS = {
   // Gera cards de memorização a partir de grifos e notas
   cards: {
+    model: HAIKU,
     effort: 'medium',
     system: `Você cria cards de memorização (repetição espaçada) em português do Brasil a partir de trechos e notas de livros.
 Regras:
@@ -43,6 +48,7 @@ Regras:
 
   // Sugere ligações [[ ]] entre uma nota e o resto do "segundo cérebro"
   links: {
+    model: HAIKU,
     effort: 'medium',
     system: `Você ajuda a conectar ideias num "segundo cérebro" de leituras (estilo Obsidian), em português do Brasil.
 Recebe uma nota e a lista de pontos já existentes (livros, notas com título, temas, subtemas e conceitos).
@@ -64,6 +70,7 @@ Recebe uma nota e a lista de pontos já existentes (livros, notas com título, t
 
   // Responde perguntas usando só as notas do usuário
   ask: {
+    model: SONNET,
     effort: 'medium',
     system: `Você responde perguntas sobre a biblioteca pessoal do usuário, em português do Brasil, usando SOMENTE as notas fornecidas.
 - Sintetize o que os livros dizem; compare autores quando houver visões diferentes.
@@ -84,6 +91,7 @@ Recebe uma nota e a lista de pontos já existentes (livros, notas com título, t
 
   // Corrige erros de OCR de um trecho fotografado, sem mudar o que o autor escreveu
   fixocr: {
+    model: HAIKU,
     effort: 'low',
     system: `Você corrige texto extraído por OCR de páginas de livros em português do Brasil.
 - Corrija só erros de leitura: letras trocadas ("nívol" → "nível"), palavras quebradas ou coladas, acentos perdidos, pontuação ruidosa e sobras soltas nas bordas (como "|", letras isoladas sem sentido).
@@ -101,6 +109,7 @@ Recebe uma nota e a lista de pontos já existentes (livros, notas com título, t
 
   // Sugere próximas leituras a partir do que a pessoa leu, avaliou e grifou
   recommend: {
+    model: SONNET,
     effort: 'medium',
     system: `Você recomenda livros, em português do Brasil, com base no histórico de leitura de uma pessoa.
 - Sugira 5 livros reais e conhecidos que NÃO estejam na lista de livros que ela já tem.
@@ -141,10 +150,9 @@ export function buildParams(task, input) {
   const t = TASKS[task];
   if (!t) throw new Error(`tarefa desconhecida: ${task}`);
   return {
-    model: MODEL,
+    model: t.model,
     max_tokens: 16000,
-    betas: [FALLBACK_BETA],
-    fallbacks: 'default',
+    ...(t.model === SONNET ? { betas: [FALLBACK_BETA], fallbacks: 'default' } : {}),
     output_config: { effort: t.effort, format: { type: 'json_schema', schema: t.schema } },
     system: input?.lang === 'en' ? `${t.system}
 
