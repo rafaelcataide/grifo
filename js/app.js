@@ -433,7 +433,7 @@ function booksView() {
     .filter((b) => (filter === 'all' || b.status === filter) && (purpose === 'all' || (b.purpose || 'hobby') === purpose))
     .sort((a, b) => (b.endDate || b.startDate || '').localeCompare(a.endDate || a.startDate || '') || b.createdAt - a.createdAt);
   const count = (st) => state.books.filter((b) => b.status === st).length;
-  return `<div class="row between"><h2>Meus livros</h2><div class="row gap-s"><button class="btn" data-action="importFile" title="Importar do Kindle, Goodreads ou Skoob">⬆️</button><button class="btn" data-action="shareShelf">📸 Minha estante</button><button class="btn primary" data-action="newBook">➕ Novo</button></div></div>
+  return `<div class="row between"><h2>Meus livros</h2><div class="row gap-s"><button class="btn" data-action="recommend" title="Sugestões de leitura com IA">✨ O que ler</button><button class="btn" data-action="importFile" title="Importar do Kindle, Goodreads ou Skoob">⬆️</button><button class="btn" data-action="shareShelf">📸 Minha estante</button><button class="btn primary" data-action="newBook">➕ Novo</button></div></div>
   <input class="search" type="search" placeholder="Buscar por título, autor, tema ou subtema…" data-filter-list="#book-list">
   <div class="tabs">
     ${[['all', `Todos (${state.books.length})`], ...Object.entries(STATUS).map(([k, v]) => [k, `${v} (${count(k)})`])]
@@ -556,6 +556,7 @@ function noteDetail(id) {
     <button class="btn" data-action="aiLinks" data-id="${n.id}">✨ Sugerir conexões</button>
     <a class="btn" href="#/mapa/${encodeURIComponent(`n:${n.id}`)}">🕸️ No mapa</a>
     <button class="btn" data-action="shareNote" data-id="${n.id}">↗ Compartilhar</button>
+    ${Cloud.user() ? `<button class="btn" data-action="noteToClub" data-id="${n.id}">👥 No clube</button>` : ''}
     <button class="btn ghost" data-action="editNote" data-id="${n.id}">✏️ Editar</button>
   </div>
   ${out.length ? `<h3>Liga-se a</h3><div class="chips">${out.map((l) => { const r = resolveLink(l); return `<a class="wl ${r.type}" href="${r.href}">${esc(l)}</a>`; }).join(' ')}</div>` : ''}
@@ -1135,6 +1136,7 @@ function clubsView() {
   <div class="quick"><button class="btn primary" data-action="newClub">➕ Criar clube</button><button class="btn" data-action="joinClubPrompt">🔑 Entrar com código</button></div>
   <div id="clubs-list"><p class="muted small">Carregando clubes…</p></div>`;
 }
+const clubPostCache = new Map();
 clubsView.mount = async () => {
   const box = $('#clubs-list');
   if (!box) return;
@@ -1144,7 +1146,9 @@ clubsView.mount = async () => {
     if (!clubs.length) { box.innerHTML = empty('Você ainda não participa de nenhum clube. Crie um e convide amigos com o código!'); return; }
     const month = state.stats.today.slice(0, 7), week = state.stats.week.start;
     const parts = await Promise.all(clubs.map(async (c) => {
-      const members = await Cloud.clubMembers(c.id);
+      const [members, posts] = await Promise.all([Cloud.clubMembers(c.id), Cloud.clubPosts(c.id, 6).catch(() => [])]);
+      const nameOf = (uid) => { const m = members.find((x) => x.user_id === uid); return m?.display_name || m?.handle || 'Leitor'; };
+      clubPostCache.set(c.id, posts);
       const rows = members.map((m) => ({
         ...m,
         week: m.stats?.weekStart === week ? m.stats.weekPages || 0 : 0,
@@ -1154,12 +1158,24 @@ clubsView.mount = async () => {
       const me = Cloud.user().id;
       return `<section class="card club">
         <div class="row between"><h3 style="margin:0">${esc(c.name)}</h3><span class="chip">${rows.length} ${rows.length === 1 ? 'membro' : 'membros'}</span></div>
+        <div class="row between wrap gap-s club-book">
+          <span>📖 ${c.current_book ? `Lendo juntos: <b>${esc(c.current_book)}</b>` : '<span class="muted">Nenhum livro do clube definido</span>'}</span>
+          ${c.owner === me ? `<button class="btn small ghost" data-action="setClubBook" data-id="${c.id}" data-book="${esc(c.current_book || '')}">✏️</button>` : ''}
+        </div>
         <div class="small muted" style="margin-top:6px">Meta coletiva do mês: <b>${nf(total)}</b> / ${nf(c.goal_pages)} páginas</div>
         <div class="bar"><div style="width:${Math.min(100, (total / c.goal_pages) * 100)}%"></div></div>
         <div class="small muted" style="margin:10px 0 4px">Ranking da semana (páginas)</div>
         <div class="list">${rows.map((r, i) => `<div class="row between li ${r.user_id === me ? 'current' : ''}">
           <span>${['🥇', '🥈', '🥉'][i] || `${i + 1}.`} ${r.handle ? `<a href="#/u/${esc(r.handle)}">${esc(r.display_name || r.handle)}</a>` : esc(r.display_name || 'Leitor')}${r.stats?.streak > 1 ? ` <span class="small">🔥${r.stats.streak}</span>` : ''}</span>
           <b>${nf(r.week)}</b></div>`).join('')}</div>
+        <div class="small muted" style="margin:12px 0 4px">🖍️ Grifos do clube</div>
+        ${posts.length ? `<div class="club-posts">${posts.map((p) => `<article class="club-post">
+          <div class="club-post-text">“${esc(p.text)}”</div>
+          <div class="row between wrap gap-s"><span class="small muted">${esc(nameOf(p.user_id))} · ${esc(p.book_title || '')}${p.page ? ` · p. ${p.page}` : ''}</span>
+            <span class="row gap-s">${p.user_id === me
+              ? `<button class="icon-btn small" data-action="deleteClubPost" data-id="${p.id}" aria-label="Apagar">🗑️</button>`
+              : `<button class="icon-btn small" data-action="saveClubPost" data-club="${c.id}" data-id="${p.id}" title="Salvar na minha estante" aria-label="Salvar na minha estante">📥</button>`}</span></div>
+        </article>`).join('')}</div>` : '<p class="small muted" style="margin:0">Ninguém compartilhou ainda. Abra uma nota e toque em “Compartilhar no clube”.</p>'}
         <div class="row between wrap gap-s" style="margin-top:10px">
           <span class="small">Convite: <b class="code">${esc(c.code)}</b></span>
           <span class="row gap-s"><button class="btn small" data-action="inviteClub" data-code="${esc(c.code)}" data-name="${esc(c.name)}">📤 Convidar</button>
@@ -1290,6 +1306,91 @@ const cloudActions = {
   },
   syncNow: () => runSync({ silent: false }),
   dailyMore: () => { dailyShift++; render(); },
+  async noteToClub({ id }) {
+    const n = noteById(id), b = bookById(n.bookId);
+    let clubs;
+    try { clubs = await Cloud.myClubs(); } catch (e) { return toast(esc(e.message), 'err'); }
+    if (!clubs.length) { toast('Você ainda não participa de um clube.'); location.hash = '#/clubes'; return; }
+    openModal(`<div class="form"><h3>👥 Compartilhar no clube</h3>
+      <p class="small muted" style="margin:0">“${esc(plainText(n.text).slice(0, 180))}${plainText(n.text).length > 180 ? '…' : ''}”</p>
+      <div class="imp-options">${clubs.map((c) => `<button type="button" class="imp-opt" data-club="${c.id}"><b>${esc(c.name)}</b>${c.current_book ? `<small>Lendo juntos: ${esc(c.current_book)}</small>` : ''}</button>`).join('')}</div>
+      <div class="actions"><button type="button" class="btn ghost" data-action="close">Cancelar</button></div>
+    </div>`, (root) => {
+      root.querySelectorAll('[data-club]').forEach((btn) => {
+        btn.onclick = async () => {
+          try {
+            await Cloud.postToClub(btn.dataset.club, { text: plainText(n.text), book_title: b?.title || '', book_author: b?.author || '', page: n.page });
+            closeModal();
+            toast('🖍️ Grifo compartilhado com o clube');
+          } catch (e) { toast(esc(e.message), 'err'); }
+        };
+      });
+    });
+  },
+  async deleteClubPost({ id }) {
+    if (!confirm('Apagar este grifo do clube?')) return;
+    try { await Cloud.deleteClubPost(id); render(); } catch (e) { toast(esc(e.message), 'err'); }
+  },
+  async saveClubPost({ club, id }) {
+    const p = (clubPostCache.get(club) || []).find((x) => x.id === id);
+    if (!p) return;
+    await commit(async () => {
+      let b = findBook(p.book_title, p.book_author);
+      if (!b) {
+        b = { id: uid(), createdAt: Date.now(), title: p.book_title || 'Livro do clube', author: p.book_author || '', pages: 0, purpose: 'hobby', genre: '', subtheme: '', status: 'want', currentPage: 0, startDate: '', endDate: '', rating: 0, isbn: '', cover: '', review: '' };
+        await persist('books', b);
+      }
+      await persist('notes', { id: uid(), bookId: b.id, title: '', text: p.text, page: p.page, kind: 'quote', source: 'clube', tags: ['clube'], createdAt: Date.now() });
+    });
+    toast('📥 Grifo salvo nas suas notas');
+  },
+  async setClubBook({ id, book }) {
+    const title = prompt('Qual livro o clube está lendo junto?', book || '');
+    if (title === null) return;
+    try { await Cloud.setClubBook(id, title.trim()); render(); } catch (e) { toast(esc(e.message), 'err'); }
+  },
+  async recommend() {
+    const read = state.books.filter((b) => b.status === 'finished' || b.status === 'reading');
+    if (read.length < 2) return toast('Cadastre pelo menos 2 livros lidos ou em leitura para receber sugestões.');
+    toast('✨ Pensando nas suas próximas leituras…');
+    const highlights = [...state.notes].sort((a, b) => (b.fav ? 1 : 0) - (a.fav ? 1 : 0) || b.createdAt - a.createdAt)
+      .map((n) => plainText(n.text)).filter((t) => t.length >= 30).slice(0, 15);
+    let res;
+    try {
+      res = await aiRun('recommend', {
+        read: read.map((b) => ({ title: b.title, author: b.author, theme: [b.genre, b.subtheme].filter(Boolean).join(' › '), rating: b.rating || 0 })),
+        highlights,
+        owned: state.books.map((b) => b.title),
+      });
+    } catch (e) { if (e.message) toast(esc(e.message), 'err'); return; }
+    const recs = (res.books || []).filter((r) => !findBook(r.title, r.author));
+    if (!recs.length) return toast('Não encontrei sugestões novas agora. Tente de novo mais tarde.');
+    openModal(`<div class="form"><div class="row between"><h3>✨ O que ler a seguir</h3><button type="button" class="icon-btn" data-action="close" aria-label="Fechar">✕</button></div>
+      <p class="hint" style="margin:0">Sugestões a partir do que você leu e grifou. A IA pode errar edições e detalhes: confira antes de comprar.</p>
+      <div class="recs">${recs.map((r, i) => `<article class="card rec">
+        <div class="row between gap"><div><b>${esc(r.title)}</b><div class="small muted">${esc(r.author)}${r.theme ? ` · ${esc(r.theme)}` : ''}</div></div>
+          <button type="button" class="btn small" data-rec="${i}">➕ Quero ler</button></div>
+        <p class="small" style="margin:6px 0 0">${esc(r.why)}</p></article>`).join('')}</div>
+    </div>`, (root) => {
+      root.querySelectorAll('[data-rec]').forEach((btn) => {
+        btn.onclick = async () => {
+          const r = recs[btn.dataset.rec];
+          btn.disabled = true;
+          btn.textContent = '✓ Na lista';
+          const [genre, subtheme = ''] = String(r.theme || '').split('›').map((x) => x.trim());
+          const book = { id: uid(), createdAt: Date.now(), title: r.title, author: r.author, pages: 0, purpose: PURPOSE[r.purpose] ? r.purpose : 'hobby', genre: genre || '', subtheme, status: 'want', currentPage: 0, startDate: '', endDate: '', rating: 0, isbn: '', cover: '', review: '' };
+          await commit(() => persist('books', book));
+          // capa e número de páginas, se a busca encontrar o livro
+          searchBooks(`${r.title} ${r.author}`).then(async ({ items }) => {
+            const hit = items.find((x) => norm(x.title).startsWith(norm(r.title).slice(0, 12)));
+            if (!hit) return;
+            await persist('books', { ...bookById(book.id), pages: Number(hit.pages) || 0, cover: hit.cover || '', isbn: hit.isbn || '' });
+            render();
+          }).catch(() => {});
+        };
+      });
+    });
+  },
   async toggleFav({ id }) {
     const n = noteById(id);
     await persist('notes', { ...n, fav: !n.fav });

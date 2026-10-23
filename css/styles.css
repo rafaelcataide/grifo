@@ -374,6 +374,16 @@ body.has-timer { padding-bottom: calc(140px + env(safe-area-inset-bottom)); }
 body.has-timer #toasts { bottom: calc(150px + env(safe-area-inset-bottom)); }
 .book-actions { display: flex; gap: 6px; flex: none; }
 
+/* grifos do clube */
+.club-book { margin-top: 8px; font-size: .9rem; }
+.club-posts { display: grid; gap: 8px; }
+.club-post { background: var(--surface-2); border-radius: 12px; padding: 10px 12px; display: grid; gap: 6px; }
+.club-post-text { font-family: "Fraunces", Georgia, serif; line-height: 1.45; border-left: 3px solid #ffd66b; padding-left: 8px; }
+
+/* recomendações */
+.recs { display: grid; gap: 8px; max-height: 60vh; overflow: auto; }
+.rec { margin: 0; }
+
 /* grifos do dia */
 .daily { display: grid; gap: 12px; background: linear-gradient(180deg, color-mix(in srgb, #ffd66b 14%, var(--surface)), var(--surface)); }
 .daily-item { display: grid; gap: 6px; padding-top: 10px; border-top: 1px solid var(--border); }

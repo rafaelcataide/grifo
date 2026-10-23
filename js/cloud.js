@@ -216,7 +216,7 @@ export async function publishStats(stats) {
 // ---------------- clubes ----------------
 export async function myClubs() {
   const sb = await client();
-  const { data, error } = await sb.from('clubs').select('id,name,code,goal_pages,owner,club_members(user_id)').order('created_at');
+  const { data, error } = await sb.from('clubs').select('id,name,code,goal_pages,owner,current_book,club_members(user_id)').order('created_at');
   if (error) throw error;
   return data;
 }
@@ -250,6 +250,33 @@ export async function clubMembers(clubId) {
   const ids = members.map((m) => m.user_id);
   const { data: profiles } = await sb.from('profiles').select('user_id,handle,display_name,avatar_url,stats').in('user_id', ids);
   return profiles || [];
+}
+
+// ----- grifos compartilhados no clube -----
+export async function clubPosts(clubId, limit = 20) {
+  const sb = await client();
+  const { data, error } = await sb.from('club_posts').select('id,user_id,text,book_title,book_author,page,created_at')
+    .eq('club_id', clubId).order('created_at', { ascending: false }).limit(limit);
+  if (error) throw error;
+  return data;
+}
+
+export async function postToClub(clubId, { text, book_title, book_author, page }) {
+  const sb = await client();
+  const { error } = await sb.from('club_posts').insert({ club_id: clubId, text: text.slice(0, 1500), book_title, book_author, page: page || null });
+  if (error) throw error;
+}
+
+export async function deleteClubPost(id) {
+  const sb = await client();
+  const { error } = await sb.from('club_posts').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function setClubBook(clubId, title) {
+  const sb = await client();
+  const { error } = await sb.from('clubs').update({ current_book: title.slice(0, 200) || null }).eq('id', clubId);
+  if (error) throw error;
 }
 
 export async function setWeeklyEmail(on) {
