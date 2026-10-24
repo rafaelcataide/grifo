@@ -516,7 +516,7 @@ Object.assign(EN, {
   '“Ler devagar é a forma mais rápida de lembrar.”': '“Reading slowly is the fastest way to remember.”',
   'Seu livro · pág. 42': 'Your book · p. 42', 'memória': 'memory', 'leitura': 'reading',
   'Só o que você grifou': 'Only what you highlighted',
-  'Tire uma foto da página: o Grifo encontra o marca-texto (amarelo, verde, rosa, azul ou laranja) e transforma o trecho em nota.': 'Take a photo of the page: Grifo finds the highlighter (yellow, green, pink, blue or orange) and turns the passage into a note.',
+  'Fotografe a página do livro ou a tela do Kindle: o Grifo encontra o que você marcou, com marca-texto colorido ou o grifo cinza do Kindle, e transforma o trecho em nota.': 'Snap the book page or your Kindle screen: Grifo finds what you marked, with a colored highlighter or Kindle gray highlights, and turns the passage into a note.',
   'Um mapa das suas ideias': 'A map of your ideas',
   'Cada tema vira uma ilha com seus livros. Ligue notas com': 'Each theme becomes an island with its books. Link notes with',
   'e veja ideias de livros diferentes se encontrarem.': 'and watch ideas from different books meet.',

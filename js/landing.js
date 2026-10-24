@@ -43,7 +43,7 @@ export function landingView({ invite = false, price = '' } = {}) {
   <section class="lp-features">
     <article class="lp-feat">
       <h3>📷 Só o que você grifou</h3>
-      <p>Tire uma foto da página: o Grifo encontra o marca-texto (amarelo, verde, rosa, azul ou laranja) e transforma o trecho em nota.</p>
+      <p>Fotografe a página do livro ou a tela do Kindle: o Grifo encontra o que você marcou, com marca-texto colorido ou o grifo cinza do Kindle, e transforma o trecho em nota.</p>
     </article>
     <article class="lp-feat">
       <h3>🕸️ Um mapa das suas ideias</h3>
