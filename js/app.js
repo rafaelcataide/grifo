@@ -1870,10 +1870,12 @@ function bookForm(existing, opts = {}) {
       <div class="grow">
         <div class="cover-pick-label">Capa</div>
         <div class="row gap-s wrap">
-          <button type="button" class="btn small" id="cover-upload">📷 Enviar foto da capa</button>
+          <button type="button" class="btn small" id="cover-cam">📷 Fotografar capa</button>
+          <button type="button" class="btn small" id="cover-upload">🖼️ Da galeria</button>
           <button type="button" class="btn small ghost" id="cover-clear"${b.cover ? '' : ' hidden'}>✕ Remover</button>
         </div>
         <input type="file" id="cover-file" accept="image/*" hidden>
+        <input type="file" id="cover-camfile" accept="image/*" capture="environment" hidden>
         <input name="cover" type="hidden" value="${esc(b.cover || '')}">
         <input id="cover-url" type="url" placeholder="ou cole o link de uma imagem" value="${b.cover?.startsWith('data:') ? '' : esc(b.cover || '')}">
       </div>
@@ -1893,12 +1895,15 @@ function bookForm(existing, opts = {}) {
     $('#cover-url', root).oninput = (e) => setCover(e.target.value.trim());
     $('#cover-clear', root).onclick = () => setCover('');
     $('#cover-upload', root).onclick = () => $('#cover-file', root).click();
-    $('#cover-file', root).onchange = async (e) => {
+    $('#cover-cam', root).onclick = () => $('#cover-camfile', root).click();
+    const onCoverFile = async (e) => {
       const f = e.target.files[0];
       e.target.value = '';
       if (!f) return;
       try { setCover(await coverFromFile(f)); } catch { toast('Não consegui abrir essa imagem.'); }
     };
+    $('#cover-file', root).onchange = onCoverFile;
+    $('#cover-camfile', root).onchange = onCoverFile;
     form.genre.oninput = () => { $('#subthemes-wrap', root).innerHTML = datalist('subthemes', subthemeOptions(form.genre.value)); };
     let found = [];
     const doLookup = async () => {
@@ -2183,12 +2188,17 @@ function noteForm(existing, { bookId, autoOCR, link } = {}) {
     <h3>${existing ? 'Editar nota' : 'Nova nota'}</h3>
     <label>Livro <select name="bookId" required>${books.map((b) => `<option value="${b.id}" ${b.id === n.bookId ? 'selected' : ''}>${esc(b.title)}</option>`).join('')}</select></label>
     <div class="ocr-box">
+      <div class="radio-pills ocr-mode">
+        <input type="radio" name="ocr-mode" id="ocr-m-h" value="highlight" checked><label for="ocr-m-h">🖍️ Só os grifos</label>
+        <input type="radio" name="ocr-mode" id="ocr-m-p" value="page"><label for="ocr-m-p">📄 Página inteira</label>
+      </div>
       <div class="row gap-s wrap">
-        <button type="button" class="btn" data-ocr="highlight">📷 Ler grifos</button>
-        <button type="button" class="btn ghost" data-ocr="page">📄 Página inteira</button>
+        <button type="button" class="btn primary" data-ocr="cam">📷 Câmera</button>
+        <button type="button" class="btn" data-ocr="file">🖼️ Galeria</button>
       </div>
       <input type="file" accept="image/*" hidden id="ocr-file">
-      <div id="ocr-status" class="small muted">Fotografe ou escolha uma imagem da página. O texto grifado vira nota.</div>
+      <input type="file" accept="image/*" capture="environment" hidden id="ocr-cam">
+      <div id="ocr-status" class="small muted">Fotografe a página: o texto grifado vira nota. Funciona com marca-texto colorido e com o grifo cinza do Kindle.</div>
       <button type="button" class="btn small" id="ocr-fix" hidden>✨ Corrigir com IA</button>
       <img id="ocr-preview" alt="Pré-visualização dos trechos detectados" hidden>
     </div>
@@ -2225,7 +2235,15 @@ function noteForm(existing, { bookId, autoOCR, link } = {}) {
     form.text.addEventListener('input', showPreview);
     showPreview();
     let mode = 'highlight';
-    btns.forEach((btn) => { btn.onclick = () => { mode = btn.dataset.ocr; file.value = ''; file.click(); }; });
+    const cam = $('#ocr-cam', root);
+    btns.forEach((btn) => {
+      btn.onclick = () => {
+        mode = root.querySelector('[name="ocr-mode"]:checked')?.value || 'highlight';
+        const input = btn.dataset.ocr === 'cam' ? cam : file;
+        input.value = '';
+        input.click();
+      };
+    });
     // a IA corrige erros de leitura do trecho recém-lido (foto tremida, pequena, com sombra)
     const fixBtn = $('#ocr-fix', root);
     let lastOcr = '';
@@ -2245,8 +2263,8 @@ function noteForm(existing, { bookId, autoOCR, link } = {}) {
       fixBtn.disabled = false;
       fixBtn.textContent = '✨ Corrigir com IA';
     };
-    file.onchange = async () => {
-      const f = file.files[0];
+    const onPhoto = async (e) => {
+      const f = e.target.files[0];
       if (!f) return;
       btns.forEach((x) => { x.disabled = true; });
       try {
@@ -2255,7 +2273,7 @@ function noteForm(existing, { bookId, autoOCR, link } = {}) {
         img.hidden = false;
         if (!r.text) {
           status.textContent = mode === 'highlight' && !r.regions
-            ? 'Nenhum grifo colorido encontrado. Tente com mais luz ou use "Página inteira".'
+            ? 'Nenhum grifo encontrado. Tente com mais luz, a página reta e mais perto, ou use "Página inteira".'
             : 'Não consegui ler texto nessa imagem. Tente uma foto mais nítida.';
         } else {
           form.text.value = form.text.value.trim() ? `${form.text.value.trim()}\n\n${r.text}` : r.text;
@@ -2271,6 +2289,8 @@ function noteForm(existing, { bookId, autoOCR, link } = {}) {
         btns.forEach((x) => { x.disabled = false; });
       }
     };
+    file.onchange = onPhoto;
+    cam.onchange = onPhoto;
     form.bookId.onchange = () => { if (!existing) form.page.value = bookById(form.bookId.value)?.currentPage || ''; };
     form.onsubmit = async (e) => {
       e.preventDefault();

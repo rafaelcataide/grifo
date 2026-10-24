@@ -588,3 +588,11 @@ EN_PATTERNS.unshift(
   [/^Ninguém entrou pelo seu convite ainda\. Plus até (.+)\.$/, 'Nobody has joined with your invite yet. Plus until $1.'],
   [/^([\d.,]+) pagantes · ([\d.,]+) por convite · meta 2–5% dos ativos$/, '$1 paying · $2 by invite · goal 2–5% of active'],
 );
+
+// Câmera direto e grifo do Kindle
+Object.assign(EN, {
+  '📷 Fotografar capa': '📷 Take cover photo', '🖼️ Da galeria': '🖼️ From gallery',
+  '🖍️ Só os grifos': '🖍️ Highlights only', '📷 Câmera': '📷 Camera', '🖼️ Galeria': '🖼️ Gallery',
+  'Fotografe a página: o texto grifado vira nota. Funciona com marca-texto colorido e com o grifo cinza do Kindle.': 'Snap the page: the highlighted text becomes a note. Works with colored highlighters and with Kindle gray highlights.',
+  'Nenhum grifo encontrado. Tente com mais luz, a página reta e mais perto, ou use "Página inteira".': 'No highlight found. Try more light, the page straight and closer, or use "Whole page".',
+});
