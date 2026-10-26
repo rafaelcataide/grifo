@@ -667,4 +667,5 @@ body.gated { padding-bottom: 24px; }
 .reader-body h3 { font-size: 1.25rem; margin: 1.4em 0 .5em; }
 .reader-body blockquote { margin: 0 0 1em; padding-left: 14px; border-left: 3px solid var(--peach); color: var(--muted); }
 .reader-body mark { background: color-mix(in srgb, #ffd84d 55%, transparent); padding: 1px 2px; }
-.grifar-btn { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 30; box-shadow: 0 8px 24px rgba(0, 0, 0, .25); }
+/* centralizado sem transform: o efeito de botão pressionado (scale) não pode tirá-lo do lugar */
+.grifar-btn { position: fixed; left: 0; right: 0; margin: 0 auto; width: max-content; bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 30; box-shadow: 0 8px 24px rgba(0, 0, 0, .25); }

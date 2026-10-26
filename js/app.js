@@ -947,17 +947,41 @@ articleView.mount = (id) => {
   const btn = $('#grifar-btn');
   const bodyEl = $('#reader-body');
   if (!btn || !bodyEl) return;
+  // trecho selecionado, completado até o fim das palavras cortadas pela seleção ("faz a m" → "faz a memória")
+  const isW = (ch) => /[\p{L}\p{N}]/u.test(ch || '');
   const sel = () => {
     const s = getSelection();
-    return s && !s.isCollapsed && bodyEl.contains(s.anchorNode) && bodyEl.contains(s.focusNode) ? s.toString().replace(/\s+/g, ' ').trim() : '';
+    if (!s || s.isCollapsed || !bodyEl.contains(s.anchorNode) || !bodyEl.contains(s.focusNode)) return '';
+    const r = s.getRangeAt(0).cloneRange();
+    if (r.startContainer.nodeType === 3) {
+      const t = r.startContainer.data;
+      let i = r.startOffset;
+      while (i > 0 && isW(t[i - 1]) && isW(t[i])) i--;
+      r.setStart(r.startContainer, i);
+    }
+    if (r.endContainer.nodeType === 3) {
+      const t = r.endContainer.data;
+      let i = r.endOffset;
+      while (i < t.length && isW(t[i - 1]) && isW(t[i])) i++;
+      r.setEnd(r.endContainer, i);
+    }
+    return r.toString().replace(/\s+/g, ' ').trim();
   };
-  const onSel = () => { if (btn.isConnected) btn.hidden = sel().length < 3; else document.removeEventListener('selectionchange', onSel); };
+  // guarda o último trecho selecionado: no toque, a seleção pode sumir antes do clique chegar ao botão
+  let last = '';
+  const onSel = () => {
+    if (!btn.isConnected) { document.removeEventListener('selectionchange', onSel); return; }
+    const t = sel();
+    if (t.length >= 3) { last = t; btn.hidden = false; } else if (!btn.matches(':hover, :active, :focus')) btn.hidden = true;
+  };
   document.addEventListener('selectionchange', onSel);
-  // mousedown/touch não pode tirar a seleção antes do clique
-  btn.addEventListener('pointerdown', (e) => e.preventDefault());
+  // o mousedown no botão não desfaz a seleção (cancelar o pointerdown impediria o clique no Chrome)
+  btn.addEventListener('mousedown', (e) => e.preventDefault());
   btn.onclick = async () => {
-    const text = sel();
+    const text = sel() || last;
     if (text.length < 3) return;
+    last = '';
+    btn.hidden = true;
     const note = { id: uid(), createdAt: Date.now(), bookId: id, text, kind: 'quote', source: 'article', tags: [], page: null };
     getSelection().removeAllRanges();
     await commit(() => persist('notes', note));
