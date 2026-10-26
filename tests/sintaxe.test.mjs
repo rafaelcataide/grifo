@@ -1,7 +1,7 @@
 // Confere que todos os arquivos JavaScript do app e do service worker compilam.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -37,4 +37,14 @@ test('todo ícone usado pelo app existe no sprite', () => {
   const names = new Set([...icons.matchAll(/'[^']+': '([a-z0-9-]+)'/g)].map((m) => m[1]));
   const faltando = [...names].filter((n) => !sprite.includes(`<symbol id="${n}"`));
   assert.deepEqual(faltando, []);
+});
+
+test('build: dist/ tem todos os arquivos do app e nada de testes ou servidor', () => {
+  const r = spawnSync(process.execPath, [join(root, 'tools', 'build.js')]);
+  assert.equal(r.status, 0, r.stderr.toString());
+  const sw = readFileSync(join(root, 'sw.js'), 'utf8');
+  const shell = sw.match(/const SHELL = \[([\s\S]*?)\];/)[1].match(/'([^']+)'/g).map((s) => s.slice(1, -1)).filter((p) => p !== './');
+  const faltando = shell.filter((p) => !existsSync(join(root, 'dist', p)));
+  assert.deepEqual(faltando, []);
+  for (const p of ['tests', 'tools', 'server.js', 'README.md', 'supabase/migrations', 'supabase/LEIA-ME.md']) assert.equal(existsSync(join(root, 'dist', p)), false, p);
 });

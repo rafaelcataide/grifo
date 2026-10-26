@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "icons": "node tools/gerar-icones.js",
-    "test": "node --test \"tests/*.test.mjs\""
+    "test": "node --test \"tests/*.test.mjs\"",
+    "build": "node tools/build.js"
   }
 }

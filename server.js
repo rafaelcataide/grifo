@@ -5,8 +5,10 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-const root = __dirname;
-const port = Number(process.env.PORT) || 5180;
+// node server.js dist 5181 → serve a versão de publicação (pasta dist) em outra porta
+const [, , dirArg, portArg] = process.argv;
+const root = dirArg ? require('path').resolve(__dirname, dirArg) : __dirname;
+const port = Number(portArg || process.env.PORT) || 5180;
 const types = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
