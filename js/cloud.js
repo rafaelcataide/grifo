@@ -424,3 +424,16 @@ export async function invokeAI(task, input) {
   }
   return data;
 }
+
+// ---------------- artigos ----------------
+// O servidor baixa a página e devolve o texto limpo (o navegador não pode buscar outros sites direto)
+export async function fetchArticle(url) {
+  const sb = await client();
+  const { data, error } = await sb.functions.invoke('article', { body: { url } });
+  if (error) {
+    let body = null;
+    try { body = await error.context?.json(); } catch { /* sem corpo */ }
+    throw new Error(body?.message || 'Não consegui buscar esse artigo agora.');
+  }
+  return data;
+}

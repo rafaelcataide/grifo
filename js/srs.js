@@ -1,5 +1,5 @@
 // Repetição espaçada (variação simples do SM-2, o algoritmo do Anki).
-import { addDays } from './game.js';
+import { addDays, parseYmd } from './game.js';
 
 export const GRADES = [
   { g: 0, label: 'Errei', cls: 'again', key: '1' },
@@ -39,6 +39,33 @@ export function intervalLabel(card, g, today) {
   if (n < 30) return `${n} dias`;
   if (n < 365) return `${Math.round(n / 30)} m`;
   return `${(n / 365).toFixed(1)} a`;
+}
+
+// ---------- plano de prova ----------
+const daysBetween = (a, b) => Math.round((parseYmd(b) - parseYmd(a)) / 864e5);
+
+// O que revisar hoje para chegar à prova com tudo visto: os cards que voltariam antes da data,
+// divididos pelos dias que faltam (os atrasados entram todos).
+export function examPlan(cards, examDate, today) {
+  const daysLeft = daysBetween(today, examDate);
+  // (card revisado hoje não volta hoje: só os que ainda não foram vistos hoje entram na meta)
+  const pending = cards.filter((c) => c.due < examDate && (c.due <= today || c.lastReview !== today)).sort((a, b) => a.due.localeCompare(b.due) || (a.createdAt || 0) - (b.createdAt || 0));
+  const overdue = pending.filter((c) => c.due <= today).length;
+  const goal = daysLeft > 0 ? Math.min(pending.length, Math.max(overdue, Math.ceil(pending.length / daysLeft))) : 0;
+  return {
+    daysLeft,
+    total: cards.length,
+    learned: cards.filter((c) => c.reps > 0).length,
+    goal,
+    queue: pending.slice(0, goal).map((c) => c.id),
+  };
+}
+
+// Card que só voltaria depois da prova é puxado para a véspera (revisão final)
+export function capForExam(card, examDate, today) {
+  const eve = addDays(examDate, -1);
+  if (eve > today && card.due > eve) return { ...card, due: eve };
+  return card;
 }
 
 // Lacunas: {{texto}} vira [ … ] na pergunta e fica destacado na resposta

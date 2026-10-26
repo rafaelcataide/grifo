@@ -143,6 +143,59 @@ Recebe uma nota e a lista de pontos já existentes (livros, notas com título, t
   },
 };
 
+// Fichamento: resumo do livro feito só a partir dos grifos e notas da pessoa
+TASKS.summary = {
+  model: SONNET,
+  effort: 'medium',
+  system: `Você monta fichamentos de livros em português do Brasil, usando SOMENTE os grifos e as notas que a pessoa fez.
+- "overview": 2 parágrafos curtos sobre o que o livro trouxe para essa pessoa, a partir do que ela grifou (não resuma o livro inteiro de memória).
+- "ideas": de 3 a 7 ideias principais; em cada uma, um título curto, uma explicação de 1 a 3 frases e os ids das notas que a sustentam.
+- "quotes": os ids de 2 a 4 grifos mais marcantes (só citações literais).
+- "questions": 2 ou 3 perguntas para a pessoa refletir ou revisar.
+- Não invente o que não está nas notas. Escreva de forma clara e direta, sem elogios.`,
+  schema: {
+    type: 'object',
+    properties: {
+      overview: { type: 'string' },
+      ideas: { type: 'array', items: { type: 'object', properties: { title: { type: 'string' }, text: { type: 'string' }, notes: { type: 'array', items: { type: 'string' } } }, required: ['title', 'text', 'notes'], additionalProperties: false } },
+      quotes: { type: 'array', items: { type: 'string' } },
+      questions: { type: 'array', items: { type: 'string' } },
+    },
+    required: ['overview', 'ideas', 'quotes', 'questions'],
+    additionalProperties: false,
+  },
+  build: ({ book = {}, notes = [] }) => `<livro titulo="${clip(book.title, 150)}" autor="${clip(book.author, 100)}"/>\n<notas>\n${notes.slice(0, 120).map((n) => `<nota id="${n.id}" tipo="${n.kind === 'quote' ? 'citação' : 'reflexão'}"${n.page ? ` pagina="${n.page}"` : ''}>\n${clip(n.text, 900)}\n</nota>`).join('\n')}\n</notas>`,
+};
+
+// Técnica de Feynman: a pessoa explica uma ideia com as próprias palavras e recebe um retorno
+TASKS.feynman = {
+  model: HAIKU,
+  effort: 'medium',
+  system: `Você é um tutor gentil e direto, em português do Brasil. A pessoa explicou uma ideia com as próprias palavras (técnica de Feynman).
+Compare a explicação com as notas dela sobre o assunto (a referência) e dê um retorno curto e útil:
+- "score": nota de 0 a 10 para clareza e fidelidade às notas.
+- "verdict": uma frase com a avaliação geral.
+- "right": até 3 pontos que ela explicou bem.
+- "missing": até 3 pontos importantes das notas que ficaram de fora.
+- "wrong": até 3 confusões ou erros (lista vazia se não houver).
+- "tip": uma dica prática para explicar melhor (ex.: um exemplo do dia a dia).
+Se as notas não bastarem para avaliar algum ponto, diga isso em vez de inventar.`,
+  schema: {
+    type: 'object',
+    properties: {
+      score: { type: 'integer' },
+      verdict: { type: 'string' },
+      right: { type: 'array', items: { type: 'string' } },
+      missing: { type: 'array', items: { type: 'string' } },
+      wrong: { type: 'array', items: { type: 'string' } },
+      tip: { type: 'string' },
+    },
+    required: ['score', 'verdict', 'right', 'missing', 'wrong', 'tip'],
+    additionalProperties: false,
+  },
+  build: ({ topic, explanation, notes = [] }) => `Ideia: ${clip(topic, 150)}\n\n<notas_de_referencia>\n${notes.slice(0, 30).map((n) => `<nota livro="${clip(n.book, 120)}">\n${clip(n.text, 800)}\n</nota>`).join('\n')}\n</notas_de_referencia>\n\n<explicacao_da_pessoa>\n${clip(explanation, 3000)}\n</explicacao_da_pessoa>`,
+};
+
 export const TASK_NAMES = Object.keys(TASKS);
 
 // Parâmetros para client.beta.messages.create (SDK oficial da Anthropic)

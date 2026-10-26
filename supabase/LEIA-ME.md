@@ -183,6 +183,10 @@ Rode `migrations/20261025_crescimento.sql` (já aplicado neste projeto). Ele cri
 
 O endereço que aparece nas artes e nos convites vem de `siteUrl` em `config.js`; troque quando tiver um domínio próprio.
 
+## 9. Artigos salvos por link
+
+Rode `migrations/20261026_artigos.sql` e publique a função: `npx supabase functions deploy article`. Ela baixa a página do link e devolve só o texto (modo leitura). Só aceita endereços públicos `http(s)` (nunca rede interna), páginas de até 3 MB e 60 artigos por pessoa por dia (`ARTICLE_DAILY_LIMIT` muda o limite). No plano grátis o app guarda até 10 artigos.
+
 ## Segurança
 
 - A chave `anon` é pública por natureza; quem protege os dados são as regras **RLS** do `schema.sql`: cada pessoa só lê e grava os próprios registros.

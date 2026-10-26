@@ -53,7 +53,7 @@ const modal = $('#modal');
 const modalBody = $('#modal-body');
 
 const fmtDate = (s) => (s ? G.parseYmd(s).toLocaleDateString(LOCALE) : '');
-const bookById = (id) => state.books.find((b) => b.id === id);
+const bookById = (id) => state.books.find((b) => b.id === id) || state.articles?.find((b) => b.id === id);
 const noteById = (id) => state.notes.find((n) => n.id === id);
 const stars = (n) => (n > 0 ? `<span class="stars">${'★'.repeat(n)}<span class="off">${'★'.repeat(5 - n)}</span></span>` : '');
 const pct = (b) => (b.pages ? Math.min(100, Math.round(((b.status === 'finished' ? b.pages : b.currentPage || 0) / b.pages) * 100)) : 0);
@@ -94,6 +94,9 @@ const noteLabel = (n) => noteTitle(n) || (n.text || '').replace(LINK_RE, '$1').s
 async function load() {
   const all = await Promise.all(STORES.map((s) => db.all(s)));
   STORES.forEach((s, i) => { state[s] = all[i]; });
+  // artigos salvos por link: mesma tabela dos livros, lista separada (não contam em metas nem na estante)
+  state.articles = state.books.filter((b) => b.kind === 'article');
+  state.books = state.books.filter((b) => b.kind !== 'article');
   state.settings = { ...DEFAULT_SETTINGS, ...((await db.getKV('settings')) || {}) };
   state.badges = (await db.getKV('badges')) || {};
   state.challenges = (await db.getKV('challenges')) || [];
@@ -113,7 +116,7 @@ function refreshStats() {
 
 async function persist(store, obj) {
   await db.put(store, obj);
-  const arr = state[store];
+  const arr = store === 'books' && obj.kind === 'article' ? state.articles : state[store];
   const i = arr.findIndex((x) => x.id === obj.id);
   if (i >= 0) arr[i] = obj; else arr.push(obj);
 }
@@ -121,6 +124,7 @@ async function persist(store, obj) {
 async function remove(store, id) {
   await db.del(store, id);
   state[store] = state[store].filter((x) => x.id !== id);
+  if (store === 'books') state.articles = state.articles.filter((x) => x.id !== id);
 }
 
 // Toda alteração passa por aqui: recalcula XP, desafios, conquistas e comemora.
@@ -434,7 +438,8 @@ function booksView() {
     .filter((b) => (filter === 'all' || b.status === filter) && (purpose === 'all' || (b.purpose || 'hobby') === purpose))
     .sort((a, b) => (b.endDate || b.startDate || '').localeCompare(a.endDate || a.startDate || '') || b.createdAt - a.createdAt);
   const count = (st) => state.books.filter((b) => b.status === st).length;
-  return `<div class="row between"><h2>Meus livros</h2><button class="btn primary" data-action="newBook">➕ Novo</button></div>
+  return `${seg([['#/livros', '📚 Livros', 'books'], ['#/artigos', '📰 Artigos', 'articles']], 'books')}
+  <div class="row between"><h2>Meus livros</h2><button class="btn primary" data-action="newBook">➕ Novo</button></div>
   <div class="row gap-s wrap page-actions"><button class="btn small" data-action="recommend" title="Sugestões de leitura com IA">✨ O que ler</button><button class="btn small" data-action="shareShelf" title="Arte da sua estante para o Instagram">📸 Estante</button><button class="btn small" data-action="importFile" title="Importar do Kindle, Goodreads ou Skoob">⬆️ Importar</button></div>
   <input class="search" type="search" placeholder="Buscar por título, autor, tema ou subtema…" data-filter-list="#book-list">
   <div class="tabs">
@@ -499,6 +504,7 @@ function bookDetail(id) {
     <button class="btn" data-action="shareBook" data-id="${b.id}">📸 ${b.status === 'finished' ? 'Terminei!' : 'Lendo agora'}</button>
     <a class="btn" href="#/mapa/${encodeURIComponent(`b:${b.id}`)}">🕸️ No mapa</a>
     ${notes.length ? `<button class="btn" data-action="aiCards" data-book="${b.id}">✨ Cards com IA</button>` : ''}
+    ${notes.length >= 3 ? `<button class="btn" data-action="aiSummary" data-book="${b.id}">✨ Fichamento com IA</button>` : ''}
     <button class="btn ghost" data-action="editBook" data-id="${b.id}">✏️ Editar</button>
   </div>
   ${b.review ? `<section class="card"><div class="small muted">Minha opinião</div><p>${esc(b.review).replace(/\n/g, '<br>')}</p></section>` : ''}
@@ -556,6 +562,7 @@ function noteDetail(id) {
     <button class="btn" data-action="newCard" data-id="${n.id}">🧠 Criar card</button>
     <button class="btn" data-action="aiCards" data-id="${n.id}">✨ Cards com IA</button>
     <button class="btn" data-action="aiLinks" data-id="${n.id}">✨ Sugerir conexões</button>
+    <button class="btn" data-action="feynman" data-id="${n.id}">🎓 Explicar com minhas palavras</button>
     <a class="btn" href="#/mapa/${encodeURIComponent(`n:${n.id}`)}">🕸️ No mapa</a>
     <button class="btn" data-action="shareNote" data-id="${n.id}">↗ Compartilhar</button>
     ${Cloud.user() ? `<button class="btn" data-action="noteToClub" data-id="${n.id}">👥 No clube</button>` : ''}
@@ -580,7 +587,8 @@ function conceptView(raw) {
   return `<a href="#/notas" class="back">← Ideias</a>
   <h2>💡 ${esc(name)} <span class="chip">${kind}</span></h2>
   <div class="quick"><a class="btn" href="#/mapa/${encodeURIComponent(`c:${k}`)}">🕸️ Ver no mapa</a>
-    <button class="btn" data-action="newNote" data-link="${esc(name)}">✍️ Nota sobre isto</button></div>
+    <button class="btn" data-action="newNote" data-link="${esc(name)}">✍️ Nota sobre isto</button>
+    ${notes.length ? `<button class="btn" data-action="feynman" data-concept="${esc(name)}">🎓 Explicar com minhas palavras</button>` : ''}</div>
   ${subs.length ? `<h3>Subtemas</h3><div class="chips">${subs.map((x) => `<a class="chip tag" href="${conceptHref(x)}">${esc(x)}</a>`).join('')}</div>` : ''}
   ${books.length ? `<h3>Livros (${books.length})</h3>${books.map(bookCard).join('')}` : ''}
   <h3>Notas conectadas (${notes.length})</h3>
@@ -828,8 +836,7 @@ function cardItem(c) {
 }
 
 // cards dentro do filtro da revisão (pelo livro do card ou da nota de origem)
-function reviewCards() {
-  const f = getScope('reviewScope');
+function reviewCards(f = getScope('reviewScope')) {
   if (!scopeActive(f)) return [...state.cards];
   return state.cards.filter((c) => {
     const b = bookById(c.bookId || noteById(c.noteId)?.bookId);
@@ -866,6 +873,7 @@ function reviewView() {
   return `<h2>Revisar</h2>
   ${state.cards.length ? scopeFilters('reviewScope') : ''}
   ${finished ? '<section class="card center"><span class="big-emoji">🎉</span><b>Revisão concluída!</b><span class="small muted">Os cards voltam no momento certo para você não esquecer.</span></section>' : ''}
+  ${examSection()}
   <section class="grid3">
     <div class="card stat"><b>${due}</b><span>para hoje</span></div>
     <div class="card stat"><b>${cards.length}</b><span>${filtered ? 'cards no filtro' : 'cards no total'}</span></div>
@@ -878,9 +886,218 @@ function reviewView() {
   ${cards.length ? cards.map(cardItem).join('') : empty('Nenhum card ainda.', '<a class="btn" href="#/notas">Ir para as notas</a>')}`;
 }
 
+// ---------- artigos salvos por link ----------
+const FREE_ARTICLES = 10;
+const SHARED_KEY = 'grifo.shared';
+
+function articlesView() {
+  const list = [...state.articles].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const notesOf = (id) => state.notes.filter((n) => n.bookId === id).length;
+  return `${seg([['#/livros', '📚 Livros', 'books'], ['#/artigos', '📰 Artigos', 'articles']], 'articles')}
+  <h2>Artigos</h2>
+  <form class="row gap-s" id="art-form"><input name="url" type="url" class="search grow" required placeholder="Cole o link de um artigo…" autocomplete="off" style="margin:0"><button class="btn primary" id="art-save">Salvar</button></form>
+  <p class="hint">No celular, em qualquer site ou app de notícias: <b>Compartilhar → Grifo</b>. Depois é só selecionar um trecho e tocar em <b>Grifar</b>.</p>
+  ${!isPlus() ? `<p class="small muted">${state.articles.length} de ${FREE_ARTICLES} artigos do plano grátis · <a href="#/plus">ilimitados no Plus</a></p>` : ''}
+  ${list.length ? list.map((a) => `<a class="card book art-item" href="#/artigo/${a.id}">
+      ${a.cover ? `<img class="art-thumb" src="${esc(a.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="art-thumb ph">📰</span>'}
+      <div class="grow"><div class="book-title">${esc(a.title)}</div>
+        <div class="small muted">${esc(a.site || '')}${a.createdAt ? ` · ${new Date(a.createdAt).toLocaleDateString(LOCALE)}` : ''}${notesOf(a.id) ? ` · ${notesOf(a.id)} ${notesOf(a.id) === 1 ? 'grifo' : 'grifos'}` : ''}</div>
+        ${a.status === 'finished' ? '<span class="chip">✓ Lido</span>' : ''}</div></a>`).join('')
+    : empty('Salve artigos, posts e notícias para ler, grifar e conectar com seus livros.')}`;
+}
+articlesView.mount = () => {
+  const form = $('#art-form');
+  form.onsubmit = (e) => { e.preventDefault(); actions.saveArticle({ url: form.url.value.trim() }); };
+};
+
+// Marca no texto os trechos já grifados (as notas de citação deste artigo)
+function markHighlights(html, quotes) {
+  let out = html;
+  for (const q of quotes) {
+    const h = esc(q);
+    if (h.length >= 3 && out.includes(h)) out = out.replace(h, `<mark>${h}</mark>`);
+  }
+  return out;
+}
+
+function articleView(id) {
+  const a = state.articles.find((x) => x.id === id);
+  if (!a) return `<a href="#/artigos" class="back">← Artigos</a>${empty('Artigo não encontrado.')}`;
+  const notes = state.notes.filter((n) => n.bookId === id).sort((x, y) => x.createdAt - y.createdAt);
+  const quotes = notes.filter((n) => n.kind === 'quote').map((n) => plainText(n.text));
+  const tag = { h: 'h3', q: 'blockquote', li: 'li', p: 'p' };
+  const body = (a.blocks || []).map((b) => `<${tag[b.t] || 'p'}>${markHighlights(esc(b.x), quotes)}</${tag[b.t] || 'p'}>`).join('');
+  return `<a href="#/artigos" class="back">← Artigos</a>
+  <article class="reader">
+    <div class="small muted">${esc([a.site, a.author].filter(Boolean).join(' · '))}</div>
+    <h1 class="reader-title">${esc(a.title)}</h1>
+    <div class="quick">
+      <a class="btn small" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">↗ Original</a>
+      <button class="btn small" data-action="articleRead" data-id="${a.id}">${a.status === 'finished' ? '✓ Lido' : '✔ Marcar como lido'}</button>
+      <button class="btn small" data-action="newNote" data-id="${a.id}">✍️ Nota</button>
+      <button class="btn small ghost" data-action="deleteArticle" data-id="${a.id}">🗑️ Excluir</button>
+    </div>
+    <div class="reader-body" id="reader-body">${body}</div>
+  </article>
+  <h3>Seus grifos (${notes.length})</h3>
+  ${notes.length ? notes.map((n) => noteCard(n, false)).join('') : '<p class="small muted">Selecione um trecho do texto e toque em <b>Grifar</b>.</p>'}
+  <button class="btn primary grifar-btn" id="grifar-btn" hidden>🖍️ Grifar trecho</button>`;
+}
+articleView.mount = (id) => {
+  const btn = $('#grifar-btn');
+  const bodyEl = $('#reader-body');
+  if (!btn || !bodyEl) return;
+  const sel = () => {
+    const s = getSelection();
+    return s && !s.isCollapsed && bodyEl.contains(s.anchorNode) && bodyEl.contains(s.focusNode) ? s.toString().replace(/\s+/g, ' ').trim() : '';
+  };
+  const onSel = () => { if (btn.isConnected) btn.hidden = sel().length < 3; else document.removeEventListener('selectionchange', onSel); };
+  document.addEventListener('selectionchange', onSel);
+  // mousedown/touch não pode tirar a seleção antes do clique
+  btn.addEventListener('pointerdown', (e) => e.preventDefault());
+  btn.onclick = async () => {
+    const text = sel();
+    if (text.length < 3) return;
+    const note = { id: uid(), createdAt: Date.now(), bookId: id, text, kind: 'quote', source: 'article', tags: [], page: null };
+    getSelection().removeAllRanges();
+    await commit(() => persist('notes', note));
+    toast('🖍️ Trecho grifado · <u>adicionar reflexão</u>', '', () => noteForm(noteById(note.id)));
+  };
+};
+
+const articleActions = {
+  async saveArticle({ url }) {
+    if (!/^https?:\/\//i.test(url || '')) { toast('Cole o endereço completo do artigo, começando com https://', 'err'); return; }
+    const same = state.articles.find((a) => a.url === url || a.sourceUrl === url);
+    if (same) { location.hash = `#/artigo/${same.id}`; return; }
+    if (!Cloud.enabled() || !Cloud.user()) { toast('Entre na sua conta para salvar artigos.', 'err'); return; }
+    if (!isPlus() && state.articles.length >= FREE_ARTICLES) {
+      toast(`⭐ O plano grátis guarda até ${FREE_ARTICLES} artigos · <u>conhecer o Plus</u>`, 'gold', () => { location.hash = '#/plus'; });
+      return;
+    }
+    const btn = $('#art-save');
+    if (btn) { btn.disabled = true; btn.textContent = 'Buscando…'; }
+    toast('📰 Buscando o artigo…');
+    try {
+      const r = await Cloud.fetchArticle(url);
+      const art = {
+        id: uid(), createdAt: Date.now(), kind: 'article', status: 'want', purpose: 'hobby', genre: '', subtheme: '', pages: 0, currentPage: 0, rating: 0, isbn: '',
+        title: r.title, author: r.byline, site: r.site, url: r.url, sourceUrl: url, cover: r.image, excerpt: r.excerpt, published: r.published, lang: r.lang, blocks: r.blocks,
+      };
+      await commit(() => persist('books', art));
+      Cloud.track('article_save');
+      location.hash = `#/artigo/${art.id}`;
+    } catch (e) {
+      toast(esc(e.message), 'err');
+    } finally {
+      if (btn?.isConnected) { btn.disabled = false; btn.textContent = 'Salvar'; }
+    }
+  },
+  async articleRead({ id }) {
+    const a = state.articles.find((x) => x.id === id);
+    await commit(() => persist('books', { ...a, status: a.status === 'finished' ? 'want' : 'finished', endDate: a.status === 'finished' ? '' : G.ymd() }));
+  },
+  async deleteArticle({ id }) {
+    const a = state.articles.find((x) => x.id === id);
+    const notes = state.notes.filter((n) => n.bookId === id);
+    if (!confirm(`Excluir “${a.title}”${notes.length ? ` e ${notes.length} grifo(s)` : ''}?`)) return;
+    await commit(async () => {
+      for (const c of state.cards.filter((x) => notes.some((n) => n.id === x.noteId))) await remove('cards', c.id);
+      for (const n of notes) await remove('notes', n.id);
+      await remove('books', id);
+    });
+    location.hash = '#/artigos';
+  },
+};
+
+// Link recebido pelo menu "Compartilhar" do celular (manifest share_target): guarda e salva quando der
+(function captureShared() {
+  const q = new URLSearchParams(location.search);
+  const found = [q.get('url'), q.get('text'), q.get('title')].join(' ').match(/https?:\/\/[^\s"<>]+/);
+  if (!found) return;
+  try { localStorage.setItem(SHARED_KEY, found[0]); } catch { /* sem armazenamento */ }
+  for (const k of ['url', 'text', 'title']) q.delete(k);
+  history.replaceState(null, '', location.pathname + (q.toString() ? `?${q}` : '') + '#/artigos');
+})();
+function saveSharedArticle() {
+  let url = null;
+  try { url = localStorage.getItem(SHARED_KEY); } catch { /* sem armazenamento */ }
+  if (!url || !Cloud.user()) return;
+  try { localStorage.removeItem(SHARED_KEY); } catch { /* sem armazenamento */ }
+  setTimeout(() => actions.saveArticle({ url }), 0);
+}
+
+// ---------- plano de prova (Plus) ----------
+// Descrição curta de um filtro ("Psicologia · Daniel Kahneman")
+function scopeLabel(f) {
+  const parts = [];
+  if (f.purpose) parts.push(PURPOSE[f.purpose]?.label);
+  for (const k of ['theme', 'author', 'book']) if (f[k]) parts.push(scopeOptions('__none', k).find(([v]) => v === f[k])?.[1]);
+  return parts.filter(Boolean).join(' · ') || 'todos os cards';
+}
+function examSection() {
+  const ex = state.settings.exam;
+  if (!ex) {
+    if (!state.cards.length) return '';
+    return `<section class="card exam-card"><div class="row gap"><span class="big-emoji">🎯</span><div class="grow"><b>Plano para prova</b>${isPlus() ? '' : ' <span class="chip">⭐ Plus</span>'}
+      <div class="small muted">Tem prova marcada? Escolha o assunto e a data: o Grifo distribui a revisão até lá e faz uma revisão final na véspera.</div></div></div>
+      <button class="btn small" data-action="newExam" style="margin-top:10px">Criar plano</button></section>`;
+  }
+  const p = S.examPlan(reviewCards(ex.scope), ex.date, G.ymd());
+  if (p.daysLeft <= 0) {
+    return `<section class="card exam-card"><b>🎯 ${esc(ex.name)}</b><p class="small muted" style="margin:6px 0 10px">A data da prova passou. Boa sorte, ou melhor: parabéns pelo estudo!</p>
+      <button class="btn small" data-action="endExam">Encerrar plano</button></section>`;
+  }
+  const pct = p.total ? Math.round((p.learned / p.total) * 100) : 0;
+  return `<section class="card exam-card">
+    <div class="row between"><b>🎯 ${esc(ex.name)}</b><span class="chip">${p.daysLeft === 1 ? 'amanhã' : `faltam ${p.daysLeft} dias`}</span></div>
+    <div class="small muted" style="margin:4px 0 10px">${fmtDate(ex.date)} · ${esc(scopeLabel(ex.scope))}</div>
+    <div class="bar"><div style="width:${pct}%"></div></div>
+    <div class="small" style="margin:6px 0 10px">${p.learned} de ${p.total} cards já estudados (${pct}%)</div>
+    <div class="row gap-s wrap">${p.goal ? `<button class="btn primary" data-action="startExam">Estudar para a prova (${p.goal} hoje)</button>` : '<span class="small muted">Meta de hoje cumprida. Amanhã tem mais.</span>'}
+      <button class="btn ghost small" data-action="newExam">Editar</button><button class="btn ghost small" data-action="endExam">Encerrar</button></div>
+  </section>`;
+}
+const examActions = {
+  newExam() {
+    if (!isPlus()) { toast('⭐ O plano para prova faz parte do Grifo Plus · <u>conhecer</u>', 'gold', () => { location.hash = '#/plus'; }); return; }
+    const ex = state.settings.exam || { name: '', date: G.addDays(G.ymd(), 30), scope: getScope('reviewScope') };
+    const scope = state.settings.exam ? ex.scope : getScope('reviewScope');
+    openModal(`<form class="form" id="exam-form"><h3>🎯 Plano para prova</h3>
+      <label>Nome da prova <input name="name" required maxlength="60" value="${esc(ex.name)}" placeholder="ex: Concurso TRT, Prova de Direito Civil"></label>
+      <label>Data <input name="date" type="date" required min="${G.addDays(G.ymd(), 1)}" value="${ex.date}"></label>
+      <p class="small">Cards incluídos: <b>${esc(scopeLabel(scope))}</b> (${reviewCards(scope).length} cards).</p>
+      <p class="hint">Para mudar o assunto, feche, escolha tema, autor ou livro nos filtros da revisão e crie o plano de novo.</p>
+      <div class="actions"><button type="button" class="btn ghost" data-action="close">Cancelar</button><button class="btn primary">Salvar plano</button></div>
+    </form>`, (root) => {
+      $('#exam-form', root).onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        state.settings = { ...state.settings, exam: { name: fd.get('name').trim(), date: fd.get('date'), scope } };
+        await db.setKV('settings', state.settings);
+        closeModal();
+        render();
+      };
+    });
+  },
+  async endExam() {
+    if (!confirm('Encerrar o plano para prova? Seus cards continuam como estão.')) return;
+    const { exam, ...rest } = state.settings;
+    state.settings = rest;
+    await db.setKV('settings', state.settings);
+    render();
+  },
+  startExam() {
+    const ex = state.settings.exam;
+    review = { queue: S.examPlan(reviewCards(ex.scope), ex.date, G.ymd()).queue, revealed: false, done: 0, exam: ex.date };
+    render();
+  },
+};
+
 async function gradeCard(g) {
   const c = state.cards.find((x) => x.id === review.queue[0]);
-  const next = S.schedule(c, g, G.ymd());
+  let next = S.schedule(c, g, G.ymd());
+  if (review.exam) next = S.capForExam(next, review.exam, G.ymd());
   review.queue.shift();
   if (g === 0) review.queue.push(c.id); // errou: volta no fim desta sessão
   review.done++;
@@ -1385,6 +1602,7 @@ askView.mount = () => {
 
 // Chama a IA tratando login, plano e chave pessoal
 async function aiRun(task, input) {
+  if (globalThis.__aiMock) return globalThis.__aiMock(task, input); // testes da interface sem gastar com a IA
   const st = AI.available(state.settings);
   if (st === 'login') { location.hash = '#/conta'; throw new Error('Entre na sua conta para usar a IA.'); }
   if (st === 'plus') { location.hash = '#/plus'; throw new Error(''); }
@@ -1397,6 +1615,93 @@ async function aiRun(task, input) {
   }
 }
 
+// ---------- fichamento e técnica de Feynman (IA, Plus) ----------
+const busyModal = (title, msg) => openModal(`<div class="form"><h3>${title}</h3><p class="small muted">${msg}</p></div>`);
+
+// Texto do fichamento (para salvar como nota, copiar ou imprimir)
+function summaryText(b, r) {
+  const quote = (id) => noteById(id) && plainText(noteById(id).text);
+  return [
+    `Fichamento: ${b.title}${b.author ? ` (${b.author})` : ''}`, '',
+    r.overview, '',
+    'Ideias principais', ...r.ideas.map((x, i) => `${i + 1}. ${x.title}: ${x.text}`), '',
+    'Grifos marcantes', ...r.quotes.map(quote).filter(Boolean).map((q) => `“${q}”`), '',
+    'Para refletir', ...r.questions.map((q) => `• ${q}`),
+  ].join('\n');
+}
+
+function printText(title, text) {
+  const f = document.createElement('iframe');
+  f.style.cssText = 'position:fixed;width:0;height:0;border:0';
+  document.body.append(f);
+  f.contentDocument.write(`<!doctype html><meta charset="utf-8"><title>${esc(title)}</title><style>body{font:15px/1.6 Georgia,serif;max-width:680px;margin:40px auto;color:#222;white-space:pre-wrap}</style><body>${esc(text)}</body>`);
+  f.contentDocument.close();
+  setTimeout(() => { f.contentWindow.print(); setTimeout(() => f.remove(), 1000); }, 200);
+}
+
+const aiStudyActions = {
+  async aiSummary({ book }) {
+    const b = bookById(book);
+    const notes = state.notes.filter((n) => n.bookId === book).map((n) => ({ id: n.id, text: plainText(n.text), page: n.page, kind: n.kind }));
+    busyModal('✨ Fichamento', `Lendo seus ${notes.length} grifos e notas de “${esc(b.title)}”…`);
+    let r;
+    try { r = await aiRun('summary', { book: { title: b.title, author: b.author }, notes }); } catch (e) { closeModal(); if (e.message) toast(esc(e.message), 'err'); return; }
+    const text = summaryText(b, r);
+    const chip = (id) => (noteById(id) ? `<a class="chip" href="#/nota/${id}">${esc((noteLabel(noteById(id)) || '').slice(0, 32))}</a>` : '');
+    openModal(`<div class="form summary"><div class="row between"><h3>✨ Fichamento</h3><button type="button" class="icon-btn" data-action="close" aria-label="Fechar">✕</button></div>
+      <h2 style="margin:0">${esc(b.title)}</h2>
+      ${r.overview.split(/\n+/).map((p) => `<p>${esc(p)}</p>`).join('')}
+      <h3>Ideias principais</h3>
+      <ol class="summary-ideas">${r.ideas.map((x) => `<li><b>${esc(x.title)}</b> ${esc(x.text)}<div class="chips">${x.notes.map(chip).join('')}</div></li>`).join('')}</ol>
+      ${r.quotes.length ? `<h3>Grifos marcantes</h3>${r.quotes.map((id) => noteById(id) && `<blockquote>${esc(plainText(noteById(id).text))}</blockquote>`).filter(Boolean).join('')}` : ''}
+      <h3>Para refletir</h3><ul>${r.questions.map((q) => `<li>${esc(q)}</li>`).join('')}</ul>
+      <div class="row gap-s wrap"><button class="btn primary" id="sum-save">✍️ Salvar como nota</button><button class="btn" id="sum-copy">📋 Copiar</button><button class="btn" id="sum-print">📄 PDF / imprimir</button></div>
+    </div>`, (root) => {
+      $('#sum-save', root).onclick = async () => {
+        closeModal();
+        await commit(() => persist('notes', { id: uid(), createdAt: Date.now(), bookId: b.id, title: `Fichamento: ${b.title}`, text, kind: 'thought', source: 'ai', tags: ['fichamento'] }));
+        toast('Fichamento salvo nas notas do livro');
+      };
+      $('#sum-copy', root).onclick = async () => { try { await navigator.clipboard.writeText(text); toast('Fichamento copiado'); } catch { prompt('Copie o fichamento:', text); } };
+      $('#sum-print', root).onclick = () => printText(`Fichamento: ${b.title}`, text);
+    });
+  },
+  feynman({ id, concept }) {
+    const n = id && noteById(id);
+    const topic = concept || noteTitle(n) || (linksOf(n.text).length ? [...new Set(linksOf(n.text))].slice(0, 2).join(' e ') : 'a ideia desta nota');
+    // referência: a nota (ou as notas do conceito) e as notas que tratam das mesmas ideias
+    const keys = concept ? [norm(concept)] : linksOf(n.text).map(norm);
+    const refs = state.notes.filter((x) => (n && x.id === n.id) || linksOf(x.text).some((l) => keys.includes(norm(l))) || (x.tags || []).some((t) => keys.includes(norm(t))));
+    openModal(`<form class="form" id="feyn-form"><div class="row between"><h3>🎓 Explique com suas palavras</h3><button type="button" class="icon-btn" data-action="close" aria-label="Fechar">✕</button></div>
+      <p class="small">Explique <b>${esc(topic)}</b> como se fosse para alguém que nunca leu o livro. A IA compara com as suas ${refs.length} ${refs.length === 1 ? 'nota' : 'notas'} sobre o assunto.</p>
+      <textarea name="exp" rows="7" required minlength="40" placeholder="Com minhas palavras, isso quer dizer que…"></textarea>
+      <div id="feyn-out"></div>
+      <div class="actions"><button type="button" class="btn ghost" data-action="close">Fechar</button><button class="btn primary" id="feyn-go">Avaliar</button></div>
+    </form>`, (root) => {
+      const form = $('#feyn-form', root);
+      form.onsubmit = async (e) => {
+        e.preventDefault();
+        const go = $('#feyn-go', root);
+        go.disabled = true;
+        go.textContent = 'Avaliando…';
+        try {
+          const r = await aiRun('feynman', { topic, explanation: form.exp.value, notes: refs.slice(0, 30).map((x) => ({ text: plainText(x.text), book: bookById(x.bookId)?.title || '' })) });
+          const list = (title, items, cls) => (items.length ? `<div class="feyn-${cls}"><b>${title}</b><ul>${items.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : '');
+          $('#feyn-out', root).innerHTML = `<section class="feyn">
+            <div class="row gap"><span class="feyn-score">${Math.max(0, Math.min(10, r.score))}<small>/10</small></span><span>${esc(r.verdict)}</span></div>
+            ${list('✅ Você explicou bem', r.right, 'ok')}${list('➕ Faltou', r.missing, 'miss')}${list('⚠️ Atenção', r.wrong, 'warn')}
+            <p class="small"><b>💡 Dica:</b> ${esc(r.tip)}</p></section>`;
+          go.textContent = 'Avaliar de novo';
+        } catch (err) {
+          if (err.message) toast(esc(err.message), 'err');
+          go.textContent = 'Avaliar';
+        }
+        go.disabled = false;
+      };
+    });
+  },
+};
+
 // ---------- plano Plus ----------
 function plusView() {
   const plan = Cloud.plan();
@@ -1408,7 +1713,12 @@ function plusView() {
     ['✨', 'Pergunte à sua biblioteca', 'Respostas tiradas das suas notas, com as fontes'],
     ['🧠', 'Cards automáticos', 'A IA transforma grifos em cards de memorização'],
     ['🔗', 'Conexões sugeridas', 'Descobre ligações entre ideias de livros diferentes'],
-    ['🎨', 'Estilos extras de arte', 'Noite e Sua foto nos posts de citação'],
+    ['📝', 'Fichamento com IA', 'Resumo do livro feito a partir dos seus grifos, em PDF'],
+    ['🎓', 'Explique com suas palavras', 'A IA avalia sua explicação (técnica de Feynman)'],
+    ['🎯', 'Plano para prova', 'Revisão distribuída até a data da prova, com revisão final na véspera'],
+    ['📰', 'Artigos ilimitados', 'Salve links, leia sem anúncios e grife trechos'],
+    ['🎨', 'Temas e cores extras', 'Minimal, Aquarela, E-reader, Caderno, Pôr do sol e marca-texto colorido'],
+    ['📊', 'Retrospectiva completa', 'Mês a mês, seus autores, ideias mais conectadas e grifos favoritos'],
     ['🏷️', 'Artes sem marca', 'Posts só com a sua assinatura'],
   ];
   if (u && plan === 'free') Cloud.track('plus_view');
@@ -2183,7 +2493,8 @@ function noteForm(existing, { bookId, autoOCR, link } = {}) {
   }
   const n = existing || { bookId: bookId || state.books.find((b) => b.status === 'reading')?.id, kind: link ? 'thought' : 'quote', source: 'manual', tags: [], text: link ? `[[${link}]] ` : '' };
   const lastPage = n.page ?? bookById(n.bookId)?.currentPage ?? '';
-  const books = [...state.books].sort((a, b) => (a.status === 'reading' ? -1 : 0) - (b.status === 'reading' ? -1 : 0) || a.title.localeCompare(b.title));
+  // (nota de um artigo: o artigo entra na lista para a nota continuar ligada a ele)
+  const books = [...state.books, ...state.articles.filter((a) => a.id === n.bookId)].sort((a, b) => (a.status === 'reading' ? -1 : 0) - (b.status === 'reading' ? -1 : 0) || a.title.localeCompare(b.title));
   openModal(`<form class="form" id="note-form">
     <h3>${existing ? 'Editar nota' : 'Nova nota'}</h3>
     <label>Livro <select name="bookId" required>${books.map((b) => `<option value="${b.id}" ${b.id === n.bookId ? 'selected' : ''}>${esc(b.title)}</option>`).join('')}</select></label>
@@ -2483,8 +2794,12 @@ const shareActions = {
     const n = noteById(id), b = bookById(n.bookId);
     shareStudio({
       title: '📸 Post da citação', filename: 'citacao', photo: true, text: b ? `${b.title}${b.author ? ` — ${b.author}` : ''}` : '',
-      groups: [{ key: 'style', options: Share.QUOTE_STYLES.map((o) => (Share.PLUS_STYLES.includes(o.id) && !isPlus() ? { ...o, label: `${o.label} 🔒`, locked: true } : o)) }, { key: 'format', options: FORMATS }],
-      render: (v, photo) => Share.quoteCard({ text: plainText(n.text), title: b?.title || '', author: b?.author, page: n.page, style: v.style, format: v.format, handle: state.settings.handle, photo }),
+      groups: [
+        { key: 'style', options: Share.QUOTE_STYLES.map((o) => (Share.PLUS_STYLES.includes(o.id) && !isPlus() ? { ...o, label: `${o.label} 🔒`, locked: true } : o)) },
+        { key: 'tone', options: Share.QUOTE_TONES.map((o) => (Share.PLUS_TONES.includes(o.id) && !isPlus() ? { ...o, label: `${o.label} 🔒`, locked: true } : o)) },
+        { key: 'format', options: FORMATS },
+      ],
+      render: (v, photo) => Share.quoteCard({ text: plainText(n.text), title: b?.title || '', author: b?.author, page: n.page, style: v.style, tone: v.tone, format: v.format, handle: state.settings.handle, photo }),
     });
   },
   shareBook({ id }) {
@@ -2525,7 +2840,7 @@ const shareActions = {
     shareStudio({
       title: '✨ Sua retrospectiva', filename: 'retrospectiva', text: 'Minha retrospectiva de leituras',
       groups: [{ key: 'period', options: Share.PERIODS, value: hasMonth ? 'month' : 'year' }],
-      render: (v) => Share.wrappedSlides(state, { period: v.period, name: state.settings.name, handle: state.settings.handle, xp: state.stats.xp }),
+      render: (v) => Share.wrappedSlides(state, { period: v.period, name: state.settings.name, handle: state.settings.handle, xp: state.stats.xp, full: isPlus() }),
     });
   },
   shareMap() {
@@ -2736,7 +3051,7 @@ function importForm() {
 
 // ---------------- backup ----------------
 function exportData() {
-  const data = { app: 'grifo', version: 2, exportedAt: new Date().toISOString(), ...Object.fromEntries(STORES.map((s) => [s, state[s]])), settings: state.settings, badges: state.badges, challenges: state.challenges };
+  const data = { app: 'grifo', version: 2, exportedAt: new Date().toISOString(), ...Object.fromEntries(STORES.map((s) => [s, s === 'books' ? [...state.books, ...state.articles] : state[s]])), settings: state.settings, badges: state.badges, challenges: state.challenges };
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   a.download = `grifo-backup-${G.ymd()}.json`;
@@ -2822,6 +3137,9 @@ const timerActions = {
 // ---------------- ações ----------------
 const actions = {
   ...shareActions,
+  ...examActions,
+  ...aiStudyActions,
+  ...articleActions,
   ...timerActions,
   ...reminderActions,
   ...cloudActions,
@@ -2998,12 +3316,12 @@ document.addEventListener('submit', async (e) => {
 const routes = {
   '': home, livros: booksView, livro: bookDetail, notas: notesView, nota: noteDetail, conceito: conceptView,
   mapa: mapView, revisar: reviewView, stats: statsView, conquistas: achievementsView, ajustes: settingsView,
-  conta: accountView, admin: adminView, u: publicProfileView, clubes: clubsView, perguntar: askView, plus: plusView,
+  conta: accountView, admin: adminView, artigos: articlesView, artigo: articleView, u: publicProfileView, clubes: clubsView, perguntar: askView, plus: plusView,
   privacidade: privacyView, termos: termsView,
 };
 // páginas que qualquer pessoa pode abrir sem login
 const OPEN_ROUTES = ['u', 'privacidade', 'termos'];
-const TAB_OF = { livro: 'livros', nota: 'notas', conceito: 'notas', mapa: 'notas', perguntar: 'notas', stats: 'progresso', conquistas: 'progresso', clubes: 'progresso' };
+const TAB_OF = { artigos: 'livros', artigo: 'livros', livro: 'livros', nota: 'notas', conceito: 'notas', mapa: 'notas', perguntar: 'notas', stats: 'progresso', conquistas: 'progresso', clubes: 'progresso' };
 
 function render() {
   const [hashPath, query = ''] = location.hash.slice(1).split('?');
@@ -3023,6 +3341,7 @@ function render() {
   graphApi = null;
   view.innerHTML = fn(arg);
   fn.mount?.(arg);
+  if (!gated) saveSharedArticle();
   view.dataset.route = location.hash;
   if (keepScroll) scrollTo(0, y); else scrollTo(0, 0);
   const tab = TAB_OF[name] ?? name;

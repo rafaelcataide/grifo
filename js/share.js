@@ -7,7 +7,7 @@ export const SIZES = { story: [1080, 1920], feed: [1080, 1350] };
 const SERIF = '"Fraunces", Georgia, "Times New Roman", serif';
 const SANS = '"Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 const EMOJI = '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
-export const PLUS_STYLES = ['noite', 'foto'];
+export const PLUS_STYLES = ['noite', 'foto', 'minimal', 'aquarela', 'ereader', 'caderno', 'sol'];
 export const prefs = { brand: true }; // Plus pode tirar a marca "Grifo" das artes
 const MONTHS = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 
@@ -183,7 +183,29 @@ export const QUOTE_STYLES = [
   { id: 'pastel', label: '🌸 Pastel' },
   { id: 'noite', label: '🌙 Noite' },
   { id: 'foto', label: '🖼️ Sua foto' },
+  { id: 'minimal', label: '▫️ Minimal' },
+  { id: 'aquarela', label: '🎨 Aquarela' },
+  { id: 'ereader', label: '📱 E-reader' },
+  { id: 'caderno', label: '📒 Caderno' },
+  { id: 'sol', label: '🌅 Pôr do sol' },
 ];
+
+// Cor do marca-texto e dos detalhes; amarelo é o padrão (grátis), as outras fazem parte do Plus
+export const QUOTE_TONES = [
+  { id: 'amarelo', label: '🟡 Amarelo' },
+  { id: 'rosa', label: '🩷 Rosa' },
+  { id: 'verde', label: '🟢 Verde' },
+  { id: 'azul', label: '🔵 Azul' },
+  { id: 'lilas', label: '🟣 Lilás' },
+];
+export const PLUS_TONES = ['rosa', 'verde', 'azul', 'lilas'];
+const TONE = {
+  amarelo: { hl: 'rgba(255, 214, 64, .62)', accent: '#e0a21a', hue: 44 },
+  rosa: { hl: 'rgba(255, 138, 190, .5)', accent: '#d9578f', hue: 330 },
+  verde: { hl: 'rgba(118, 218, 140, .5)', accent: '#3f9e64', hue: 140 },
+  azul: { hl: 'rgba(108, 186, 255, .5)', accent: '#3b7fd6', hue: 208 },
+  lilas: { hl: 'rgba(182, 148, 255, .5)', accent: '#7e5bd6', hue: 266 },
+};
 
 const ART = {
   papel: { text: '#2b2620', sub: '#7a6e5d', accent: '#c08b5c', dark: false },
@@ -191,9 +213,71 @@ const ART = {
   pastel: { text: '#2d2f36', sub: '#6f7280', accent: '#6f7fe8', dark: false },
   noite: { text: '#eef0f6', sub: '#a3a7b5', accent: '#f0b590', dark: true },
   foto: { text: '#ffffff', sub: 'rgba(255,255,255,.8)', accent: '#ffd66b', dark: true },
+  minimal: { text: '#141414', sub: '#777777', accent: '#141414', dark: false },
+  aquarela: { text: '#2a2a33', sub: '#6d6d7a', accent: '#c08b5c', dark: false },
+  ereader: { text: '#1d1d1f', sub: '#5c5c60', accent: '#3a3a3d', dark: true },
+  caderno: { text: '#1f2a44', sub: '#5d6680', accent: '#d9746f', dark: false },
+  sol: { text: '#ffffff', sub: 'rgba(255,255,255,.82)', accent: '#ffffff', dark: true },
 };
+// estilos em que a faixa de marca-texto é desenhada atrás de cada linha
+const BANDS = { grifo: true, caderno: true, ereader: true };
 
-function paintQuoteBg(ctx, w, h, style, photo) {
+function paintQuoteBg(ctx, w, h, style, photo, tone = TONE.amarelo) {
+  if (style === 'minimal') {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = 'rgba(0,0,0,.08)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(56, 56, w - 112, h - 112);
+    return;
+  }
+  if (style === 'aquarela') {
+    ctx.fillStyle = '#fbf8f3';
+    ctx.fillRect(0, 0, w, h);
+    // manchas de aquarela em tons vizinhos da cor escolhida
+    const blobs = [[0.18, 0.16, 0.55, 0], [0.86, 0.3, 0.45, 40], [0.3, 0.86, 0.6, -35], [0.85, 0.88, 0.4, 70]];
+    for (const [bx, by, br, dh] of blobs) {
+      const g = ctx.createRadialGradient(w * bx, h * by, 0, w * bx, h * by, w * br);
+      g.addColorStop(0, `hsla(${tone.hue + dh}, 70%, 72%, .45)`);
+      g.addColorStop(1, `hsla(${tone.hue + dh}, 70%, 72%, 0)`);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+    }
+    grain(ctx, w, h, 0.05);
+    return;
+  }
+  if (style === 'ereader') {
+    // aparelho de tinta eletrônica: moldura escura e tela cinza-papel
+    ctx.fillStyle = '#1b1b1d';
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = '#e9e7e1';
+    ctx.beginPath();
+    ctx.roundRect(60, 120, w - 120, h - 330, 18);
+    ctx.fill();
+    grain(ctx, w, h, 0.02);
+    return;
+  }
+  if (style === 'caderno') {
+    ctx.fillStyle = '#fffdf6';
+    ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = 'rgba(80,120,200,.18)';
+    ctx.lineWidth = 2;
+    for (let y = 150; y < h; y += 62) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+    ctx.strokeStyle = 'rgba(217,116,111,.45)';
+    ctx.beginPath(); ctx.moveTo(120, 0); ctx.lineTo(120, h); ctx.stroke();
+    ctx.fillStyle = '#e8e2d2';
+    for (let y = 110; y < h - 60; y += 150) { ctx.beginPath(); ctx.arc(52, y, 16, 0, Math.PI * 2); ctx.fill(); }
+    return;
+  }
+  if (style === 'sol') {
+    linear(ctx, w, h, [`hsl(${tone.hue} 85% 64%)`, `hsl(${tone.hue - 28} 80% 58%)`, `hsl(${tone.hue - 60} 70% 42%)`], 'v');
+    grain(ctx, w, h, 0.04);
+    return;
+  }
+  if (style === 'pastel' && tone !== TONE.amarelo) {
+    linear(ctx, w, h, [`hsl(${tone.hue} 80% 93%)`, `hsl(${tone.hue + 30} 70% 94%)`, `hsl(${tone.hue + 60} 75% 93%)`]);
+    return;
+  }
   if (style === 'papel') {
     ctx.fillStyle = '#f3ead8';
     ctx.fillRect(0, 0, w, h);
@@ -229,36 +313,40 @@ function paintQuoteBg(ctx, w, h, style, photo) {
   }
 }
 
-export async function quoteCard({ text, title, author, page, style = 'papel', format = 'story', handle = '', photo = null }) {
+export async function quoteCard({ text, title, author, page, style = 'papel', tone = 'amarelo', format = 'story', handle = '', photo = null }) {
   await ensureFonts();
   const [w, h] = SIZES[format];
   const c = makeCanvas(w, h);
   const ctx = c.getContext('2d');
-  const t = ART[style] || ART.papel;
-  paintQuoteBg(ctx, w, h, style, photo);
+  const tn = TONE[tone] || TONE.amarelo;
+  const base = ART[style] || ART.papel;
+  // a cor escolhida troca o detalhe (aspas e traço) nos estilos que usam cor
+  const t = tone === 'amarelo' || ['papel', 'minimal', 'ereader', 'sol', 'foto'].includes(style) ? base : { ...base, accent: tn.accent };
+  paintQuoteBg(ctx, w, h, style, photo, tn);
 
-  const pad = style === 'grifo' ? 140 : 110;
+  const pad = style === 'ereader' ? 150 : style === 'caderno' ? 170 : style === 'grifo' ? 140 : 110;
   const top = format === 'story' ? 470 : 260;
   const boxH = format === 'story' ? 920 : 700;
 
   ctx.fillStyle = t.accent;
   ctx.font = `600 ${format === 'story' ? 280 : 220}px ${SERIF}`;
   ctx.textAlign = 'left';
-  ctx.fillText('“', pad - 16, top - 30);
+  if (style !== 'ereader') ctx.fillText('“', pad - 16, top - 30);
 
-  const fit = fitText(ctx, text, { maxW: w - pad * 2, maxH: boxH, max: format === 'story' ? 80 : 68, min: 32, font: (s) => `${style === 'grifo' ? 500 : 400} ${s}px ${SERIF}`, lh: style === 'grifo' ? 1.45 : 1.32 });
+  const band = BANDS[style];
+  const fit = fitText(ctx, text, { maxW: w - pad * 2, maxH: boxH, max: format === 'story' ? 80 : 68, min: 32, font: (s) => `${band ? 500 : style === 'minimal' ? 300 : 400} ${s}px ${SERIF}`, lh: band ? 1.45 : 1.32 });
   let y = top + (boxH - fit.lines.length * fit.lh) / 2 + fit.size;
   for (const line of fit.lines) {
-    if (style === 'grifo' && line) {
-      // faixa de marca-texto levemente torta atrás de cada linha
+    if (band && line) {
+      // faixa de marca-texto atrás de cada linha (no e-reader: o cinza reto do Kindle)
       const lw = ctx.measureText(line).width;
       const r = hash(line);
       ctx.save();
       ctx.translate(pad - 10, y - fit.size * 0.78);
-      ctx.rotate((((r % 7) - 3) / 3) * 0.006);
-      ctx.fillStyle = 'rgba(255, 214, 64, .62)';
+      if (style !== 'ereader') ctx.rotate((((r % 7) - 3) / 3) * 0.006);
+      ctx.fillStyle = style === 'ereader' ? 'rgba(0, 0, 0, .13)' : tn.hl;
       ctx.beginPath();
-      ctx.roundRect(0, 0, lw + 20, fit.size * 1.02, 8);
+      ctx.roundRect(0, 0, lw + 20, fit.size * 1.02, style === 'ereader' ? 0 : 8);
       ctx.fill();
       ctx.restore();
     }
@@ -593,7 +681,30 @@ export function wrappedData(state, periodId) {
   else if (longest >= 14) persona = { icon: '🔥', name: 'Leitor Constante', desc: `Disciplina pura: ${longest} dias seguidos de leitura.` };
   else persona = { icon: '🧭', name: 'Explorador Curioso', desc: 'Você passeia entre temas e encontra ideias onde ninguém procura.' };
 
+  // retrospectiva completa (Plus): mês a mês (ou semana a semana), autores, ideias mais ligadas e grifos favoritos
+  const yearly = periodId === 'year';
+  const buckets = yearly ? MONTHS.map((m) => [m.slice(0, 3), 0]) : [['1ª sem', 0], ['2ª sem', 0], ['3ª sem', 0], ['4ª sem', 0], ['5ª sem', 0]];
+  for (const s of sessions) {
+    const dt = parseYmd(s.date);
+    const k = yearly ? dt.getMonth() : Math.min(4, Math.floor((dt.getDate() - 1) / 7));
+    buckets[k][1] += s.pages;
+  }
+  while (!yearly && buckets.length > 4 && !buckets[buckets.length - 1][1]) buckets.pop();
+  const authors = count(touched.flatMap((b) => String(b.author || '').split(/\s*[;&]\s*/).filter(Boolean).map((a) => ({ a }))), (x) => x.a);
+  const ideaCount = new Map();
+  for (const n of notes) for (const m of n.text.matchAll(/\[\[([^[\]]+?)\]\]/g)) {
+    const k = m[1].split('|')[0].trim();
+    ideaCount.set(k, (ideaCount.get(k) || 0) + 1);
+  }
+  const ideas = [...ideaCount].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const favQuotes = [...notes]
+    .filter((n) => n.kind === 'quote' && plain(n.text).length >= 20 && plain(n.text).length <= 180 && n.id !== quoteNote?.id)
+    .sort((a, b) => (state.cards || []).filter((c) => c.noteId === b.id).length - (state.cards || []).filter((c) => c.noteId === a.id).length || b.text.length - a.text.length)
+    .slice(0, 3)
+    .map((n) => ({ text: plain(n.text), book: state.books.find((x) => x.id === n.bookId)?.title || '' }));
+
   return {
+    buckets, authors: authors.slice(0, 5), ideas, favQuotes,
     range: r, pages, finished, sessions, days: byDay.size, longest, bestDay, bestDate, speed,
     themes, subthemes, purposes, best, quote: quoteNote && { ...quoteNote, text: plain(quoteNote.text) },
     notes: notes.length, linked, connections, cards: cards.length, reviews: reviews.length, persona,
@@ -633,7 +744,7 @@ function centerLines(ctx, text, y, { maxW, maxH, max, min, font, color, lh }) {
   return y;
 }
 
-export async function wrappedSlides(state, { period = 'month', name = '', handle = '', xp = 0 } = {}) {
+export async function wrappedSlides(state, { period = 'month', name = '', handle = '', xp = 0, full = false } = {}) {
   await ensureFonts();
   const d = wrappedData(state, period);
   const [w, h] = SIZES.story;
@@ -830,6 +941,88 @@ export async function wrappedSlides(state, { period = 'month', name = '', handle
         ctx.fillText(label, 330 + nw + 24, y + 5);
         ctx.textAlign = 'center';
         y += 210;
+      }
+    });
+  }
+
+  // ---- retrospectiva completa (Plus) ----
+  if (full && d.buckets.some(([, v]) => v)) {
+    slides.push(async (ctx, i, n) => {
+      slideFrame(ctx, w, h, i, n, d);
+      centerLines(ctx, period === 'year' ? 'Seu ano, mês a mês' : 'Seu mês, semana a semana', 400, { maxW: w - 200, maxH: 200, max: 80, min: 50, font: (s) => `600 ${s}px ${SERIF}`, color: ink });
+      const max = Math.max(...d.buckets.map(([, v]) => v), 1);
+      const best = d.buckets.reduce((a, b) => (b[1] > a[1] ? b : a));
+      const n2 = d.buckets.length, gap = 18, bw = (w - 240 - gap * (n2 - 1)) / n2, base = 1380, top = 640;
+      d.buckets.forEach(([label, v], k) => {
+        const x = 120 + k * (bw + gap);
+        const bh = Math.max(8, ((base - top) * v) / max);
+        ctx.fillStyle = label === best[0] ? '#6f7fe8' : 'rgba(111,127,232,.35)';
+        ctx.beginPath(); ctx.roundRect(x, base - bh, bw, bh, 12); ctx.fill();
+        ctx.fillStyle = soft;
+        ctx.font = `600 ${n2 > 6 ? 26 : 32}px ${SANS}`;
+        ctx.fillText(label, x + bw / 2, base + 50);
+      });
+      ctx.fillStyle = ink;
+      ctx.font = `400 42px ${SANS}`;
+      ctx.fillText(`Pico em ${best[0]}: ${best[1].toLocaleString(LOCALE)} páginas`, w / 2, 1560);
+    });
+  }
+  if (full && d.authors.length) {
+    slides.push(async (ctx, i, n) => {
+      slideFrame(ctx, w, h, i, n, d);
+      centerLines(ctx, 'Os autores que te acompanharam', 400, { maxW: w - 200, maxH: 240, max: 80, min: 50, font: (s) => `600 ${s}px ${SERIF}`, color: ink, lh: 1.12 });
+      let y = 700;
+      d.authors.forEach(([a, v], k) => {
+        ctx.fillStyle = 'rgba(255,255,255,.72)';
+        ctx.beginPath(); ctx.roundRect(140, y - 80, w - 280, 140, 30); ctx.fill();
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#8a63d2';
+        ctx.font = `800 56px ${SANS}`;
+        ctx.fillText(`${k + 1}`, 190, y + 10);
+        ctx.fillStyle = ink;
+        ctx.font = `600 44px ${SERIF}`;
+        ctx.fillText(ellipsize(ctx, a, w - 560), 270, y + 8);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = soft;
+        ctx.font = `400 32px ${SANS}`;
+        ctx.fillText(`${v} ${v === 1 ? 'livro' : 'livros'}`, w - 190, y + 6);
+        ctx.textAlign = 'center';
+        y += 175;
+      });
+    });
+  }
+  if (full && d.ideas.length) {
+    slides.push(async (ctx, i, n) => {
+      slideFrame(ctx, w, h, i, n, d, true);
+      ctx.fillStyle = 'rgba(255,255,255,.6)';
+      ctx.font = `800 32px ${SANS}`;
+      ctx.fillText('AS IDEIAS QUE VOCÊ MAIS CONECTOU', w / 2, 360);
+      const max = d.ideas[0][1];
+      let y = 620;
+      for (const [idea, v] of d.ideas) {
+        const s = 60 + Math.round((v / max) * 50);
+        centerLines(ctx, idea, y, { maxW: w - 200, maxH: s * 1.3, max: s, min: 36, font: (z) => `600 ${z}px ${SERIF}`, color: '#ffffff' });
+        ctx.fillStyle = '#f0b590';
+        ctx.font = `600 30px ${SANS}`;
+        ctx.fillText(`${v} ${v === 1 ? 'ligação' : 'ligações'}`, w / 2, y + 56);
+        y += 200;
+      }
+      return true;
+    });
+  }
+  if (full && d.favQuotes.length) {
+    slides.push(async (ctx, i, n) => {
+      slideFrame(ctx, w, h, i, n, d);
+      centerLines(ctx, 'Outros grifos que marcaram', 380, { maxW: w - 200, maxH: 200, max: 76, min: 50, font: (s) => `600 ${s}px ${SERIF}`, color: ink });
+      let y = 600;
+      for (const q of d.favQuotes) {
+        ctx.fillStyle = 'rgba(255,255,255,.72)';
+        ctx.beginPath(); ctx.roundRect(110, y - 70, w - 220, 360, 32); ctx.fill();
+        const end = centerLines(ctx, `“${q.text}”`, y, { maxW: w - 300, maxH: 230, max: 44, min: 28, font: (s) => `italic 400 ${s}px ${SERIF}`, color: ink, lh: 1.3 });
+        ctx.fillStyle = soft;
+        ctx.font = `600 28px ${SANS}`;
+        ctx.fillText(ellipsize(ctx, `— ${q.book}`, w - 300), w / 2, Math.min(end + 20, y + 260));
+        y += 420;
       }
     });
   }

@@ -12,7 +12,7 @@ export const EMOJI_ICONS = {
   '📥': 'download', '📤': 'share', '🖼️': 'photo', '▭': 'forms', '🎈': 'balloon', '💼': 'briefcase', '🎓': 'school', '↻': 'refresh',
   '↗': 'share', '🏃': 'run', '🧱': 'stack-2', '⚡': 'bolt', '🔔': 'bell', '💬': 'message-circle', '🔄': 'refresh', '🔑': 'key',
   '🎨': 'palette', '✓': 'check', '🐞': 'bug', '⚠️': 'alert-triangle', '❓': 'help-circle', '⏸': 'player-pause', '▶': 'player-play',
-  '■': 'player-stop', '🌸': 'flower', '📜': 'file-text', '🧩': 'layout-grid', '👋': 'confetti', '📋': 'clipboard',
+  '■': 'player-stop', '📰': 'news', '📝': 'notes', '✔': 'check', '🌸': 'flower', '📜': 'file-text', '🧩': 'layout-grid', '👋': 'confetti', '📋': 'clipboard',
 };
 
 const SPRITE = 'icons/ui.svg';

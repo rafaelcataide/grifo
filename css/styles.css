@@ -631,3 +631,40 @@ body.gated { padding-bottom: 24px; }
 .weekbars .wb { flex: 1; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; font-size: .72rem; color: var(--muted); }
 .weekbars i { display: block; width: 100%; max-width: 36px; background: var(--accent); border-radius: 6px 6px 0 0; min-height: 4px; }
 .weekbars .wb-n { color: var(--text); font-weight: 600; }
+
+/* plano para prova */
+.exam-card { border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
+.exam-card .bar { margin: 0; }
+
+/* fichamento e Feynman */
+.summary p { line-height: 1.6; margin: 0 0 8px; }
+.summary-ideas { padding-left: 20px; display: grid; gap: 10px; margin: 0; }
+.summary-ideas .chips { margin-top: 4px; }
+.summary blockquote { margin: 0 0 8px; padding: 6px 12px; border-left: 3px solid var(--peach); font-family: "Fraunces", Georgia, serif; }
+.feyn { border-radius: 12px; background: var(--surface-2); padding: 12px; display: grid; gap: 8px; }
+.feyn ul { margin: 4px 0 0; padding-left: 18px; }
+.feyn-score { font-family: "Fraunces", Georgia, serif; font-size: 2rem; font-weight: 600; color: var(--accent); line-height: 1; }
+.feyn-score small { font-size: .9rem; color: var(--muted); }
+
+/* fichamento e Feynman */
+.summary p { line-height: 1.6; margin: 0 0 8px; }
+.summary-ideas { padding-left: 20px; display: grid; gap: 10px; margin: 0; }
+.summary-ideas .chips { margin-top: 4px; }
+.summary blockquote { margin: 0 0 8px; padding: 6px 12px; border-left: 3px solid var(--peach); font-family: "Fraunces", Georgia, serif; }
+.feyn { border-radius: 12px; background: var(--surface-2); padding: 12px; display: grid; gap: 8px; }
+.feyn ul { margin: 4px 0 0; padding-left: 18px; }
+.feyn-score { font-family: "Fraunces", Georgia, serif; font-size: 2rem; font-weight: 600; color: var(--accent); line-height: 1; }
+.feyn-score small { font-size: .9rem; color: var(--muted); }
+
+/* artigos */
+.art-item { text-decoration: none; color: inherit; }
+.art-thumb { width: 64px; height: 64px; border-radius: 10px; object-fit: cover; flex: none; background: var(--surface-2); }
+.art-thumb.ph { display: grid; place-items: center; font-size: 1.6rem; }
+.reader { max-width: 680px; margin: 0 auto; }
+.reader-title { font-family: "Fraunces", Georgia, serif; font-weight: 600; font-size: clamp(1.6rem, 6vw, 2.2rem); line-height: 1.15; margin: 6px 0 12px; }
+.reader-body { font-family: "Fraunces", Georgia, serif; font-size: 1.12rem; line-height: 1.7; margin-top: 18px; }
+.reader-body p, .reader-body li { margin: 0 0 1em; }
+.reader-body h3 { font-size: 1.25rem; margin: 1.4em 0 .5em; }
+.reader-body blockquote { margin: 0 0 1em; padding-left: 14px; border-left: 3px solid var(--peach); color: var(--muted); }
+.reader-body mark { background: color-mix(in srgb, #ffd84d 55%, transparent); padding: 1px 2px; }
+.grifar-btn { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 30; box-shadow: 0 8px 24px rgba(0, 0, 0, .25); }

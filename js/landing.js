@@ -80,9 +80,9 @@ export function landingView({ invite = false, price = '' } = {}) {
     <h2>Planos</h2>
     <div class="lp-plans-grid">
       <div class="lp-plan"><h3>Grátis</h3><div class="lp-price">R$ 0</div>
-        <ul><li>Livros, notas e grifos por foto</li><li>Mapa de ideias e cards de revisão</li><li>Metas, conquistas e clubes</li><li>Sincronização entre aparelhos</li><li>Artes para o Instagram</li></ul></div>
+        <ul><li>Livros, notas e grifos por foto</li><li>Até 10 artigos salvos por link</li><li>Mapa de ideias e cards de revisão</li><li>Metas, conquistas e clubes</li><li>Sincronização entre aparelhos</li><li>Artes para o Instagram</li></ul></div>
       <div class="lp-plan plus"><h3>⭐ Plus</h3><div class="lp-price">${esc(price)}</div>
-        <ul><li>Tudo do grátis</li><li>Pergunte à sua biblioteca com IA</li><li>Cards e conexões sugeridos pela IA</li><li>Estilos extras e artes sem marca</li></ul></div>
+        <ul><li>Tudo do grátis</li><li>Pergunte à sua biblioteca com IA</li><li>Fichamento e cards feitos pela IA</li><li>Plano de revisão para provas</li><li>Artigos ilimitados</li><li>Temas extras e artes sem marca</li></ul></div>
     </div>
   </section>
 

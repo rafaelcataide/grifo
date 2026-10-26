@@ -154,3 +154,23 @@ test('texto: ligações [[ ]] e escape de HTML', async () => {
   assert.equal(U.plainText('ver [[Hábitos]] e [[Normalização|normalizar]]'), 'ver Hábitos e normalizar');
   assert.equal(U.esc('<b>"a" & \'b\'</b>'), '&lt;b&gt;&quot;a&quot; &amp; &#39;b&#39;&lt;/b&gt;');
 });
+
+test('plano de prova: meta do dia, atrasados e revisão na véspera', async () => {
+  const S = await import('../js/srs.js');
+  const card = (id, due, reps = 1) => ({ id, due, reps, createdAt: 0 });
+  const cards = [card('a', '2026-11-01'), card('b', '2026-11-02'), card('c', '2026-11-05'), card('d', '2026-11-08'), card('e', '2026-12-30'), card('f', '2026-11-03', 0)];
+  const p = S.examPlan(cards, '2026-11-10', '2026-11-02');
+  assert.equal(p.daysLeft, 8);
+  assert.equal(p.total, 6);
+  assert.equal(p.learned, 5);
+  // 5 cards voltam antes da prova; atrasados (a, b) entram todos; meta = máx(2, ceil(5/8)) = 2
+  assert.deepEqual(p.queue, ['a', 'b']);
+  // revisado hoje e marcado para amanhã: não é puxado de volta para hoje
+  assert.equal(S.examPlan([{ id: 'x', due: '2026-11-03', reps: 1, lastReview: '2026-11-02' }], '2026-11-10', '2026-11-02').goal, 0);
+  // prova já passou: nada a revisar pelo plano
+  assert.equal(S.examPlan(cards, '2026-11-01', '2026-11-02').goal, 0);
+  // card que voltaria depois da prova vai para a véspera; na véspera não muda
+  assert.equal(S.capForExam({ due: '2026-12-01' }, '2026-11-10', '2026-11-02').due, '2026-11-09');
+  assert.equal(S.capForExam({ due: '2026-12-01' }, '2026-11-10', '2026-11-09').due, '2026-12-01');
+  assert.equal(S.capForExam({ due: '2026-11-05' }, '2026-11-10', '2026-11-02').due, '2026-11-05');
+});
