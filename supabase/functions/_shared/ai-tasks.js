@@ -196,6 +196,28 @@ Se as notas não bastarem para avaliar algum ponto, diga isso em vez de inventar
   build: ({ topic, explanation, notes = [] }) => `Ideia: ${clip(topic, 150)}\n\n<notas_de_referencia>\n${notes.slice(0, 30).map((n) => `<nota livro="${clip(n.book, 120)}">\n${clip(n.text, 800)}\n</nota>`).join('\n')}\n</notas_de_referencia>\n\n<explicacao_da_pessoa>\n${clip(explanation, 3000)}\n</explicacao_da_pessoa>`,
 };
 
+// Classificação de artigo: finalidade, tema e subtema, de preferência usando os que a pessoa já tem
+TASKS.classify = {
+  model: HAIKU,
+  effort: 'low',
+  system: `Você classifica artigos salvos numa biblioteca pessoal de leituras, em português do Brasil.
+- "purpose": "hobby" (lazer, cultura, curiosidade), "professional" (trabalho, carreira, negócios, tecnologia aplicada) ou "academic" (estudo, ciência, provas, pesquisa).
+- "theme": a área ampla (1 a 3 palavras). Se algum tema da lista de temas existentes servir, copie o nome exatamente igual.
+- "subtheme": o assunto mais específico (1 a 4 palavras). Prefira um subtema existente daquele tema quando servir.
+- Use português, com inicial maiúscula.`,
+  schema: {
+    type: 'object',
+    properties: {
+      purpose: { type: 'string', enum: ['hobby', 'professional', 'academic'] },
+      theme: { type: 'string' },
+      subtheme: { type: 'string' },
+    },
+    required: ['purpose', 'theme', 'subtheme'],
+    additionalProperties: false,
+  },
+  build: ({ title, site, text, themes = [] }) => `<temas_existentes>\n${themes.slice(0, 80).map((t) => `- ${clip(t.theme, 60)}${t.subthemes?.length ? `: ${t.subthemes.slice(0, 12).map((x) => clip(x, 40)).join(', ')}` : ''}`).join('\n')}\n</temas_existentes>\n\n<artigo titulo="${clip(title, 200)}" site="${clip(site, 80)}">\n${clip(text, 5000)}\n</artigo>`,
+};
+
 export const TASK_NAMES = Object.keys(TASKS);
 
 // Parâmetros para client.beta.messages.create (SDK oficial da Anthropic)

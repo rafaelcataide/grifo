@@ -80,12 +80,18 @@ export const db = {
     if (track && SYNC_KV.includes(key)) await rawSetKV(`__ts:${key}`, Date.now());
   },
   tombstones: async () => (await getKV(TOMBS)) || [],
+  // arquivos de PDF ficam só neste aparelho (no Plus também vão para o armazenamento da conta)
+  getFile: (id) => getKV(`file:${id}`),
+  setFile: (id, blob) => rawSetKV(`file:${id}`, blob),
+  delFile: (id) => tx('kv', 'readwrite', (s) => s.delete(`file:${id}`)),
   // Limpa o aparelho sem gerar lápides (ao sair da conta ou entrar com outra)
   wipeLocal: async () => {
     for (const s of STORES) await tx(s, 'readwrite', (st) => st.clear());
     for (const k of [...SYNC_KV, TOMBS, '__sync', 'lastReminder', ...SYNC_KV.map((x) => `__ts:${x}`)]) {
       await tx('kv', 'readwrite', (st) => st.delete(k));
     }
+    const keys = await tx('kv', 'readonly', (st) => st.getAllKeys());
+    for (const k of keys.filter((x) => String(x).startsWith('file:'))) await tx('kv', 'readwrite', (st) => st.delete(k));
   },
   pruneTombstones: async (upTo) => rawSetKV(TOMBS, ((await getKV(TOMBS)) || []).filter((t) => t.ts > upTo)),
 };

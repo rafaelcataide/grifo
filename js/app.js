@@ -54,6 +54,8 @@ const modalBody = $('#modal-body');
 
 const fmtDate = (s) => (s ? G.parseYmd(s).toLocaleDateString(LOCALE) : '');
 // livros e artigos (o que tem finalidade, tema e notas)
+// endereço de um livro, artigo ou PDF
+const srcHref = (b) => (b.kind === 'pdf' ? `#/pdf/${b.id}` : b.kind === 'article' ? `#/artigo/${b.id}` : `#/livro/${b.id}`);
 const sources = () => [...state.books, ...(state.articles || [])];
 const bookById = (id) => state.books.find((b) => b.id === id) || state.articles?.find((b) => b.id === id);
 const noteById = (id) => state.notes.find((n) => n.id === id);
@@ -97,8 +99,8 @@ async function load() {
   const all = await Promise.all(STORES.map((s) => db.all(s)));
   STORES.forEach((s, i) => { state[s] = all[i]; });
   // artigos salvos por link: mesma tabela dos livros, lista separada (não contam em metas nem na estante)
-  state.articles = state.books.filter((b) => b.kind === 'article');
-  state.books = state.books.filter((b) => b.kind !== 'article');
+  state.articles = state.books.filter((b) => b.kind === 'article' || b.kind === 'pdf');
+  state.books = state.books.filter((b) => b.kind !== 'article' && b.kind !== 'pdf');
   state.settings = { ...DEFAULT_SETTINGS, ...((await db.getKV('settings')) || {}) };
   state.badges = (await db.getKV('badges')) || {};
   state.challenges = (await db.getKV('challenges')) || [];
@@ -118,7 +120,7 @@ function refreshStats() {
 
 async function persist(store, obj) {
   await db.put(store, obj);
-  const arr = store === 'books' && obj.kind === 'article' ? state.articles : state[store];
+  const arr = store === 'books' && (obj.kind === 'article' || obj.kind === 'pdf') ? state.articles : state[store];
   const i = arr.findIndex((x) => x.id === obj.id);
   if (i >= 0) arr[i] = obj; else arr.push(obj);
 }
@@ -130,7 +132,7 @@ async function remove(store, id) {
 }
 
 // Toda alteração passa por aqui: recalcula XP, desafios, conquistas e comemora.
-async function commit(fn, { quiet = false } = {}) {
+async function commit(fn, { quiet = false, rerender = true } = {}) {
   const before = refreshStats().xp;
   const levelBefore = G.levelInfo(before).level;
   await fn();
@@ -159,7 +161,7 @@ async function commit(fn, { quiet = false } = {}) {
   if (gained > 0 && !quiet) toast(`✨ +${gained} XP`);
   const lv = G.levelInfo(s.xp);
   if (lv.level > levelBefore) { toast(`⬆️ Você subiu para o nível ${lv.level}: <b>${lv.title}</b>! · <u>compartilhar</u>`, 'gold', () => actions.shareLevel()); confetti(); }
-  render();
+  if (rerender) render();
   scheduleSync();
 }
 
@@ -394,6 +396,30 @@ onboarding.mount = () => {
 
 const needsOnboarding = () => !state.settings.onboarded && !state.books.length && !state.notes.length;
 
+// ---------- primeiros passos ----------
+// Lista que leva a pessoa até sentir o valor do app; cada passo se marca sozinho e a lista some no fim
+const FIRST_STEPS = [
+  { id: 'book', label: 'Adicione um livro que está lendo', done: () => state.books.length > 0, btn: ['➕ Livro', 'newBook'] },
+  { id: 'note', label: 'Guarde um grifo: foto da página ou texto', done: () => state.notes.length > 0, btn: ['📷 Grifo', 'scan'] },
+  { id: 'card', label: 'Transforme um grifo em card de revisão', done: () => state.cards.length > 0, href: ['🧠 Ver notas', '#/notas'] },
+  { id: 'review', label: 'Faça sua primeira revisão', done: () => (state.reviews || []).length > 0, href: ['🧠 Revisar', '#/revisar'] },
+  { id: 'link', label: 'Ligue duas ideias com [[ ]] numa nota', done: () => state.notes.some((n) => linksOf(n.text).length), btn: ['✍️ Nota', 'newNote'] },
+  { id: 'article', label: 'Salve um artigo para ler e grifar', done: () => state.articles.length > 0, href: ['📰 Artigos', '#/artigos'] },
+];
+function firstSteps() {
+  if (state.settings.firstStepsHidden) return '';
+  const steps = FIRST_STEPS.map((st) => ({ ...st, ok: st.done() }));
+  const done = steps.filter((st) => st.ok).length;
+  if (done === steps.length) return '';
+  const next = steps.find((st) => !st.ok);
+  return `<section class="card first-steps">
+    <div class="row between"><b>🚀 Primeiros passos</b><span class="small muted">${done} de ${steps.length}</span></div>
+    <div class="bar"><div style="width:${(done / steps.length) * 100}%"></div></div>
+    <ol>${steps.map((st) => `<li class="${st.ok ? 'ok' : st === next ? 'next' : ''}"><span class="fs-dot">${st.ok ? '✓' : ''}</span><span class="grow">${st.label}</span>${st === next ? (st.btn ? `<button class="btn small primary" data-action="${st.btn[1]}">${st.btn[0]}</button>` : `<a class="btn small primary" href="${st.href[1]}">${st.href[0]}</a>`) : ''}</li>`).join('')}</ol>
+    <button class="btn ghost small" data-action="hideFirstSteps">Esconder</button>
+  </section>`;
+}
+
 function home() {
   const s = state.stats, set = state.settings;
   const ch = G.weeklyChallenge(s);
@@ -404,7 +430,8 @@ function home() {
     ? (s.pagesToday >= set.dailyGoal ? 'Meta de hoje batida! 🎉' : `Faltam ${set.dailyGoal - s.pagesToday} páginas para a meta de hoje.`)
     : (s.streak > 0 ? `Leia hoje para manter sua sequência de ${s.streak} dias!` : 'Que tal começar uma sequência hoje?');
 
-  return `${levelCard()}
+  return `${firstSteps()}
+  ${levelCard()}
   <p class="nudge">${streakMsg}</p>
   <section class="grid2">
     <div class="card center">${C.ring(s.pagesToday / set.dailyGoal)}<div class="small"><b>${s.pagesToday}</b> / ${set.dailyGoal} páginas hoje</div></div>
@@ -736,7 +763,7 @@ function graphData(scope = {}) {
     const group = b.genre ? norm(b.genre) : '';
     if (group && !groups.has(group)) groups.set(group, { key: group, label: b.genre, href: conceptHref(b.genre), color: themeIndex(group) });
     const art = b.kind === 'article';
-    const bid = node(`b:${b.id}`, b.title, 'book', { purpose: b.purpose || 'hobby', href: art ? `#/artigo/${b.id}` : `#/livro/${b.id}`, group, article: art });
+    const bid = node(`b:${b.id}`, b.title, 'book', { purpose: b.purpose || 'hobby', href: srcHref(b), group, article: art || b.kind === 'pdf' });
     if (b.subtheme && norm(b.subtheme) !== group) link(bid, node(`c:${norm(b.subtheme)}`, b.subtheme, 'subtheme', { href: conceptHref(b.subtheme), group }));
   }
   for (const n of state.notes) {
@@ -892,24 +919,110 @@ function reviewView() {
   ${cards.length ? cards.map(cardItem).join('') : empty('Nenhum card ainda.', '<a class="btn" href="#/notas">Ir para as notas</a>')}`;
 }
 
+// ---------- busca em tudo ----------
+// Livros, artigos (inclusive o texto), notas e ideias (temas, subtemas, conceitos e tags) num campo só
+function searchAll(q) {
+  const k = norm(q);
+  if (k.length < 2) return null;
+  const has = (...xs) => xs.some((x) => x && norm(x).includes(k));
+  // trecho do texto em volta do termo, com o termo destacado
+  const snippet = (text) => {
+    const t = String(text || '').replace(/\s+/g, ' ');
+    const i = norm(t).indexOf(k);
+    if (i < 0) return esc(t.slice(0, 120));
+    const a = Math.max(0, i - 60);
+    const part = t.slice(a, i + k.length + 80);
+    const j = i - a;
+    return `${a ? '…' : ''}${esc(part.slice(0, j))}<mark>${esc(part.slice(j, j + k.length))}</mark>${esc(part.slice(j + k.length))}…`;
+  };
+  const books = state.books.filter((b) => has(b.title, b.author, b.genre, b.subtheme, b.isbn));
+  const articles = state.articles.filter((a) => has(a.title, a.author, a.site, a.genre, a.subtheme) || (a.blocks || []).some((b) => has(b.x)))
+    .map((a) => ({ a, hit: (a.blocks || []).find((b) => has(b.x))?.x }));
+  const notes = state.notes.filter((n) => has(n.title, plainText(n.text), ...(n.tags || [])));
+  const ideas = new Map();
+  for (const b of sources()) for (const x of [b.genre, b.subtheme]) if (x && has(x)) ideas.set(norm(x), x);
+  for (const n of state.notes) for (const x of [...linksOf(n.text), ...(n.tags || [])]) if (has(x) && resolveLink(x).type === 'concept') ideas.set(norm(x), x);
+  return { books, articles, notes, ideas: [...ideas.values()], snippet };
+}
+
+function searchView() {
+  const q = sessionStorage.getItem('searchQ') || '';
+  return `<h2>Buscar</h2>
+  <input type="search" class="search" id="search-all" placeholder="Livros, artigos, notas e ideias…" value="${esc(q)}" autocomplete="off" enterkeyhint="search">
+  <div id="search-out">${searchResults(q)}</div>`;
+}
+function searchResults(q) {
+  const r = searchAll(q);
+  if (!r) return '<p class="small muted">Digite ao menos 2 letras. A busca olha títulos, autores, temas, o texto das notas e o texto dos artigos salvos.</p>';
+  const total = r.books.length + r.articles.length + r.notes.length + r.ideas.length;
+  if (!total) return `<p class="nudge">Nada encontrado para “${esc(q)}”.</p>`;
+  const MAX = 8;
+  const more = (n) => (n > MAX ? `<p class="small muted">+ ${n - MAX} resultado(s). Refine a busca.</p>` : '');
+  return [
+    r.ideas.length ? `<h3>Ideias e temas (${r.ideas.length})</h3><div class="chips">${r.ideas.slice(0, 20).map((x) => `<a class="chip tag" href="${conceptHref(x)}">${esc(x)}</a>`).join('')}</div>` : '',
+    r.books.length ? `<h3>Livros (${r.books.length})</h3>${r.books.slice(0, MAX).map(bookCard).join('')}${more(r.books.length)}` : '',
+    r.articles.length ? `<h3>Artigos (${r.articles.length})</h3>${r.articles.slice(0, MAX).map(({ a, hit }) => `<a class="card search-hit" href="${srcHref(a)}"><b>${esc(a.title)}</b><div class="small muted">${esc(a.site || '')}</div>${hit ? `<div class="small">${r.snippet(hit)}</div>` : ''}</a>`).join('')}${more(r.articles.length)}` : '',
+    r.notes.length ? `<h3>Notas (${r.notes.length})</h3>${r.notes.slice(0, MAX).map((n) => `<a class="card search-hit" href="#/nota/${n.id}">${n.title ? `<b>${esc(noteTitle(n))}</b>` : ''}<div class="small">${r.snippet(plainText(n.text))}</div><div class="small muted">${esc(bookById(n.bookId)?.title || '')}</div></a>`).join('')}${more(r.notes.length)}` : '',
+  ].join('');
+}
+searchView.mount = () => {
+  const input = $('#search-all');
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
+  let t = 0;
+  input.oninput = () => {
+    clearTimeout(t);
+    t = setTimeout(() => {
+      sessionStorage.setItem('searchQ', input.value);
+      $('#search-out').innerHTML = searchResults(input.value);
+    }, 150);
+  };
+};
+// "/" abre a busca (fora de campos de texto)
+document.addEventListener('keydown', (e) => {
+  if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || e.target.closest?.('input, textarea, select, [contenteditable]')) return;
+  if (document.body.classList.contains('gated')) return;
+  e.preventDefault();
+  location.hash = '#/busca';
+});
+
 // ---------- artigos salvos por link ----------
 const FREE_ARTICLES = 10;
 const SHARED_KEY = 'grifo.shared';
 
+// tempo de leitura (~200 palavras por minuto) e quanto já foi lido (guardado neste aparelho)
+const readMinutes = (a) => Math.max(1, Math.round((a.blocks || []).reduce((n, b) => n + b.x.split(/\s+/).length, 0) / 200));
+const POS_KEY = (id) => `grifo.artpos.${id}`;
+function readPos(id) {
+  try { return JSON.parse(localStorage.getItem(POS_KEY(id))) || { p: 0, y: 0 }; } catch { return { p: 0, y: 0 }; }
+}
+const ART_QUEUE = { want: 'Ler depois', reading: 'Lendo', finished: 'Lidos' };
+
 function articlesView() {
-  const list = [...state.articles].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const filter = sessionStorage.getItem('artFilter') || 'all';
+  const all = [...state.articles].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const list = filter === 'all' ? all : all.filter((a) => (a.status || 'want') === filter);
+  const count = (k) => all.filter((a) => (a.status || 'want') === k).length;
   const notesOf = (id) => state.notes.filter((n) => n.bookId === id).length;
+  const status = (a) => {
+    if (a.status === 'finished') return '<span class="chip">✓ Lido</span>';
+    const pos = readPos(a.id).p;
+    return a.status === 'reading' || pos > 0.05 ? `<span class="chip p-academic">Lendo${pos > 0.05 ? ` · ${Math.round(pos * 100)}%` : ''}</span>` : '<span class="chip">Ler depois</span>';
+  };
   return `${seg([['#/livros', '📚 Livros', 'books'], ['#/artigos', '📰 Artigos', 'articles']], 'articles')}
   <h2>Artigos</h2>
   <form class="row gap-s" id="art-form"><input name="url" type="url" class="search grow" required placeholder="Cole o link de um artigo…" autocomplete="off" style="margin:0"><button class="btn primary" id="art-save">Salvar</button></form>
+  <div class="row gap-s wrap" style="margin-top:8px"><button class="btn small" data-action="addPdf">📄 Abrir PDF</button><input type="file" id="pdf-file" accept="application/pdf,.pdf" hidden></div>
   <p class="hint">No celular, em qualquer site ou app de notícias: <b>Compartilhar → Grifo</b>. Depois é só selecionar um trecho e tocar em <b>Grifar</b>.</p>
   ${!isPlus() ? `<p class="small muted">${state.articles.length} de ${FREE_ARTICLES} artigos do plano grátis · <a href="#/plus">ilimitados no Plus</a></p>` : ''}
-  ${list.length ? list.map((a) => `<a class="card book art-item" href="#/artigo/${a.id}">
-      ${a.cover ? `<img class="art-thumb" src="${esc(a.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="art-thumb ph">📰</span>'}
+  ${all.length ? `<div class="tabs">${[['all', `Todos (${all.length})`], ...Object.entries(ART_QUEUE).map(([k, v]) => [k, `${v} (${count(k)})`])]
+    .map(([k, v]) => `<button class="tab ${filter === k ? 'active' : ''}" data-action="artFilter" data-v="${k}">${v}</button>`).join('')}</div>` : ''}
+  ${list.length ? list.map((a) => `<a class="card book art-item" href="${srcHref(a)}">
+      ${a.cover ? `<img class="art-thumb" src="${esc(a.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="art-thumb ph">${a.kind === 'pdf' ? '📄' : '📰'}</span>`}
       <div class="grow"><div class="book-title">${esc(a.title)}</div>
-        <div class="small muted">${esc(a.site || '')}${a.createdAt ? ` · ${new Date(a.createdAt).toLocaleDateString(LOCALE)}` : ''}${notesOf(a.id) ? ` · ${notesOf(a.id)} ${notesOf(a.id) === 1 ? 'grifo' : 'grifos'}` : ''}</div>
-        <div class="chips" style="margin-top:4px">${a.genre ? `<span class="chip tag">${esc(a.genre)}</span>` : ''}${a.status === 'finished' ? '<span class="chip">✓ Lido</span>' : ''}</div></div></a>`).join('')
-    : empty('Salve artigos, posts e notícias para ler, grifar e conectar com seus livros.')}`;
+        <div class="small muted">${a.kind === 'pdf' ? `PDF · ${a.pages || '?'} páginas` : `${esc(a.site || '')} · ${readMinutes(a)} min`}${notesOf(a.id) ? ` · ${notesOf(a.id)} ${notesOf(a.id) === 1 ? 'grifo' : 'grifos'}` : ''}</div>
+        <div class="chips" style="margin-top:4px">${status(a)}${a.genre ? `<span class="chip tag">${esc(a.genre)}</span>` : ''}</div></div></a>`).join('')
+    : all.length ? '<p class="nudge">Nenhum artigo aqui.</p>' : empty('Salve artigos, posts e notícias para ler, grifar e conectar com seus livros.')}`;
 }
 articlesView.mount = () => {
   const form = $('#art-form');
@@ -944,7 +1057,7 @@ function articleView(id) {
   const body = (a.blocks || []).map((b) => `<${tag[b.t] || 'p'}>${markHighlights(esc(b.x), quotes)}</${tag[b.t] || 'p'}>`).join('');
   return `<a href="#/artigos" class="back">← Artigos</a>
   <article class="reader">
-    <div class="small muted">${esc([a.site, a.author].filter(Boolean).join(' · '))}</div>
+    <div class="small muted">${esc([a.site, a.author, `${readMinutes(a)} min de leitura`].filter(Boolean).join(' · '))}</div>
     <h1 class="reader-title">${esc(a.title)}</h1>
     <div class="quick">
       <a class="btn small" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">↗ Original</a>
@@ -959,15 +1072,13 @@ function articleView(id) {
   ${notes.length ? notes.map((n) => noteCard(n, false)).join('') : '<p class="small muted">Selecione um trecho do texto e toque em <b>Grifar</b>.</p>'}
   <button class="btn primary grifar-btn" id="grifar-btn" hidden>🖍️ Grifar trecho</button>`;
 }
-articleView.mount = (id) => {
-  const btn = $('#grifar-btn');
-  const bodyEl = $('#reader-body');
-  if (!btn || !bodyEl) return;
-  // trecho selecionado, completado até o fim das palavras cortadas pela seleção ("faz a m" → "faz a memória")
+// Seleção de texto + botão "Grifar" (artigos e PDFs). onSave recebe o texto e a página (no PDF).
+function attachGrifar(bodyEl, btn, onSave) {
   const isW = (ch) => /[\p{L}\p{N}]/u.test(ch || '');
+  // trecho selecionado, completado até o fim das palavras cortadas pela seleção ("faz a m" → "faz a memória")
   const sel = () => {
     const s = getSelection();
-    if (!s || s.isCollapsed || !bodyEl.contains(s.anchorNode) || !bodyEl.contains(s.focusNode)) return '';
+    if (!s || s.isCollapsed || !bodyEl.contains(s.anchorNode) || !bodyEl.contains(s.focusNode)) return null;
     const r = s.getRangeAt(0).cloneRange();
     if (r.startContainer.nodeType === 3) {
       const t = r.startContainer.data;
@@ -981,29 +1092,222 @@ articleView.mount = (id) => {
       while (i < t.length && isW(t[i - 1]) && isW(t[i])) i++;
       r.setEnd(r.endContainer, i);
     }
-    return r.toString().replace(/\s+/g, ' ').trim();
+    const el = r.startContainer.nodeType === 3 ? r.startContainer.parentElement : r.startContainer;
+    return { text: r.toString().replace(/\s+/g, ' ').trim(), page: Number(el?.closest('[data-page]')?.dataset.page) || null };
   };
   // guarda o último trecho selecionado: no toque, a seleção pode sumir antes do clique chegar ao botão
-  let last = '';
+  let last = null;
   const onSel = () => {
     if (!btn.isConnected) { document.removeEventListener('selectionchange', onSel); return; }
     const t = sel();
-    if (t.length >= 3) { last = t; btn.hidden = false; } else if (!btn.matches(':hover, :active, :focus')) btn.hidden = true;
+    if (t && t.text.length >= 3) { last = t; btn.hidden = false; } else if (!btn.matches(':hover, :active, :focus')) btn.hidden = true;
   };
   document.addEventListener('selectionchange', onSel);
   // o mousedown no botão não desfaz a seleção (cancelar o pointerdown impediria o clique no Chrome)
   btn.addEventListener('mousedown', (e) => e.preventDefault());
   btn.onclick = async () => {
-    const text = sel() || last;
-    if (text.length < 3) return;
-    last = '';
+    const t = sel() || last;
+    if (!t || t.text.length < 3) return;
+    last = null;
     btn.hidden = true;
-    const note = { id: uid(), createdAt: Date.now(), bookId: id, text, kind: 'quote', source: 'article', tags: [], page: null };
     getSelection().removeAllRanges();
+    await onSave(t.text, t.page);
+  };
+}
+
+// continua de onde parou e marca "Lendo" ao passar do começo
+function trackReading(id, bodyEl) {
+  const saved = readPos(id);
+  if (saved.y > 0 && view.dataset.route !== location.hash) setTimeout(() => scrollTo(0, saved.y), 50);
+  let t = 0;
+  const onScroll = () => {
+    if (!bodyEl.isConnected) { removeEventListener('scroll', onScroll); return; }
+    clearTimeout(t);
+    t = setTimeout(async () => {
+      const r = bodyEl.getBoundingClientRect();
+      const p = Math.min(1, Math.max(0, (innerHeight - r.top) / r.height));
+      try { localStorage.setItem(POS_KEY(id), JSON.stringify({ p, y: scrollY })); } catch { /* sem armazenamento */ }
+      const a = state.articles.find((x) => x.id === id);
+      if (a && (a.status || 'want') === 'want' && p > 0.15) await persist('books', { ...a, status: 'reading', startDate: G.ymd() });
+    }, 400);
+  };
+  addEventListener('scroll', onScroll, { passive: true });
+}
+
+articleView.mount = (id) => {
+  const btn = $('#grifar-btn');
+  const bodyEl = $('#reader-body');
+  if (!btn || !bodyEl) return;
+  trackReading(id, bodyEl);
+  attachGrifar(bodyEl, btn, async (text) => {
+    const note = { id: uid(), createdAt: Date.now(), bookId: id, text, kind: 'quote', source: 'article', tags: [], page: null };
     await commit(() => persist('notes', note));
     toast('🖍️ Trecho grifado · <u>adicionar reflexão</u>', '', () => noteForm(noteById(note.id)));
-  };
+  });
 };
+// ---------- PDFs ----------
+// O arquivo fica no aparelho (IndexedDB); no Plus também vai para o armazenamento da conta e é baixado em outro aparelho.
+const canSyncPdf = () => Cloud.enabled() && Cloud.user() && Cloud.plan() === 'plus';
+async function pdfBlob(a) {
+  const local = await db.getFile(a.id);
+  if (local) return local;
+  if (!canSyncPdf() || !a.synced) return null;
+  const blob = await Cloud.downloadPdf(a.id);
+  await db.setFile(a.id, blob);
+  return blob;
+}
+const pdfNotesHtml = (id) => {
+  const notes = state.notes.filter((n) => n.bookId === id).sort((x, y) => (x.page || 0) - (y.page || 0) || x.createdAt - y.createdAt);
+  return `<h3>Seus grifos (${notes.length})</h3>${notes.length ? notes.map((n) => noteCard(n, false)).join('') : '<p class="small muted">Selecione um trecho do PDF e toque em <b>Grifar</b>.</p>'}`;
+};
+
+function pdfView(id) {
+  const a = state.articles.find((x) => x.id === id && x.kind === 'pdf');
+  if (!a) return `<a href="#/artigos" class="back">← Artigos</a>${empty('PDF não encontrado.')}`;
+  return `<a href="#/artigos" class="back">← Artigos</a>
+  <article class="reader pdf-reader">
+    <div class="small muted">${esc(['PDF', a.pages ? `${a.pages} páginas` : '', a.author].filter(Boolean).join(' · '))}</div>
+    <h1 class="reader-title">${esc(a.title)}</h1>
+    <div class="quick">
+      <button class="btn small" data-action="articleRead" data-id="${a.id}">${a.status === 'finished' ? '✓ Lido' : '✔ Marcar como lido'}</button>
+      <button class="btn small" data-action="newNote" data-id="${a.id}">✍️ Nota</button>
+      <button class="btn small" data-action="pdfImport" data-id="${a.id}">📥 Importar grifos do arquivo</button>
+      <button class="btn small ghost" data-action="deleteArticle" data-id="${a.id}">🗑️ Excluir</button>
+    </div>
+    ${articleTags(a)}
+    <p class="small muted" id="pdf-status">Abrindo o PDF…</p>
+    <div class="pdf-pages" id="reader-body"></div>
+  </article>
+  <div id="pdf-notes">${pdfNotesHtml(id)}</div>
+  <button class="btn primary grifar-btn" id="grifar-btn" hidden>🖍️ Grifar trecho</button>`;
+}
+pdfView.mount = async (id) => {
+  const a = state.articles.find((x) => x.id === id && x.kind === 'pdf');
+  const bodyEl = $('#reader-body');
+  const status = $('#pdf-status');
+  if (!a || !bodyEl) return;
+  let blob;
+  try { blob = await pdfBlob(a); } catch { blob = null; }
+  if (!bodyEl.isConnected) return;
+  if (!blob) {
+    status.innerHTML = `O arquivo deste PDF está em outro aparelho${canSyncPdf() ? '' : ' (no Plus, seus PDFs sincronizam entre aparelhos)'}. <button class="btn small" id="pdf-reattach">📄 Escolher o arquivo</button>`;
+    $('#pdf-reattach').onclick = () => actions.addPdf({ id });
+    return;
+  }
+  const P = await import('./pdf.js');
+  let doc;
+  try { doc = await P.openPdf(blob); } catch (e) { status.textContent = `Não consegui abrir o PDF: ${e.message}`; return; }
+  status.remove();
+  // páginas: espaço reservado do tamanho certo e desenho só quando chega perto da tela
+  const width = Math.min(bodyEl.clientWidth || 600, 900);
+  const first = await doc.getPage(1);
+  const v = first.getViewport({ scale: 1 });
+  const h = Math.round((width / v.width) * v.height);
+  bodyEl.innerHTML = Array.from({ length: doc.numPages }, (_, i) => `<div class="pdf-page" data-page="${i + 1}" style="width:${width}px;height:${h}px"><span class="pdf-pn">${i + 1}</span></div>`).join('');
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (!e.isIntersecting || e.target.dataset.done) continue;
+      e.target.dataset.done = '1';
+      P.renderPage(doc, Number(e.target.dataset.page), e.target, width).catch(() => { e.target.dataset.done = ''; });
+    }
+  }, { rootMargin: '900px 0px' });
+  bodyEl.querySelectorAll('.pdf-page').forEach((el) => io.observe(el));
+  trackReading(id, bodyEl);
+  attachGrifar(bodyEl, $('#grifar-btn'), async (text, page) => {
+    const note = { id: uid(), createdAt: Date.now(), bookId: id, text, kind: 'quote', source: 'pdf', tags: [], page };
+    await commit(() => persist('notes', note), { rerender: false });
+    $('#pdf-notes').innerHTML = pdfNotesHtml(id);
+    toast(`🖍️ Grifado${page ? ` (p. ${page})` : ''} · <u>adicionar reflexão</u>`, '', () => noteForm(noteById(note.id)));
+  });
+  // na primeira vez, traz os grifos que já estavam no arquivo
+  if (!a.imported) importPdfHighlights(a, doc, P, true);
+};
+
+// Grifos feitos em outros apps viram notas (sem repetir os que já existem)
+async function importPdfHighlights(a, doc, P, auto = false) {
+  try {
+    const found = await P.existingHighlights(doc);
+    const have = new Set(state.notes.filter((n) => n.bookId === a.id).map((n) => `${n.page}|${norm(plainText(n.text))}`));
+    const add = found.filter((x) => !have.has(`${x.page}|${norm(x.text)}`));
+    await commit(async () => {
+      for (const [i, x] of add.entries()) {
+        await persist('notes', { id: uid(), createdAt: Date.now() + i, bookId: a.id, text: x.comment ? `${x.text}\n\n${x.comment}` : x.text, kind: 'quote', source: 'pdf', tags: [], page: x.page });
+      }
+      await persist('books', { ...state.articles.find((y) => y.id === a.id), imported: true });
+    }, { rerender: false });
+    if ($('#pdf-notes')) $('#pdf-notes').innerHTML = pdfNotesHtml(a.id);
+    if (add.length) toast(`📥 ${add.length} ${add.length === 1 ? 'grifo importado' : 'grifos importados'} do arquivo`);
+    else if (!auto) toast(found.length ? 'Os grifos do arquivo já estavam aqui.' : 'Este PDF não tem grifos feitos em outros apps.');
+  } catch (e) {
+    if (!auto) toast(`Não consegui ler os grifos do arquivo: ${esc(e.message)}`, 'err');
+  }
+}
+
+const pdfActions = {
+  // escolhe um PDF no aparelho (id: trocar o arquivo de um PDF já salvo)
+  addPdf({ id } = {}) {
+    const input = $('#pdf-file') || Object.assign(document.createElement('input'), { type: 'file', accept: 'application/pdf,.pdf' });
+    input.value = '';
+    input.onchange = async () => {
+      const f = input.files[0];
+      if (!f) return;
+      if (f.size > 50 * 1024 * 1024) { toast('PDF grande demais (máximo 50 MB).', 'err'); return; }
+      try {
+        const P = await import('./pdf.js');
+        const doc = await P.openPdf(f);
+        const meta = await P.info(doc, f.name);
+        const old = id && state.articles.find((x) => x.id === id);
+        const rec = old ? { ...old, pages: meta.pages } : {
+          id: uid(), createdAt: Date.now(), kind: 'pdf', status: 'reading', startDate: G.ymd(), purpose: 'hobby', genre: '', subtheme: '', pages: meta.pages, currentPage: 0, rating: 0, isbn: '',
+          title: meta.title || 'PDF sem título', author: meta.author, fileName: f.name, size: f.size,
+        };
+        await db.setFile(rec.id, f);
+        if (canSyncPdf()) {
+          try { await Cloud.uploadPdf(rec.id, f); rec.synced = true; } catch { toast('O PDF ficou só neste aparelho (não foi possível enviar para a conta agora).', 'err'); }
+        }
+        await commit(() => persist('books', rec));
+        Cloud.track('pdf_add');
+        location.hash = `#/pdf/${rec.id}`;
+        if (old) render();
+      } catch (e) {
+        toast(`Não consegui abrir esse PDF: ${esc(e.message)}`, 'err');
+      }
+    };
+    input.click();
+  },
+  async pdfImport({ id }) {
+    const a = state.articles.find((x) => x.id === id);
+    const blob = await pdfBlob(a);
+    if (!blob) { toast('O arquivo deste PDF não está neste aparelho.', 'err'); return; }
+    const P = await import('./pdf.js');
+    importPdfHighlights(a, await P.openPdf(blob), P, false);
+  },
+};
+
+// Sugestão de finalidade, tema e subtema pela IA (Plus), usando os temas que a pessoa já tem
+async function suggestCategory(a) {
+  const map = new Map();
+  for (const b of sources()) {
+    if (!b.genre) continue;
+    if (!map.has(b.genre)) map.set(b.genre, new Set());
+    if (b.subtheme) map.get(b.genre).add(b.subtheme);
+  }
+  const themes = [...map].map(([theme, subs]) => ({ theme, subthemes: [...subs] }));
+  const text = (a.blocks || []).map((b) => b.x).join('\n').slice(0, 5000);
+  return aiRun('classify', { title: a.title, site: a.site, text, themes });
+}
+// Logo depois de salvar: classifica sozinho, se a IA estiver liberada para a pessoa
+async function autoClassify(id) {
+  if (AI.available(state.settings) !== 'ok') return;
+  try {
+    const a = state.articles.find((x) => x.id === id);
+    const r = await suggestCategory(a);
+    const now = state.articles.find((x) => x.id === id);
+    if (!now || now.genre) return; // a pessoa já classificou nesse meio tempo
+    await commit(() => persist('books', { ...now, purpose: r.purpose, genre: r.theme, subtheme: r.subtheme }), { quiet: true });
+    toast(`🏷️ Classificado como ${esc(r.theme)} › ${esc(r.subtheme)} · <u>alterar</u>`, '', () => actions.classifyArticle({ id }));
+  } catch { /* sem classificação automática: a pessoa classifica à mão */ }
+}
 
 const articleActions = {
   async saveArticle({ url }) {
@@ -1027,6 +1331,7 @@ const articleActions = {
       await commit(() => persist('books', art));
       Cloud.track('article_save');
       location.hash = `#/artigo/${art.id}`;
+      autoClassify(art.id);
     } catch (e) {
       toast(esc(e.message), 'err');
     } finally {
@@ -1044,9 +1349,24 @@ const articleActions = {
         <label>Tema <input name="genre" list="themes" value="${esc(a.genre || '')}" placeholder="ex: Psicologia" autocomplete="off">${datalist('themes', themeOptions())}</label>
         <label>Subtema <input name="subtheme" list="subthemes" value="${esc(a.subtheme || '')}" placeholder="ex: Memória" autocomplete="off"><span id="art-subthemes">${datalist('subthemes', subthemeOptions(a.genre))}</span></label>
       </div>
+      <button type="button" class="btn small" id="artcat-ai">✨ Sugerir com IA${isPlus() ? '' : ' 🔒'}</button>
       <div class="actions"><button type="button" class="btn ghost" data-action="close">Cancelar</button><button class="btn primary">Salvar</button></div>
     </form>`, (root) => {
       const form = $('#artcat-form', root);
+      $('#artcat-ai', root).onclick = async (e) => {
+        if (!isPlus()) { closeModal(); toast('⭐ A classificação com IA faz parte do Grifo Plus · <u>conhecer</u>', 'gold', () => { location.hash = '#/plus'; }); return; }
+        const b = e.currentTarget;
+        b.disabled = true;
+        b.textContent = '✨ Pensando…';
+        try {
+          const r = await suggestCategory(a);
+          root.querySelector(`#ap-${r.purpose}`).checked = true;
+          form.genre.value = r.theme;
+          form.subtheme.value = r.subtheme;
+        } catch (err) { if (err.message) toast(esc(err.message), 'err'); }
+        b.disabled = false;
+        b.textContent = '✨ Sugerir com IA';
+      };
       form.genre.oninput = () => { $('#art-subthemes', root).innerHTML = datalist('subthemes', subthemeOptions(form.genre.value)); };
       form.onsubmit = async (e) => {
         e.preventDefault();
@@ -1056,6 +1376,12 @@ const articleActions = {
       };
     });
   },
+  async hideFirstSteps() {
+    state.settings = { ...state.settings, firstStepsHidden: true };
+    await db.setKV('settings', state.settings);
+    render();
+  },
+  artFilter: ({ v }) => { sessionStorage.setItem('artFilter', v); render(); },
   async articleRead({ id }) {
     const a = state.articles.find((x) => x.id === id);
     await commit(() => persist('books', { ...a, status: a.status === 'finished' ? 'want' : 'finished', endDate: a.status === 'finished' ? '' : G.ymd() }));
@@ -1069,6 +1395,10 @@ const articleActions = {
       for (const n of notes) await remove('notes', n.id);
       await remove('books', id);
     });
+    if (a.kind === 'pdf') {
+      await db.delFile(id);
+      if (a.synced && canSyncPdf()) Cloud.deletePdf(id).catch(() => {});
+    }
     location.hash = '#/artigos';
   },
 };
@@ -1320,6 +1650,11 @@ function settingsView() {
     <div class="quick"><button class="btn" data-action="importFile">📱 Kindle, Goodreads, Skoob</button><button class="btn" data-action="export">⬇️ Exportar</button>
       <button class="btn" data-action="import">⬆️ Importar</button>
       <input type="file" id="import-file" accept="application/json,.json" hidden></div>
+  </section>
+  <section class="card"><h3>📤 Levar para outros apps${isPlus() ? '' : ' <span class="chip">⭐ Plus</span>'}</h3>
+    <p class="small muted">Suas notas viram arquivos Markdown com as [[ligações]] (Obsidian e Notion) e seus cards viram um baralho do Anki.</p>
+    <div class="quick" style="margin:0"><button class="btn" data-action="exportMarkdown">🧩 Obsidian / Notion (.zip)</button><button class="btn" data-action="exportAnki">🧠 Anki (.txt)</button></div>
+    <p class="hint">No Obsidian: descompacte o .zip numa pasta e abra como cofre. No Notion: Importar → Texto e Markdown. No Anki: Arquivo → Importar (tipo, baralho e lacunas já vêm prontos).</p>
   </section>
   <section class="card"><h3>Dicas</h3><ul class="small">
     <li><b>Mapa mental:</b> escreva <b>[[Nome]]</b> numa nota para ligá-la a um livro, outra nota (pelo título) ou conceito. Temas e subtemas dos livros também viram pontos do mapa.</li>
@@ -2760,6 +3095,32 @@ function canvasFile(c, name) {
   return new Promise((resolve) => c.toBlob((b) => resolve(new File([b], name, { type: 'image/png' })), 'image/png'));
 }
 
+const exportPlus = () => {
+  if (isPlus()) return true;
+  toast('⭐ Exportar para outros apps faz parte do Grifo Plus · <u>conhecer</u>', 'gold', () => { location.hash = '#/plus'; });
+  return false;
+};
+const exportActions = {
+  async exportMarkdown() {
+    if (!exportPlus()) return;
+    toast('📦 Preparando os arquivos…');
+    try {
+      const E = await import('./export.js');
+      const data = { books: state.books, articles: state.articles, notes: state.notes };
+      const files = [...E.markdownFiles(data), { path: 'Grifo - livros e artigos.csv', content: E.booksCsv(data) }];
+      downloadFile(new File([await E.zip(files)], `grifo-${G.ymd()}.zip`, { type: 'application/zip' }));
+      Cloud.track('export', { to: 'markdown' });
+    } catch (e) { toast(`Não foi possível exportar: ${esc(e.message)}`, 'err'); }
+  },
+  async exportAnki() {
+    if (!exportPlus()) return;
+    if (!state.cards.length) { toast('Você ainda não tem cards para levar ao Anki.'); return; }
+    const E = await import('./export.js');
+    downloadFile(new File([E.ankiText({ books: state.books, articles: state.articles, cards: state.cards })], `grifo-anki-${G.ymd()}.txt`, { type: 'text/plain' }));
+    Cloud.track('export', { to: 'anki' });
+  },
+};
+
 function downloadFile(file) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(file);
@@ -3203,6 +3564,8 @@ const actions = {
   ...examActions,
   ...aiStudyActions,
   ...articleActions,
+  ...exportActions,
+  ...pdfActions,
   ...timerActions,
   ...reminderActions,
   ...cloudActions,
@@ -3381,12 +3744,12 @@ document.addEventListener('submit', async (e) => {
 const routes = {
   '': home, livros: booksView, livro: bookDetail, notas: notesView, nota: noteDetail, conceito: conceptView,
   mapa: mapView, revisar: reviewView, stats: statsView, conquistas: achievementsView, ajustes: settingsView,
-  conta: accountView, admin: adminView, artigos: articlesView, artigo: articleView, u: publicProfileView, clubes: clubsView, perguntar: askView, plus: plusView,
+  conta: accountView, admin: adminView, busca: searchView, artigos: articlesView, pdf: pdfView, artigo: articleView, u: publicProfileView, clubes: clubsView, perguntar: askView, plus: plusView,
   privacidade: privacyView, termos: termsView,
 };
 // páginas que qualquer pessoa pode abrir sem login
 const OPEN_ROUTES = ['u', 'privacidade', 'termos'];
-const TAB_OF = { artigos: 'livros', artigo: 'livros', livro: 'livros', nota: 'notas', conceito: 'notas', mapa: 'notas', perguntar: 'notas', stats: 'progresso', conquistas: 'progresso', clubes: 'progresso' };
+const TAB_OF = { pdf: 'livros', busca: 'nenhuma', artigos: 'livros', artigo: 'livros', livro: 'livros', nota: 'notas', conceito: 'notas', mapa: 'notas', perguntar: 'notas', stats: 'progresso', conquistas: 'progresso', clubes: 'progresso' };
 
 function render() {
   const [hashPath, query = ''] = location.hash.slice(1).split('?');

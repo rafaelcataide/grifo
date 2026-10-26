@@ -437,3 +437,21 @@ export async function fetchArticle(url) {
   }
   return data;
 }
+
+// ---------------- PDFs (Plus: guardados na conta) ----------------
+const pdfPath = (id) => `${user().id}/${id}.pdf`;
+export async function uploadPdf(id, blob) {
+  const sb = await client();
+  const { error } = await sb.storage.from('pdfs').upload(pdfPath(id), blob, { contentType: 'application/pdf', upsert: true });
+  if (error) throw error;
+}
+export async function downloadPdf(id) {
+  const sb = await client();
+  const { data, error } = await sb.storage.from('pdfs').download(pdfPath(id));
+  if (error) throw error;
+  return data;
+}
+export async function deletePdf(id) {
+  const sb = await client();
+  await sb.storage.from('pdfs').remove([pdfPath(id)]);
+}

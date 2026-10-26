@@ -174,3 +174,42 @@ test('plano de prova: meta do dia, atrasados e revisão na véspera', async () =
   assert.equal(S.capForExam({ due: '2026-12-01' }, '2026-11-10', '2026-11-09').due, '2026-12-01');
   assert.equal(S.capForExam({ due: '2026-11-05' }, '2026-11-10', '2026-11-02').due, '2026-11-05');
 });
+
+test('exportar: Markdown (Obsidian/Notion), CSV e texto do Anki', async () => {
+  const E = await import('../js/export.js');
+  const books = [{ id: 'b1', title: 'Rápido e Devagar', author: 'Daniel Kahneman', genre: 'Psicologia', subtheme: 'Vieses', purpose: 'academic', status: 'finished', pages: 600, rating: 5 }];
+  const articles = [{ id: 'a1', kind: 'article', title: 'Ler: devagar?', url: 'https://ex.com/a', site: 'Ex', genre: 'Psicologia', status: 'want' }];
+  const notes = [
+    { id: 'n1', bookId: 'b1', kind: 'quote', text: 'O [[Sistema 1]] é rápido.', page: 20, createdAt: 1, tags: ['mente'] },
+    { id: 'n2', bookId: 'a1', kind: 'thought', title: 'Ancoragem', text: 'Primeiro número pesa.', createdAt: 2 },
+  ];
+  const files = E.markdownFiles({ books, articles, notes });
+  const paths = files.map((f) => f.path).sort();
+  // ':' e '?' não podem estar em nome de arquivo
+  assert.deepEqual(paths, ['Artigos/Ler devagar.md', 'Livros/Rápido e Devagar.md', 'Notas/Ancoragem.md', 'Temas/Psicologia.md']);
+  const book = files.find((f) => f.path === 'Livros/Rápido e Devagar.md').content;
+  assert.match(book, /^---\ntipo: livro\nautor: "Daniel Kahneman"/);
+  assert.match(book, /> O \[\[Sistema 1\]\] é rápido\./); // ligações mantidas para o Obsidian
+  assert.match(book, /p\. 20 · #mente/);
+  assert.match(files.find((f) => f.path === 'Temas/Psicologia.md').content, /- \[\[Rápido e Devagar\]\] · Vieses/);
+  assert.match(E.booksCsv({ books, articles }), /"Rápido e Devagar","Livro","Daniel Kahneman"/);
+  const anki = E.ankiText({ books, articles, cards: [
+    { bookId: 'b1', type: 'cloze', front: 'O {{Sistema 1}} é {{rápido}}.' },
+    { bookId: 'b1', type: 'qa', front: 'O que é [[ancoragem]]?', back: 'Peso do\nprimeiro número' },
+  ] });
+  assert.match(anki, /^#separator:tab\n#html:true/);
+  assert.match(anki, /Cloze\tGrifo::Rápido e Devagar\tO \{\{c1::Sistema 1\}\} é \{\{c2::rápido\}\}\.\t\tgrifo Psicologia/);
+  assert.match(anki, /Basic\tGrifo::Rápido e Devagar\tO que é ancoragem\?\tPeso do<br>primeiro número/);
+});
+
+test('PDF: texto embaixo de um grifo feito em outro app', async () => {
+  const { textUnder } = await import('../js/pdf.js');
+  // duas linhas de texto (pdf.js: transform[4]=x, transform[5]=y da base da linha)
+  const items = [
+    { str: 'Ler devagar ajuda a lembrar', transform: [1, 0, 0, 12, 72, 700], width: 160, height: 12 },
+    { str: 'o que importa de verdade.', transform: [1, 0, 0, 12, 72, 684], width: 150, height: 12 },
+  ];
+  // grifo pegando a segunda metade da 1ª linha e a 2ª linha inteira
+  assert.equal(textUnder(items, [[152, 699, 232, 712], [72, 683, 222, 696]]), 'ajuda a lembrar o que importa de verdade.');
+  assert.equal(textUnder(items, [[300, 600, 400, 610]]), '');
+});

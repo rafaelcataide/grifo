@@ -522,7 +522,7 @@ body.has-timer #toasts { bottom: calc(150px + env(safe-area-inset-bottom)); }
 }
 
 /* sem login (com servidor): só a tela de entrada */
-body.gated .tabbar, body.gated #timer-bar, body.gated #account-btn, body.gated .topbar a[href="#/ajustes"], body.gated .topbar .brand { display: none !important; }
+body.gated .tabbar, body.gated #timer-bar, body.gated #account-btn, body.gated #search-btn, body.gated .topbar a[href="#/ajustes"], body.gated .topbar .brand { display: none !important; }
 body.gated { padding-bottom: 24px; }
 .login-logo { margin: 8px auto 0; border-radius: 20px; box-shadow: 0 8px 24px rgba(111, 127, 232, .3); }
 .login h2 { font-size: 2rem; letter-spacing: -.5px; }
@@ -670,7 +670,30 @@ body.gated { padding-bottom: 24px; }
 /* centralizado sem transform: o efeito de botão pressionado (scale) não pode tirá-lo do lugar */
 .grifar-btn { position: fixed; left: 0; right: 0; margin: 0 auto; width: max-content; bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 30; box-shadow: 0 8px 24px rgba(0, 0, 0, .25); }
 
+/* busca */
+.search-hit { display: block; color: inherit; text-decoration: none; }
+.search-hit .small { margin-top: 4px; line-height: 1.5; }
+
 /* classificação dos artigos */
 .art-tags { margin: 4px 0 0; }
 .chip-btn { border: 1px dashed var(--border); background: none; cursor: pointer; font-family: inherit; font-size: .72rem; font-weight: 600; color: var(--muted); }
 .art-classify { display: flex; gap: 12px; align-items: flex-start; width: 100%; text-align: left; cursor: pointer; font: inherit; color: var(--text); border-style: dashed; margin: 4px 0 0; }
+
+/* primeiros passos */
+.first-steps { display: grid; gap: 8px; border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+.first-steps .bar { margin: 0; }
+.first-steps ol { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 6px; }
+.first-steps li { display: flex; align-items: center; gap: 10px; font-size: .92rem; min-height: 34px; }
+.first-steps li.ok { color: var(--muted); text-decoration: line-through; }
+.first-steps li.next { font-weight: 600; }
+.fs-dot { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--border); display: grid; place-items: center; font-size: .75rem; flex: none; }
+.first-steps li.ok .fs-dot { background: var(--ok); border-color: var(--ok); color: #fff; }
+.first-steps li.next .fs-dot { border-color: var(--accent); }
+.first-steps > .btn { justify-self: start; }
+
+/* leitor de PDF */
+.pdf-pages { display: grid; justify-content: center; gap: 14px; margin-top: 16px; }
+.pdf-page { position: relative; background: #fff; box-shadow: 0 2px 12px rgba(0, 0, 0, .18); border-radius: 4px; overflow: hidden; max-width: 100%; }
+.pdf-page canvas { display: block; }
+.pdf-pn { position: absolute; inset: 0; display: grid; place-items: center; color: #999; font-size: .9rem; }
+.pdf-page .textLayer ::selection { background: rgba(255, 214, 64, .55); }

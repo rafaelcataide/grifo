@@ -1,8 +1,8 @@
 // Service worker: app funciona offline depois da primeira visita.
-const CACHE = 'grifo-v33';
+const CACHE = 'grifo-v34';
 const SHELL = [
   './', 'index.html', 'css/styles.css', 'manifest.webmanifest',
-  'js/app.js', 'js/util.js', 'js/i18n.js', 'js/i18n-en.js', 'js/icons.js', 'js/landing.js', 'icons/ui.svg', 'js/db.js', 'js/game.js', 'js/ocr.js', 'js/charts.js', 'js/graph.js', 'js/srs.js', 'js/share.js', 'js/scanner.js', 'js/importers.js', 'js/cloud.js', 'js/ai.js', 'config.js', 'supabase/functions/_shared/ai-tasks.js',
+  'js/app.js', 'js/util.js', 'js/i18n.js', 'js/i18n-en.js', 'js/icons.js', 'js/landing.js', 'js/export.js', 'js/pdf.js', 'icons/ui.svg', 'js/db.js', 'js/game.js', 'js/ocr.js', 'js/charts.js', 'js/graph.js', 'js/srs.js', 'js/share.js', 'js/scanner.js', 'js/importers.js', 'js/cloud.js', 'js/ai.js', 'config.js', 'supabase/functions/_shared/ai-tasks.js',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/og.png',
 ];
 
