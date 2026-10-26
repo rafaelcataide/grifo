@@ -55,7 +55,7 @@ export function tr(s, quiet = false) {
   return s;
 }
 
-const ATTRS = ['placeholder', 'title', 'aria-label', 'alt'];
+const ATTRS = ['placeholder', 'title', 'aria-label', 'alt', 'label'];
 const SKIP = new Set(['SCRIPT', 'STYLE', 'TEXTAREA', 'CODE']);
 
 function translateNode(node) {

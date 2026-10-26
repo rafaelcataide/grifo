@@ -53,6 +53,8 @@ const modal = $('#modal');
 const modalBody = $('#modal-body');
 
 const fmtDate = (s) => (s ? G.parseYmd(s).toLocaleDateString(LOCALE) : '');
+// livros e artigos (o que tem finalidade, tema e notas)
+const sources = () => [...state.books, ...(state.articles || [])];
 const bookById = (id) => state.books.find((b) => b.id === id) || state.articles?.find((b) => b.id === id);
 const noteById = (id) => state.notes.find((n) => n.id === id);
 const stars = (n) => (n > 0 ? `<span class="stars">${'★'.repeat(n)}<span class="off">${'★'.repeat(5 - n)}</span></span>` : '');
@@ -247,7 +249,7 @@ function bookCard(b) {
 function noteCard(n, showBook = true) {
   const b = bookById(n.bookId);
   const cards = state.cards.filter((c) => c.noteId === n.id).length;
-  return `<article class="note card ${n.kind === 'quote' ? 'quote' : ''}" data-href="#/nota/${n.id}" data-book="${n.bookId}" data-search="${esc(`${n.title || ''} ${n.text} ${(n.tags || []).join(' ')} ${b?.title || ''}`.toLowerCase())}">
+  return `<article class="note card ${n.kind === 'quote' ? 'quote' : ''}" data-href="#/nota/${n.id}" data-book="${n.bookId}" data-src="${b?.kind === 'article' ? 'article' : 'book'}" data-search="${esc(`${n.title || ''} ${n.text} ${(n.tags || []).join(' ')} ${b?.title || ''}`.toLowerCase())}">
     ${n.title ? `<div class="note-title">${esc(noteTitle(n))}</div>` : ''}
     <div class="note-text">${renderText(n.text)}</div>
     <div class="row between wrap gap-s">
@@ -528,13 +530,16 @@ function bookDetail(id) {
 function notesView() {
   const notes = [...state.notes].sort((a, b) => b.createdAt - a.createdAt);
   const withNotes = state.books.filter((b) => notes.some((n) => n.bookId === b.id));
+  const artsWithNotes = state.articles.filter((a) => notes.some((n) => n.bookId === a.id));
   return `${seg([['#/notas', '✍️ Notas', 'list'], ['#/mapa', '🕸️ Mapa', 'map'], ['#/perguntar', '✨ Perguntar', 'ask']], 'list')}
   <div class="row between"><h2 style="margin-top:0">Notas</h2>
     <div class="row gap-s"><button class="btn" data-action="scan">📷 Grifo</button><button class="btn primary" data-action="newNote">✍️ Nova</button></div></div>
   <p class="small muted">Dica: escreva <b>[[</b> numa nota para ligá-la a um livro, a outra nota ou a um conceito. As ligações formam o mapa mental.</p>
   <input class="search" type="search" placeholder="Buscar em notas e tags…" data-filter-list="#note-list">
-  ${withNotes.length > 1 ? `<select class="search" data-book-filter="#note-list"><option value="">Todos os livros</option>
-    ${withNotes.map((b) => `<option value="${b.id}">${esc(b.title)}</option>`).join('')}</select>` : ''}
+  ${withNotes.length + artsWithNotes.length > 1 ? `<select class="search" data-book-filter="#note-list"><option value="">Todos os livros e artigos</option>
+    ${withNotes.length && artsWithNotes.length ? '<option value="__books">Só livros</option><option value="__articles">Só artigos</option>' : ''}
+    ${withNotes.length ? `<optgroup label="Livros">${withNotes.map((b) => `<option value="${b.id}">${esc(b.title)}</option>`).join('')}</optgroup>` : ''}
+    ${artsWithNotes.length ? `<optgroup label="Artigos">${artsWithNotes.map((a) => `<option value="${a.id}">${esc(a.title)}</option>`).join('')}</optgroup>` : ''}</select>` : ''}
   <div id="note-list">${notes.length ? notes.map((n) => noteCard(n)).join('') : empty('Suas citações e reflexões aparecem aqui.', '<button class="btn primary" data-action="scan">📷 Capturar um grifo</button>')}</div>`;
 }
 
@@ -613,12 +618,12 @@ function bookInScope(b, f, skip = '') {
 }
 function scopeOptions(key, field) {
   const f = getScope(key);
-  const pool = state.books.filter((b) => bookInScope(b, f, field));
+  const pool = sources().filter((b) => bookInScope(b, f, field));
   const uniq = (pairs) => [...new Map(pairs.filter(([v]) => v).map((p) => [p[0], p])).values()].sort((a, b) => a[1].localeCompare(b[1], LOCALE));
   if (field === 'purpose') return Object.entries(PURPOSE).map(([k, p]) => [k, tr(p.label)]);
   if (field === 'theme') return uniq(pool.map((b) => [norm(b.genre || ''), b.genre]));
   if (field === 'author') return uniq(pool.flatMap((b) => authorsOf(b).map((a) => [norm(a), a])));
-  return uniq(pool.map((b) => [b.id, b.title]));
+  return uniq(pool.map((b) => [b.id, b.kind === 'article' ? `${b.title} (artigo)` : b.title]));
 }
 const SCOPE_ALL = { purpose: 'Todas as finalidades', theme: 'Todos os temas', author: 'Todos os autores', book: 'Todos os livros' };
 function scopeFilters(key) {
@@ -724,13 +729,14 @@ function graphData(scope = {}) {
   const groups = new Map();
   const node = (id, label, type, extra = {}) => { if (!nodes.has(id)) nodes.set(id, { id, label, type, ...extra }); return id; };
   const link = (a, b) => { if (a && b && a !== b) links.set(a < b ? `${a}|${b}` : `${b}|${a}`, { source: a, target: b }); };
-  const books = state.books.filter((b) => bookInScope(b, scope));
+  const books = sources().filter((b) => bookInScope(b, scope));
   const ids = new Set(books.map((b) => b.id));
 
   for (const b of books) {
     const group = b.genre ? norm(b.genre) : '';
     if (group && !groups.has(group)) groups.set(group, { key: group, label: b.genre, href: conceptHref(b.genre), color: themeIndex(group) });
-    const bid = node(`b:${b.id}`, b.title, 'book', { purpose: b.purpose || 'hobby', href: `#/livro/${b.id}`, group });
+    const art = b.kind === 'article';
+    const bid = node(`b:${b.id}`, b.title, 'book', { purpose: b.purpose || 'hobby', href: art ? `#/artigo/${b.id}` : `#/livro/${b.id}`, group, article: art });
     if (b.subtheme && norm(b.subtheme) !== group) link(bid, node(`c:${norm(b.subtheme)}`, b.subtheme, 'subtheme', { href: conceptHref(b.subtheme), group }));
   }
   for (const n of state.notes) {
@@ -787,9 +793,9 @@ mapView.mount = (arg) => {
       near.sort((a, b) => order.indexOf(a.type) - order.indexOf(b.type));
       const notes = near.filter((x) => x.type === 'note');
       const others = near.filter((x) => x.type !== 'note');
-      const chip = (x) => `<a class="chip" href="${x.href}">${esc(TYPE_LABEL[x.type])}: ${esc(x.label.length > 40 ? `${x.label.slice(0, 39)}…` : x.label)}</a>`;
+      const chip = (x) => `<a class="chip" href="${x.href}">${esc(x.article ? 'Artigo' : TYPE_LABEL[x.type])}: ${esc(x.label.length > 40 ? `${x.label.slice(0, 39)}…` : x.label)}</a>`;
       const count = n.type === 'theme' ? `${others.length} na ilha` : `${others.length} ${others.length === 1 ? 'conexão' : 'conexões'}`;
-      panel.innerHTML = `<div class="row between gap"><div><span class="chip">${TYPE_LABEL[n.type]}</span><h3 style="margin:4px 0 0">${esc(n.label)}</h3></div>
+      panel.innerHTML = `<div class="row between gap"><div><span class="chip">${n.article ? 'Artigo' : TYPE_LABEL[n.type]}</span><h3 style="margin:4px 0 0">${esc(n.label)}</h3></div>
         <a class="btn small primary" href="${n.href}">Abrir</a></div>
         ${others.length ? `<div class="small muted" style="margin:10px 0 4px">${count}</div><div class="chips">${others.map(chip).join('')}</div>` : ''}
         ${notes.length ? `<div class="small muted" style="margin:10px 0 4px">${notes.length} ${notes.length === 1 ? 'nota' : 'notas'}</div><div class="chips">${notes.map(chip).join('')}</div>` : ''}`;
@@ -902,13 +908,22 @@ function articlesView() {
       ${a.cover ? `<img class="art-thumb" src="${esc(a.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="art-thumb ph">📰</span>'}
       <div class="grow"><div class="book-title">${esc(a.title)}</div>
         <div class="small muted">${esc(a.site || '')}${a.createdAt ? ` · ${new Date(a.createdAt).toLocaleDateString(LOCALE)}` : ''}${notesOf(a.id) ? ` · ${notesOf(a.id)} ${notesOf(a.id) === 1 ? 'grifo' : 'grifos'}` : ''}</div>
-        ${a.status === 'finished' ? '<span class="chip">✓ Lido</span>' : ''}</div></a>`).join('')
+        <div class="chips" style="margin-top:4px">${a.genre ? `<span class="chip tag">${esc(a.genre)}</span>` : ''}${a.status === 'finished' ? '<span class="chip">✓ Lido</span>' : ''}</div></div></a>`).join('')
     : empty('Salve artigos, posts e notícias para ler, grifar e conectar com seus livros.')}`;
 }
 articlesView.mount = () => {
   const form = $('#art-form');
   form.onsubmit = (e) => { e.preventDefault(); actions.saveArticle({ url: form.url.value.trim() }); };
 };
+
+// Finalidade, tema e subtema do artigo (como nos livros), com o botão para mudar
+function articleTags(a) {
+  const pp = PURPOSE[a.purpose || 'hobby'];
+  const parts = [a.genre, a.subtheme].filter(Boolean);
+  return parts.length
+    ? `<div class="chips art-tags"><span class="chip p-${a.purpose || 'hobby'}">${pp.icon} ${pp.label}</span>${parts.map((x) => `<a class="chip tag" href="${conceptHref(x)}">${esc(x)}</a>`).join('')}<button class="chip chip-btn" data-action="classifyArticle" data-id="${a.id}">✏️ Classificar</button></div>`
+    : `<button class="card art-classify" data-action="classifyArticle" data-id="${a.id}">🏷️ <span><b>Classifique este artigo</b><br><span class="small muted">Finalidade, tema e subtema: ele passa a aparecer no mapa, nos filtros e junto dos livros do mesmo tema.</span></span></button>`;
+}
 
 // Marca no texto os trechos já grifados (as notas de citação deste artigo)
 function markHighlights(html, quotes) {
@@ -937,6 +952,7 @@ function articleView(id) {
       <button class="btn small" data-action="newNote" data-id="${a.id}">✍️ Nota</button>
       <button class="btn small ghost" data-action="deleteArticle" data-id="${a.id}">🗑️ Excluir</button>
     </div>
+    ${articleTags(a)}
     <div class="reader-body" id="reader-body">${body}</div>
   </article>
   <h3>Seus grifos (${notes.length})</h3>
@@ -1016,6 +1032,29 @@ const articleActions = {
     } finally {
       if (btn?.isConnected) { btn.disabled = false; btn.textContent = 'Salvar'; }
     }
+  },
+  classifyArticle({ id }) {
+    const a = state.articles.find((x) => x.id === id);
+    openModal(`<form class="form" id="artcat-form"><h3>🏷️ Classificar artigo</h3>
+      <p class="small muted" style="margin:0">${esc(a.title)}</p>
+      <label>Finalidade
+        <div class="radio-pills">${Object.entries(PURPOSE).map(([k, p]) => `<input type="radio" name="purpose" id="ap-${k}" value="${k}" ${(a.purpose || 'hobby') === k ? 'checked' : ''}><label for="ap-${k}">${p.icon} ${p.label}</label>`).join('')}</div>
+      </label>
+      <div class="grid2">
+        <label>Tema <input name="genre" list="themes" value="${esc(a.genre || '')}" placeholder="ex: Psicologia" autocomplete="off">${datalist('themes', themeOptions())}</label>
+        <label>Subtema <input name="subtheme" list="subthemes" value="${esc(a.subtheme || '')}" placeholder="ex: Memória" autocomplete="off"><span id="art-subthemes">${datalist('subthemes', subthemeOptions(a.genre))}</span></label>
+      </div>
+      <div class="actions"><button type="button" class="btn ghost" data-action="close">Cancelar</button><button class="btn primary">Salvar</button></div>
+    </form>`, (root) => {
+      const form = $('#artcat-form', root);
+      form.genre.oninput = () => { $('#art-subthemes', root).innerHTML = datalist('subthemes', subthemeOptions(form.genre.value)); };
+      form.onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = Object.fromEntries(new FormData(form));
+        closeModal();
+        await commit(() => persist('books', { ...a, purpose: fd.purpose || 'hobby', genre: fd.genre.trim(), subtheme: fd.subtheme.trim() }));
+      };
+    });
   },
   async articleRead({ id }) {
     const a = state.articles.find((x) => x.id === id);
@@ -2147,11 +2186,11 @@ function termsView() {
 function datalist(id, values) {
   return `<datalist id="${id}">${[...new Set(values)].filter(Boolean).sort((a, b) => a.localeCompare(b)).map((v) => `<option value="${esc(v)}">`).join('')}</datalist>`;
 }
-const themeOptions = () => [...Object.keys(THEMES), ...state.books.map((b) => b.genre)];
+const themeOptions = () => [...Object.keys(THEMES), ...sources().map((b) => b.genre)];
 function subthemeOptions(theme) {
   const k = norm(theme);
   const preset = Object.entries(THEMES).find(([t]) => norm(t) === k)?.[1] || [];
-  return [...preset, ...state.books.filter((b) => norm(b.genre) === k).map((b) => b.subtheme)];
+  return [...preset, ...sources().filter((b) => norm(b.genre) === k).map((b) => b.subtheme)];
 }
 
 function starInput(value) {
@@ -3301,7 +3340,9 @@ document.addEventListener('input', (e) => {
 document.addEventListener('change', async (e) => {
   if (e.target.dataset.bookFilter) {
     const v = e.target.value;
-    document.querySelectorAll(`${e.target.dataset.bookFilter} [data-book]`).forEach((el) => { el.hidden = v && el.dataset.book !== v; });
+    // "__books"/"__articles": só livros ou só artigos; senão, um livro ou artigo específico
+    const hide = (el) => (v === '__books' ? el.dataset.src === 'article' : v === '__articles' ? el.dataset.src !== 'article' : v && el.dataset.book !== v);
+    document.querySelectorAll(`${e.target.dataset.bookFilter} [data-book]`).forEach((el) => { el.hidden = hide(el); });
   }
   if (e.target.matches('[data-theme-pick]')) applyTheme(e.target.value);
   if (e.target.matches('[data-lang-pick]')) { setLang(e.target.value); location.reload(); }

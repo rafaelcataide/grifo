@@ -663,3 +663,13 @@ EN_PATTERNS.unshift(
   [/^(\d+) (livro|livros)$/, (m) => `${m[1]} ${m[1] === '1' ? 'book' : 'books'}`],
   [/^(\d+) (ligação|ligações)$/, (m) => `${m[1]} ${m[1] === '1' ? 'link' : 'links'}`],
 );
+
+// Categorias dos artigos e filtro de notas
+Object.assign(EN, {
+  'Todos os livros e artigos': 'All books and articles', 'Só livros': 'Books only', 'Só artigos': 'Articles only',
+  'Livros': 'Books', 'Artigo': 'Article', '✏️ Classificar': '✏️ Categorize', '🏷️ Classificar artigo': '🏷️ Categorize article',
+  'Classifique este artigo': 'Categorize this article',
+  'Finalidade, tema e subtema: ele passa a aparecer no mapa, nos filtros e junto dos livros do mesmo tema.': 'Purpose, theme and subtheme: it then shows up on the map, in filters and next to books on the same theme.',
+  'ex: Psicologia': 'e.g. Psychology', 'ex: Memória': 'e.g. Memory',
+});
+EN_PATTERNS.unshift([/^(.+) \(artigo\)$/, '$1 (article)']);

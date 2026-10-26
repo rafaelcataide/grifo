@@ -669,3 +669,8 @@ body.gated { padding-bottom: 24px; }
 .reader-body mark { background: color-mix(in srgb, #ffd84d 55%, transparent); padding: 1px 2px; }
 /* centralizado sem transform: o efeito de botão pressionado (scale) não pode tirá-lo do lugar */
 .grifar-btn { position: fixed; left: 0; right: 0; margin: 0 auto; width: max-content; bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 30; box-shadow: 0 8px 24px rgba(0, 0, 0, .25); }
+
+/* classificação dos artigos */
+.art-tags { margin: 4px 0 0; }
+.chip-btn { border: 1px dashed var(--border); background: none; cursor: pointer; font-family: inherit; font-size: .72rem; font-weight: 600; color: var(--muted); }
+.art-classify { display: flex; gap: 12px; align-items: flex-start; width: 100%; text-align: left; cursor: pointer; font: inherit; color: var(--text); border-style: dashed; margin: 4px 0 0; }
