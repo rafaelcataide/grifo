@@ -800,3 +800,4 @@ EN_PATTERNS.unshift(
   [/^🗑️ “(.+)” excluído$/, '🗑️ “$1” deleted'],
   [/^🗑️ “(.+)” saiu do vocabulário$/, '🗑️ “$1” removed from vocabulary'],
 );
+EN_PATTERNS.unshift([/^Não foi possível salvar esta revisão: (.+)$/, "Couldn't save this review: $1"]);

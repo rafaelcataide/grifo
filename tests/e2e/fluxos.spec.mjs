@@ -331,3 +331,18 @@ test('excluir uma nota some da tela e avisa', async ({ page }) => {
   await expect(page.locator('#note-list .note')).toHaveCount(1);
   await expect(page.locator('#note-list')).not.toContainText('vai embora');
 });
+
+test('revisão: cada resposta passa para o próximo card, e toque duplo não pula um card sem ver @celular', async ({ page }) => {
+  await semear(page, { books: [livro('b1')], notes: [nota('n1', 'b1', 'x')], cards: [card('c1', 'b1', 'n1'), card('c2', 'b1', 'n1', { front: 'Segundo card' }), card('c3', 'b1', 'n1', { front: 'Terceiro card' })] });
+  await page.goto('/#/revisar');
+  await page.getByRole('button', { name: /Revisar 3 cards agora/ }).click();
+  await page.getByRole('button', { name: /Mostrar resposta/ }).click();
+  await page.getByRole('button', { name: /^Fácil/ }).dblclick();
+  await expect(page.getByText('1 feitas · 2 restantes')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Mostrar resposta/ })).toBeVisible();
+  await page.waitForTimeout(400); // logo depois de responder, o Mostrar resposta ignora toques (proteção do toque duplo)
+  await page.getByRole('button', { name: /Mostrar resposta/ }).click();
+  await page.getByRole('button', { name: /^Errei/ }).click();
+  await expect(page.getByText('2 feitas · 2 restantes')).toBeVisible();
+  await expect.poll(async () => (await lerBanco(page, 'reviews')).length).toBe(2);
+});

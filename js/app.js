@@ -1787,17 +1787,31 @@ const examActions = {
 };
 
 async function gradeCard(g) {
+  if (!review?.queue.length || !review.revealed) return; // toque duplo não avalia o próximo card sem ver
   const c = state.cards.find((x) => x.id === review.queue[0]);
+  if (!c) { review.queue.shift(); render(); return; }
   let next = S.schedule(c, g, G.ymd());
   if (review.exam) next = S.capForExam(next, review.exam, G.ymd());
   review.queue.shift();
   if (g === 0) review.queue.push(c.id); // errou: volta no fim desta sessão
   review.done++;
   review.revealed = false;
-  await commit(async () => {
-    await persist('cards', next);
-    await persist('reviews', { id: uid(), cardId: c.id, date: G.ymd(), grade: g, createdAt: Date.now() });
-  }, { quiet: true });
+  // o "Mostrar resposta" do próximo card nasce onde estavam os botões: um toque rápido/duplo não pode revelá-lo
+  review.revealAfter = Date.now() + 350;
+  // o próximo card aparece na hora, do começo; a gravação vem depois (sem redesenhar de novo)
+  const i = state.cards.findIndex((x) => x.id === c.id);
+  if (i >= 0) state.cards[i] = next;
+  render();
+  view.querySelector('.review-card, h2')?.scrollIntoView({ block: 'nearest' });
+  try {
+    await commit(async () => {
+      await persist('cards', next);
+      await persist('reviews', { id: uid(), cardId: c.id, date: G.ymd(), grade: g, createdAt: Date.now() });
+    }, { quiet: true, rerender: false });
+  } catch (e) {
+    console.error(e);
+    toast(`Não foi possível salvar esta revisão: ${esc(e.message || String(e))}`, 'err');
+  }
 }
 
 // ---------- progresso ----------
@@ -3958,7 +3972,7 @@ const actions = {
   },
   clearScope: ({ key }) => { sessionStorage.removeItem(key); render(); },
   stopReview: () => { review = review && { ...review, queue: [] }; render(); },
-  reveal: () => { review.revealed = true; render(); },
+  reveal: () => { if (!review || Date.now() < (review.revealAfter || 0)) return; review.revealed = true; render(); },
   grade: ({ g }) => gradeCard(Number(g)),
   bookFilter: ({ v }) => { sessionStorage.setItem('bookFilter', v); render(); },
   bookPurpose: ({ v }) => { sessionStorage.setItem('bookPurpose', v); render(); },
