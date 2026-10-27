@@ -48,6 +48,7 @@ export function tr(s, quiet = false) {
     if (m) {
       const value = typeof out === 'function' ? out(m, tr) : key.replace(re, out);
       OUTPUTS.add(value);
+      OUTPUTS.add(value.replace(LEAD_EMOJI, '').trim()); // o emoji do começo vira ícone e sai do texto
       return s.replace(key, value);
     }
   }
@@ -64,7 +65,8 @@ function translateNode(node) {
     if (!p || SKIP.has(p.tagName) || p.closest('[data-no-tr]')) return;
     const t = tr(node.nodeValue);
     if (t !== node.nodeValue) node.nodeValue = t;
-    iconize(node);
+    // pedaços de uma frase dividida pelo ícone no meio já estão no idioma certo
+    for (const piece of iconize(node) || []) OUTPUTS.add(piece);
     return;
   }
   if (node.nodeType !== 1 || SKIP.has(node.tagName) || node.closest?.('[data-no-tr]')) return;

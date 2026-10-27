@@ -2,3 +2,5 @@ node_modules/
 supabase/.temp/
 .teste/
 dist/
+test-results/
+playwright-report/

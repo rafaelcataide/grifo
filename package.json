@@ -7,6 +7,10 @@
     "start": "node server.js",
     "icons": "node tools/gerar-icones.js",
     "test": "node --test \"tests/*.test.mjs\"",
-    "build": "node tools/build.js"
+    "build": "node tools/build.js",
+    "test:telas": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
   }
 }

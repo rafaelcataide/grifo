@@ -47,12 +47,16 @@ export function iconize(node) {
     if (!rest.trim()) node.remove();
     else node.nodeValue = ` ${rest}`;
   } else if (p.closest(INLINE)) {
+    const parts = [node];
     let m;
     while ((m = node.nodeValue.match(ANY))) {
       const after = node.splitText(m.index);
       after.nodeValue = after.nodeValue.slice(m[0].length);
       p.insertBefore(svgFor(m[1]), after);
       node = after;
+      parts.push(after);
     }
+    // pedaços de uma frase já traduzida (quem chama marca para não traduzir de novo)
+    if (parts.length > 1) return parts.map((t) => t.nodeValue.trim()).filter(Boolean);
   }
 }

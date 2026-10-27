@@ -681,3 +681,52 @@ Object.assign(EN, {
   'Mostrar:': 'Show:', 'Áreas': 'Areas', 'Subtemas': 'Subthemes', 'Ideias': 'Ideas', 'Tags': 'Tags',
   'Áreas escondidas: só as ligações entre os pontos.': 'Areas hidden: only the links between points.',
 });
+
+// Busca, primeiros passos, fila de artigos, PDF, exportar e classificação com IA
+Object.assign(EN, {
+  // busca
+  'Buscar em tudo (/)': 'Search everything (/)', 'Buscar em tudo': 'Search everything', 'Buscar': 'Search',
+  'Livros, artigos, notas e ideias…': 'Books, articles, notes and ideas…',
+  'Digite ao menos 2 letras. A busca olha títulos, autores, temas, o texto das notas e o texto dos artigos salvos.': 'Type at least 2 letters. Search looks at titles, authors, themes, note text and the text of saved articles.',
+  // primeiros passos
+  '🚀 Primeiros passos': '🚀 First steps', 'Esconder': 'Hide',
+  'Adicione um livro que está lendo': "Add a book you're reading", 'Guarde um grifo: foto da página ou texto': 'Save a highlight: page photo or text',
+  'Transforme um grifo em card de revisão': 'Turn a highlight into a review card', 'Faça sua primeira revisão': 'Do your first review',
+  'Ligue duas ideias com [[ ]] numa nota': 'Link two ideas with [[ ]] in a note', 'Salve um artigo para ler e grifar': 'Save an article to read and highlight',
+  '🧠 Ver notas': '🧠 See notes', '📰 Artigos': '📰 Articles',
+  // artigos e PDF
+  'Ler depois': 'Read later', 'Lendo': 'Reading', 'Lidos': 'Read', '📄 Abrir PDF': '📄 Open PDF', 'Abrir PDF': 'Open PDF', 'Nenhum artigo aqui.': 'No articles here.',
+  'PDF não encontrado.': 'PDF not found.', 'Abrindo o PDF…': 'Opening the PDF…', '📥 Importar grifos do arquivo': '📥 Import highlights from the file',
+  'Selecione um trecho do PDF e toque em': 'Select a passage of the PDF and tap', '📄 Escolher o arquivo': '📄 Choose the file',
+  'O arquivo deste PDF não está neste aparelho.': "This PDF's file isn't on this device.", 'PDF grande demais (máximo 50 MB).': 'PDF too large (50 MB max).',
+  'O PDF ficou só neste aparelho (não foi possível enviar para a conta agora).': "The PDF stayed only on this device (couldn't upload to your account now).",
+  'Os grifos do arquivo já estavam aqui.': "The file's highlights were already here.", 'Este PDF não tem grifos feitos em outros apps.': "This PDF has no highlights made in other apps.",
+  'PDF sem título': 'Untitled PDF',
+  // exportar
+  '📤 Levar para outros apps': '📤 Take to other apps', 'Levar para outros apps': 'Take to other apps',
+  'Suas notas viram arquivos Markdown com as [[ligações]] (Obsidian e Notion) e seus cards viram um baralho do Anki.': 'Your notes become Markdown files with the [[links]] (Obsidian and Notion) and your cards become an Anki deck.',
+  '🧩 Obsidian / Notion (.zip)': '🧩 Obsidian / Notion (.zip)', 'Obsidian / Notion (.zip)': 'Obsidian / Notion (.zip)', '🧠 Anki (.txt)': '🧠 Anki (.txt)', 'Anki (.txt)': 'Anki (.txt)',
+  'No Obsidian: descompacte o .zip numa pasta e abra como cofre. No Notion: Importar → Texto e Markdown. No Anki: Arquivo → Importar (tipo, baralho e lacunas já vêm prontos).': 'In Obsidian: unzip into a folder and open it as a vault. In Notion: Import → Text & Markdown. In Anki: File → Import (note type, deck and clozes are ready).',
+  '⭐ Exportar para outros apps faz parte do Grifo Plus ·': '⭐ Exporting to other apps is part of Grifo Plus ·', '📦 Preparando os arquivos…': '📦 Preparing the files…',
+  'Você ainda não tem cards para levar ao Anki.': "You don't have cards to take to Anki yet.",
+  // classificação com IA
+  '✨ Sugerir com IA': '✨ Suggest with AI', '✨ Pensando…': '✨ Thinking…', '⭐ A classificação com IA faz parte do Grifo Plus ·': '⭐ AI categorization is part of Grifo Plus ·',
+  // dicas e textos do mapa
+  '[[Nome]]': '[[Name]]', 'Mapa de ideias: cada tema é uma ilha com seus livros': 'Idea map: each theme is an island with its books',
+});
+EN_PATTERNS.unshift(
+  [/^(\d+) de (\d+)$/, '$1 of $2'],
+  [/^(Ler depois|Lendo|Lidos) \((\d+)\)$/, (m) => `${({ 'Ler depois': 'Read later', Lendo: 'Reading', Lidos: 'Read' })[m[1]]} (${m[2]})`],
+  [/^Lendo · (\d+)%$/, 'Reading · $1%'],
+  [/^(\d+) min de leitura$/, '$1 min read'],
+  [/^PDF · (\d+|\?) páginas$/, 'PDF · $1 pages'],
+  [/^(Ideias e temas|Livros|Artigos|Notas) \((\d+)\)$/, (m) => `${({ 'Ideias e temas': 'Ideas and themes', Livros: 'Books', Artigos: 'Articles', Notas: 'Notes' })[m[1]]} (${m[2]})`],
+  [/^Nada encontrado para “(.+)”\.$/, 'Nothing found for “$1”.'],
+  [/^\+ (\d+) resultado\(s\)\. Refine a busca\.$/, '+ $1 result(s). Refine your search.'],
+  [/^🖍️ Grifado(?: \(p\. (\d+)\))? ·$/, (m) => `🖍️ Highlighted${m[1] ? ` (p. ${m[1]})` : ''} ·`],
+  [/^📥 (\d+) (grifo importado|grifos importados) do arquivo$/, (m) => `📥 ${m[1]} highlight${m[1] === '1' ? '' : 's'} imported from the file`],
+  [/^🏷️ Classificado como (.+) › (.+) ·$/, '🏷️ Categorized as $1 › $2 ·'],
+  [/^Não foi possível exportar: (.+)$/, "Couldn't export: $1"],
+  [/^Não consegui abrir esse PDF: (.+)$/, "Couldn't open this PDF: $1"],
+  [/^O arquivo deste PDF está em outro aparelho(.*)\.$/, (m) => `This PDF's file is on another device${m[1] ? ' (with Plus, your PDFs sync between devices)' : ''}.`],
+);
