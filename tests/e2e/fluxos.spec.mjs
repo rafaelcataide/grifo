@@ -274,6 +274,10 @@ async function dicionarioFalso(page) {
     const word = new URL(route.request().url()).searchParams.get('page');
     const text = `<div class="mw-parser-output"><div class="mw-heading mw-heading1"><h1 id="Português">Português</h1></div>
       <div class="mw-heading mw-heading2"><h2 id="Adverbio">Advérbio</h2></div><ol><li>sem pressa, lentamente<dl><dd>exemplo</dd></dl></li><li>com calma</li></ol>
+      <div class="mw-heading mw-heading3"><h3 id="Sinonimos">Sinônimos</h3></div><ul><li><a>lentamente</a>, <a>vagarosamente</a></li></ul>
+      <div class="mw-heading mw-heading2"><h2 id="Adjetivo">Adjetivo</h2></div><ol><li>que é lento</li></ol>
+      <div class="mw-heading mw-heading2"><h2 id="Etimologia">Etimologia</h2></div><dl><dd>De vagar.</dd></dl>
+      <div class="mw-heading mw-heading2"><h2 id="Anagramas">Anagramas</h2></div><ol><li><a>gravade</a></li></ol>
       <div class="mw-heading mw-heading1"><h1 id="Inglês">Inglês</h1></div><ol><li>não deve aparecer</li></ol></div>`;
     route.fulfill({ json: { parse: { title: word, text } } });
   });
@@ -292,13 +296,14 @@ test('vocabulário: selecionar uma palavra no artigo, ver o significado e virar 
     return m[0];
   });
   await page.getByRole('button', { name: 'Significado' }).click();
-  await expect(page.locator('.word-defs li')).toHaveText(['sem pressa, lentamente', 'com calma']);
+  await expect(page.locator('.word-defs li')).toHaveText(['sem pressa, lentamente', 'com calma', 'que é lento']);
   await expect(page.locator('.word-modal .word-ctx')).toContainText(palavra);
   await page.getByRole('button', { name: 'Salvar e criar card' }).click();
   await expect.poll(async () => (await lerBanco(page, 'words')).map((w) => w.word)).toEqual([palavra.toLowerCase()]);
   const [c] = await lerBanco(page, 'cards');
   expect(c.front).toContain(palavra.toLowerCase());
-  expect(c.back).toContain('sem pressa');
+  // verso completo: todos os sentidos por classe, depois sinônimos e anagramas (anagrama não vira sentido)
+  expect(c.back).toBe('**Advérbio**\n1. sem pressa, lentamente\n2. com calma\n\n**Adjetivo**\n1. que é lento\n\n**Sinônimos:** lentamente, vagarosamente\n**Anagramas:** gravade');
   await page.goto('/#/vocabulario');
   await expect(page.locator('#word-list .word-item')).toHaveCount(1);
   await expect(page.locator('#word-list .word-item')).toContainText('card');
@@ -314,4 +319,15 @@ test('vocabulário: procurar uma palavra digitando (livro de papel)', async ({ p
   await expect(page.locator('.word-modal .word-title')).toHaveText('devagar');
   await page.getByRole('button', { name: 'Salvar', exact: true }).click();
   await expect(page.locator('#word-list .word-item')).toHaveCount(1);
+});
+
+test('excluir uma nota some da tela e avisa', async ({ page }) => {
+  await semear(page, { books: [livro('b1')], notes: [nota('n1', 'b1', 'Nota que vai embora.'), nota('n2', 'b1', 'Nota que fica.')] });
+  await page.goto('/#/nota/n1');
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: 'Excluir nota' }).click();
+  await expect(page).toHaveURL(/#\/notas$/);
+  await expect(page.getByText('Nota excluída')).toBeVisible();
+  await expect(page.locator('#note-list .note')).toHaveCount(1);
+  await expect(page.locator('#note-list')).not.toContainText('vai embora');
 });

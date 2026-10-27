@@ -92,7 +92,7 @@ export function booksCsv({ books = [], articles = [] }) {
  */
 export function ankiText({ books = [], articles = [], cards = [] }) {
   const src = new Map([...books, ...articles].map((b) => [b.id, b]));
-  const clean = (t) => String(t || '').replace(/\[\[([^[\]]+?)\]\]/g, (m, x) => x.split('|').pop()).replace(/\t/g, ' ').replace(/\r?\n/g, '<br>');
+  const clean = (t) => String(t || '').replace(/\[\[([^[\]]+?)\]\]/g, (m, x) => x.split('|').pop()).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\t/g, ' ').replace(/\r?\n/g, '<br>');
   const deck = (c) => `Grifo::${fileName(src.get(c.bookId)?.title || 'Geral').replace(/::/g, ' ')}`;
   const lines = ['#separator:tab', '#html:true', '#notetype column:1', '#deck column:2', '#tags column:5'];
   for (const c of cards) {

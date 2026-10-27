@@ -790,3 +790,13 @@ EN_PATTERNS.unshift(
   [/^O que significa “(.+)”\?$/, 'What does “$1” mean?'],
 );
 Object.assign(EN, { 'a palavra procurada (só a palavra, sem o texto em volta) é enviada ao Wikcionário, ao Dicionário Aberto e à Free Dictionary API.': 'the word you look up (only the word, not the text around it) is sent to Wiktionary, Dicionário Aberto and the Free Dictionary API.', 'Dicionário:': 'Dictionary:' });
+
+// exclusões e verbete completo
+Object.assign(EN, {
+  '🗑️ Card excluído': '🗑️ Card deleted', '🗑️ Nota excluída': '🗑️ Note deleted', '🗑️ Sessão excluída': '🗑️ Session deleted',
+  'Sinônimos': 'Synonyms', 'Antônimos': 'Antonyms', 'Anagramas': 'Anagrams',
+});
+EN_PATTERNS.unshift(
+  [/^🗑️ “(.+)” excluído$/, '🗑️ “$1” deleted'],
+  [/^🗑️ “(.+)” saiu do vocabulário$/, '🗑️ “$1” removed from vocabulary'],
+);

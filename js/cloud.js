@@ -208,6 +208,8 @@ export function sync() {
     // 1) puxar
     let applied = false;
     let cursor = meta.cursor;
+    // excluídos neste aparelho e ainda não enviados: a cópia antiga da nuvem não pode trazê-los de volta
+    const deletedHere = new Map((await db.tombstones()).map((t) => [`${t.store}:${t.id}`, t.ts]));
     const since = new Date(new Date(cursor).getTime() - 5000).toISOString(); // pequena sobreposição: transações concorrentes
     for (let from = 0; ; from += 1000) {
       const { data: rows, error } = await sb.from('records').select('store,id,data,deleted,client_ts,synced_at')
@@ -228,6 +230,7 @@ export function sync() {
           await db.setKV(`__ts:${r.id}`, r.client_ts, { track: false });
           applied = true;
         } else if (STORES.includes(r.store)) {
+          if (!r.deleted && (deletedHere.get(`${r.store}:${r.id}`) || 0) >= r.client_ts) continue;
           const local = await db.get(r.store, r.id);
           if (local && (local.updatedAt || 0) >= r.client_ts) continue;
           if (r.deleted) { if (local) await db.del(r.store, r.id, { silent: true }); } else await db.put(r.store, { ...r.data, updatedAt: r.client_ts }, { keepTs: true });

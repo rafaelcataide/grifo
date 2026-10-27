@@ -585,14 +585,27 @@ function notesView() {
 // ---------- vocabulário ----------
 // Palavras procuradas no dicionário (ao selecionar num artigo ou PDF, ou digitando), com a frase onde apareceram
 const wordByText = (w) => state.words.find((x) => norm(x.word) === norm(w));
-function wordDefsHtml(r, max = 8) {
+// sentidos agrupados pela classe da palavra (substantivo, verbo…), na ordem do dicionário
+function wordGroups(r) {
   const groups = [];
-  for (const d of r.defs.slice(0, max)) {
-    const g = groups.at(-1);
-    if (g && g.pos === d.pos) g.items.push(d.text); else groups.push({ pos: d.pos, items: [d.text] });
+  for (const d of r.defs || []) {
+    const g = groups.find((x) => x.pos === d.pos);
+    if (g) g.items.push(d.text); else groups.push({ pos: d.pos, items: [d.text] });
   }
-  return groups.map((g) => `${g.pos ? `<div class="word-pos">${esc(g.pos)}</div>` : ''}<ol class="word-defs">${g.items.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>`).join('');
+  return groups;
 }
+const WORD_LISTS = [['synonyms', 'Sinônimos'], ['antonyms', 'Antônimos'], ['anagrams', 'Anagramas']];
+function wordDefsHtml(r) {
+  return wordGroups(r).map((g) => `${g.pos ? `<div class="word-pos">${esc(g.pos)}</div>` : ''}<ol class="word-defs">${g.items.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>`).join('')
+    + WORD_LISTS.filter(([k]) => r[k]?.length).map(([k, label]) => `<div class="word-pos">${label}</div><div class="chips">${r[k].map((x) => `<span class="chip">${esc(x)}</span>`).join('')}</div>`).join('');
+}
+// verso do card: todos os sentidos por classe, depois sinônimos, antônimos e anagramas
+function wordBackText(w) {
+  const defs = wordGroups(w).map((g) => `${g.pos ? `**${g.pos}**\n` : ''}${g.items.map((t, i) => `${i + 1}. ${t}`).join('\n')}`).join('\n\n');
+  const lists = WORD_LISTS.filter(([k]) => w[k]?.length).map(([k, label]) => `**${label}:** ${w[k].join(', ')}`).join('\n');
+  return [defs, lists].filter(Boolean).join('\n\n');
+}
+const wordRecord = (r) => ({ word: r.word, lang: r.lang, base: r.base || '', defs: r.defs.slice(0, 30), synonyms: r.synonyms || [], antonyms: r.antonyms || [], anagrams: r.anagrams || [], source: r.source || null, v: 2 });
 function wordModal(r, { context = '', sourceId = null } = {}) {
   const saved = wordByText(r.word);
   const hasCard = saved && state.cards.some((c) => c.wordId === saved.id);
@@ -611,7 +624,7 @@ function wordModal(r, { context = '', sourceId = null } = {}) {
     const save = async () => {
       const cur = wordByText(r.word);
       if (cur) return cur;
-      const rec = { id: uid(), createdAt: Date.now(), word: r.word, lang: r.lang, base: r.base || '', defs: r.defs.slice(0, 8), context, sourceId, source: r.source || null };
+      const rec = { id: uid(), createdAt: Date.now(), ...wordRecord(r), context, sourceId };
       await commit(() => persist('words', rec), { rerender: false });
       return rec;
     };
@@ -624,9 +637,25 @@ function wordModal(r, { context = '', sourceId = null } = {}) {
 async function makeWordCard(w) {
   if (state.cards.some((c) => c.wordId === w.id)) return;
   const front = `O que significa “${w.word}”?${w.context ? `\n\n“${w.context}”` : ''}`;
-  const back = w.defs.slice(0, 2).map((d) => d.text).join('\n');
-  await commit(() => persist('cards', S.newCard({ id: uid(), noteId: null, wordId: w.id, bookId: w.sourceId || null, createdAt: Date.now(), type: 'qa', front, back, source: 'vocab' }, G.ymd())));
+  await commit(() => persist('cards', S.newCard({ id: uid(), noteId: null, wordId: w.id, bookId: w.sourceId || null, createdAt: Date.now(), type: 'qa', front, back: wordBackText(w), source: 'vocab' }, G.ymd())));
   toast('🧠 Card criado: a palavra entra na sua revisão');
+}
+// palavras salvas antes de guardar o verbete completo: busca de novo e completa a palavra e o card
+let refreshingWords = false;
+async function refreshOldWords() {
+  const old = state.words.filter((w) => !w.v).slice(0, 10);
+  if (!old.length || refreshingWords) return;
+  refreshingWords = true;
+  try {
+    const D = await import('./dict.js');
+    for (const w of old) {
+      const r = await D.lookup(w.base && !w.defs.length ? w.base : w.word);
+      const upd = r ? { ...w, ...wordRecord(r), word: w.word } : { ...w, v: 2 };
+      await persist('words', upd);
+      for (const c of state.cards.filter((x) => x.wordId === w.id)) await persist('cards', { ...c, back: wordBackText(upd) });
+    }
+  } finally { refreshingWords = false; }
+  if (location.hash.startsWith('#/vocabulario')) render();
 }
 // procura e mostra o resultado (com aviso enquanto busca)
 async function wordLookup(raw, opts = {}) {
@@ -673,6 +702,7 @@ function vocabView() {
 vocabView.mount = () => {
   const form = $('#word-form');
   form.onsubmit = (e) => { e.preventDefault(); wordLookup(form.q.value); form.q.value = ''; };
+  refreshOldWords();
 };
 const wordActions = {
   showWord: ({ id }) => { const w = state.words.find((x) => x.id === id); if (w) wordModal(w, { context: w.context, sourceId: w.sourceId }); },
@@ -684,6 +714,7 @@ const wordActions = {
       for (const c of state.cards.filter((x) => x.wordId === id)) await remove('cards', c.id);
       await remove('words', id);
     });
+    toast(`🗑️ “${esc(w.word)}” saiu do vocabulário`);
   },
 };
 
@@ -1084,7 +1115,8 @@ mapView.mount = (arg) => {
 
 // ---------- cards de memorização ----------
 // [[ligação]] já escapada → negrito, sem os colchetes (em cards e textos que não levam a lugar nenhum)
-const linkBold = (html) => html.replace(LINK_RE, (m, x) => `<b class="wl-txt">${x.split('|').pop().trim()}</b>`);
+const linkBold = (html) => html.replace(LINK_RE, (m, x) => `<b class="wl-txt">${x.split('|').pop().trim()}</b>`)
+  .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>'); // **negrito**: classes e listas no verso dos cards de palavras
 
 function cardFace(c, answer) {
   if (c.type === 'cloze') {
@@ -1661,6 +1693,7 @@ const articleActions = {
       for (const n of notes) await remove('notes', n.id);
       await remove('books', id);
     });
+    toast(`🗑️ “${esc(a.title)}” excluído`);
     if (a.kind === 'pdf') {
       await db.delFile(id);
       if (a.synced && canSyncPdf()) Cloud.deletePdf(id).catch(() => {});
@@ -3913,7 +3946,9 @@ const actions = {
   newCard: ({ id }) => cardForm({ note: noteById(id) }),
   editCard: ({ id }) => cardForm({ card: state.cards.find((c) => c.id === id) }),
   async deleteCard({ id }) {
-    if (confirm('Excluir este card?')) await commit(() => remove('cards', id));
+    if (!confirm('Excluir este card?')) return;
+    await commit(() => remove('cards', id));
+    toast('🗑️ Card excluído');
   },
   startReview: () => {
     const today = G.ymd();
@@ -3936,6 +3971,7 @@ const actions = {
       for (const s of state.sessions.filter((x) => x.bookId === id)) await remove('sessions', s.id);
       await remove('books', id);
     });
+    toast(`🗑️ “${esc(b.title)}” excluído`);
     location.hash = '#/livros';
   },
   async deleteNote({ id }) {
@@ -3945,6 +3981,7 @@ const actions = {
       for (const c of cards) await remove('cards', c.id);
       await remove('notes', id);
     });
+    toast('🗑️ Nota excluída');
     if (location.hash.startsWith('#/nota/')) location.hash = '#/notas';
   },
   async deleteSession({ id }) {
@@ -3955,6 +3992,7 @@ const actions = {
       const b = bookById(s.bookId);
       if (b && b.currentPage === s.toPage && b.status !== 'finished') await persist('books', { ...b, currentPage: s.fromPage });
     });
+    toast('🗑️ Sessão excluída');
   },
   async shareNote({ id }) {
     const n = noteById(id);
