@@ -801,3 +801,4 @@ EN_PATTERNS.unshift(
   [/^🗑️ “(.+)” saiu do vocabulário$/, '🗑️ “$1” removed from vocabulary'],
 );
 EN_PATTERNS.unshift([/^Não foi possível salvar esta revisão: (.+)$/, "Couldn't save this review: $1"]);
+Object.assign(EN, { 'Sair sem salvar o que você mudou?': 'Leave without saving your changes?' });

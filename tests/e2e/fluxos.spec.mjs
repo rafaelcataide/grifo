@@ -359,3 +359,20 @@ test('duas abas abertas: o que é excluído numa some da outra', async ({ page, 
   await expect(outra.locator('#note-list .note')).toHaveCount(1);
   await expect(outra.locator('#note-list')).not.toContainText('vai embora');
 });
+
+test('nota: mudar a página não fecha a janela (Enter vai para o próximo campo; sair pergunta) @celular', async ({ page }) => {
+  await semear(page, { books: [livro('b1')], notes: [nota('n1', 'b1', 'Texto da nota', { page: 12 })] });
+  await page.goto('/#/nota/n1');
+  await page.getByRole('button', { name: 'Editar' }).click();
+  const aberta = () => page.evaluate(() => document.querySelector('#modal').open);
+  const pg = page.locator('#note-form [name=page]');
+  await pg.fill('34');
+  await pg.press('Enter');
+  expect(await aberta()).toBe(true);
+  // Esc / voltar do Android com algo mudado: pergunta; "não" mantém a janela
+  page.once('dialog', (d) => d.dismiss());
+  await page.keyboard.press('Escape');
+  expect(await aberta()).toBe(true);
+  await page.getByRole('button', { name: 'Salvar' }).click();
+  await expect.poll(async () => (await lerBanco(page, 'notes'))[0].page).toBe(34);
+});

@@ -235,11 +235,27 @@ function confetti() {
 
 function openModal(html, mount) {
   modalBody.innerHTML = html;
+  delete modal.dataset.dirty;
   if (!modal.open) modal.showModal();
   mount?.(modalBody);
 }
 const closeModal = () => modal.close();
-modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+// Formulário com algo digitado não fecha sem querer: tocar fora, Esc e o "voltar" do Android
+// (que fecha a janela junto com o teclado) perguntam antes de descartar
+modal.addEventListener('input', () => { modal.dataset.dirty = '1'; });
+const keepEdits = () => modal.dataset.dirty && modalBody.querySelector('form') && !confirm('Sair sem salvar o que você mudou?');
+modal.addEventListener('click', (e) => { if (e.target === modal && !keepEdits()) closeModal(); });
+modal.addEventListener('cancel', (e) => { if (keepEdits()) e.preventDefault(); });
+// Enter num campo de uma linha vai para o próximo campo (no celular, o "Ir" do teclado numérico salvava e fechava)
+modal.addEventListener('keydown', (e) => {
+  const el = e.target;
+  if (e.key !== 'Enter' || e.isComposing || e.defaultPrevented || !el.matches('form input:not([type=checkbox], [type=radio], [type=submit], [type=button], [type=hidden])') || el.closest('.combo')) return;
+  const fields = [...el.form.querySelectorAll('input:not([type=hidden]):not([disabled]), select, textarea')].filter((x) => x.offsetParent !== null);
+  const next = fields[fields.indexOf(el) + 1];
+  if (!next) return; // último campo: Enter salva, como sempre
+  e.preventDefault();
+  next.focus();
+});
 
 // ---------------- componentes ----------------
 const READ_SEG = [['#/livros', '📚 Livros', 'books'], ['#/artigos', '📰 Artigos e PDFs', 'articles']];
