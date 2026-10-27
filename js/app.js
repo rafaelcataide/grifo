@@ -1,6 +1,6 @@
 import { LOCALE, tr, lang, setLang, startTranslating } from './i18n.js';
 import { db, uid, STORES } from './db.js';
-import { LINK_RE, esc, norm, nf, linksOf, plainText } from './util.js';
+import { LINK_RE, esc, norm, nf, linksOf, plainText, splitTags } from './util.js';
 import * as G from './game.js';
 import * as C from './charts.js';
 import * as S from './srs.js';
@@ -99,6 +99,13 @@ async function load() {
   const all = await Promise.all(STORES.map((s) => db.all(s)));
   STORES.forEach((s, i) => { state[s] = all[i]; });
   // artigos salvos por link: mesma tabela dos livros, lista separada (não contam em metas nem na estante)
+  // tags gravadas juntas antes de aceitar ';' ("religião;umbanda"): separa uma vez; a correção sincroniza
+  for (const [i, n] of state.notes.entries()) {
+    if (!(n.tags || []).some((t) => /[;,#]/.test(t))) continue;
+    const fixed = { ...n, tags: splitTags(n.tags) };
+    await db.put('notes', fixed);
+    state.notes[i] = fixed;
+  }
   state.articles = state.books.filter((b) => b.kind === 'article' || b.kind === 'pdf');
   state.books = state.books.filter((b) => b.kind !== 'article' && b.kind !== 'pdf');
   state.settings = { ...DEFAULT_SETTINGS, ...((await db.getKV('settings')) || {}) };
@@ -3016,7 +3023,7 @@ function noteForm(existing, { bookId, autoOCR, link } = {}) {
       const note = existing ? { ...existing } : { id: uid(), createdAt: Date.now() };
       Object.assign(note, {
         bookId: fd.bookId, title: plainText(fd.title).trim(), text: fd.text.trim(), page: Number(fd.page) || null, kind: fd.kind, source: fd.source,
-        tags: [...new Set(fd.tags.split(/[;,]/).map((t) => t.trim().replace(/^#/, '')).filter(Boolean))], updatedAt: Date.now(),
+        tags: splitTags(fd.tags), updatedAt: Date.now(),
       });
       closeModal();
       await commit(() => persist('notes', note));

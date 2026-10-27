@@ -243,3 +243,10 @@ test('mapa: esconder tipos de ponto sem desfazer as ligações', async () => {
   assert.equal(noAreas.groups.length, 0);
   assert.ok(noAreas.nodes.every((n) => !n.group));
 });
+
+test('tags: separa por ; e vírgula, tira # e repetidas', async () => {
+  const { splitTags } = await import('../js/util.js');
+  assert.deepEqual(splitTags('religião;umbanda'), ['religião', 'umbanda']);
+  assert.deepEqual(splitTags(['religião;espiritismo', '#Religião', 'umbanda, #fé ;']), ['religião', 'espiritismo', 'umbanda', 'fé']);
+  assert.deepEqual(splitTags(''), []);
+});

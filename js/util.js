@@ -18,3 +18,17 @@ export const linksOf = (text) => [...String(text || '').matchAll(LINK_RE)].map((
 
 // Texto sem a marcação [[ ]] (mostra o apelido quando houver)
 export const plainText = (t) => String(t || '').replace(LINK_RE, (m, x) => x.split('|').pop());
+
+// Tags: aceita "a; b, c" e "#a"; sem repetidas (ignora maiúsculas ao comparar)
+export function splitTags(list) {
+  const seen = new Set();
+  const out = [];
+  for (const raw of [].concat(list || [])) {
+    for (const t of String(raw).split(/[;,]/)) {
+      const tag = t.trim().replace(/^#+/, '').trim();
+      const key = norm(tag);
+      if (tag && !seen.has(key)) { seen.add(key); out.push(tag); }
+    }
+  }
+  return out;
+}
