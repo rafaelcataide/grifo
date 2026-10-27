@@ -1,8 +1,8 @@
 // Camada de dados: IndexedDB no próprio aparelho.
 // Cada gravação carimba "updatedAt" e cada exclusão deixa uma "lápide": é o que a sincronização na nuvem envia.
 const DB_NAME = 'estante';
-const VERSION = 2;
-export const STORES = ['books', 'sessions', 'notes', 'cards', 'reviews'];
+const VERSION = 3;
+export const STORES = ['books', 'sessions', 'notes', 'cards', 'reviews', 'words'];
 export const SYNC_KV = ['settings', 'badges', 'challenges'];
 const TOMBS = '__tombstones';
 

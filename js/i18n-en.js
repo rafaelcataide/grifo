@@ -767,3 +767,26 @@ Object.assign(EN, {
 // início: artigos
 Object.assign(EN, { '📰 Artigo': '📰 Article', 'Artigo': 'Article' });
 EN_PATTERNS.unshift([/^📰 (\d+) (artigo|artigos) para ler depois →$/, (m) => `📰 ${m[1]} article${m[1] === '1' ? '' : 's'} to read later →`]);
+
+// leituras, vocabulário e PDF
+Object.assign(EN, {
+  'Leituras': 'Reading', '📰 Artigos e PDFs': '📰 Articles & PDFs', 'Artigos e PDFs': 'Articles & PDFs', '📄 Adicionar PDF': '📄 Add PDF', 'Adicionar PDF': 'Add PDF',
+  '🔤 Palavras': '🔤 Words', 'Palavras': 'Words', 'Vocabulário': 'Vocabulary', '📖 Significado': '📖 Meaning', 'Significado': 'Meaning',
+  'Procurar uma palavra…': 'Look up a word…', 'Filtrar suas palavras…': 'Filter your words…', '📄 Abrindo o PDF…': '📄 Opening the PDF…',
+  'As palavras que você procurar e salvar aparecem aqui, com a frase onde estavam. Vire card e elas entram na revisão.': 'Words you look up and save show up here, with the sentence they came from. Turn them into cards and they join your review.',
+  'Lendo no papel? Procure aqui.': 'Reading on paper? Look it up here.', '. Lendo no papel? Procure aqui.': '. Reading on paper? Look it up here.', 'Num artigo ou PDF, selecione uma palavra e toque em': 'In an article or PDF, select a word and tap',
+  '📖 Procurando no dicionário…': '📖 Looking it up…', 'Fonte:': 'Source:', '➕ Salvar': '➕ Save', '🧠 Salvar e criar card': '🧠 Save and make a card', '✓ No seu vocabulário': '✓ In your vocabulary',
+  'Forma de': 'Form of', 'Procurar no Dicio ↗': 'Search on Dicio ↗', 'Criar card de revisão': 'Create review card', 'Tirar do vocabulário': 'Remove from vocabulary',
+  '🧠 Card criado: a palavra entra na sua revisão': '🧠 Card created: the word joins your review', '🧠 card': '🧠 card',
+  'o arquivo tem senha': 'the file is password-protected', 'o arquivo não é um PDF válido': "the file isn't a valid PDF",
+});
+EN_PATTERNS.unshift(
+  [/^Suas palavras \((\d+)\)$/, 'Your words ($1)'],
+  [/^🔤 “(.+)” no seu vocabulário · ver$/, '🔤 “$1” saved to your vocabulary · see'],
+  [/^Não encontrei “(.+)” nos dicionários gratuitos\. .*$/, "Couldn't find “$1” in the free dictionaries. Check the spelling or try the base form."],
+  [/^Tirar “(.+)” do vocabulário\? O card de revisão dela também sai\.$/, 'Remove “$1” from your vocabulary? Its review card goes too.'],
+  [/^Criar card de (.+)$/, 'Create card for $1'],
+  [/^Tirar (.+) do vocabulário$/, 'Remove $1 from vocabulary'],
+  [/^O que significa “(.+)”\?$/, 'What does “$1” mean?'],
+);
+Object.assign(EN, { 'a palavra procurada (só a palavra, sem o texto em volta) é enviada ao Wikcionário, ao Dicionário Aberto e à Free Dictionary API.': 'the word you look up (only the word, not the text around it) is sent to Wiktionary, Dicionário Aberto and the Free Dictionary API.', 'Dicionário:': 'Dictionary:' });

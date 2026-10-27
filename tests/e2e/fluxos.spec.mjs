@@ -136,7 +136,7 @@ test('PDF: abrir, ver as páginas e importar o grifo feito em outro app', async 
   await semear(page);
   await page.goto('/#/artigos');
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Abrir PDF' }).click();
+  await page.getByRole('button', { name: 'Adicionar PDF' }).click();
   await (await chooser).setFiles({ name: 'guia.pdf', mimeType: 'application/pdf', buffer: pdfDeTeste() });
   await expect(page).toHaveURL(/#\/pdf\//, { timeout: 30_000 });
   await expect(page.getByRole('heading', { name: 'Guia de Leitura Lenta' })).toBeVisible();
@@ -171,7 +171,7 @@ test('apresentação: quem não entrou vê a página do Grifo e o convite fica g
 test('em inglês: telas principais sem texto faltando na tradução', async ({ page }) => {
   await semear(page, { books: [livro('b1'), artigo('a1')], notes: [nota('n1', 'b1', 'x', { tags: ['mente'] })], cards: [card('c1', 'b1', 'n1')], settings: { firstStepsHidden: false } });
   await page.evaluate(() => localStorage.setItem('grifo.lang', 'en'));
-  for (const r of ['#/', '#/livros', '#/artigos', '#/artigo/a1', '#/notas', '#/mapa', '#/revisar', '#/busca', '#/tags', '#/ajustes', '#/plus']) {
+  for (const r of ['#/', '#/livros', '#/artigos', '#/artigo/a1', '#/notas', '#/mapa', '#/revisar', '#/busca', '#/tags', '#/vocabulario', '#/ajustes', '#/plus']) {
     await page.goto(`/${r}`);
     await page.waitForTimeout(300);
   }
@@ -266,4 +266,52 @@ test('início: artigos em leitura aparecem em "Lendo agora" e os da fila num ata
   await expect(page.locator('.art-item')).toContainText('Por que ler devagar');
   await page.getByRole('link', { name: /1 artigo para ler depois/ }).click();
   await expect(page).toHaveURL(/#\/artigos/);
+});
+
+// dicionário simulado: o teste não depende da internet
+async function dicionarioFalso(page) {
+  await page.route('https://pt.wiktionary.org/**', (route) => {
+    const word = new URL(route.request().url()).searchParams.get('page');
+    const text = `<div class="mw-parser-output"><div class="mw-heading mw-heading1"><h1 id="Português">Português</h1></div>
+      <div class="mw-heading mw-heading2"><h2 id="Adverbio">Advérbio</h2></div><ol><li>sem pressa, lentamente<dl><dd>exemplo</dd></dl></li><li>com calma</li></ol>
+      <div class="mw-heading mw-heading1"><h1 id="Inglês">Inglês</h1></div><ol><li>não deve aparecer</li></ol></div>`;
+    route.fulfill({ json: { parse: { title: word, text } } });
+  });
+}
+
+test('vocabulário: selecionar uma palavra no artigo, ver o significado e virar card', async ({ page }) => {
+  await dicionarioFalso(page);
+  await semear(page, { books: [artigo('a1')] });
+  await page.goto('/#/artigo/a1');
+  const palavra = await page.evaluate(() => {
+    const t = [...document.querySelectorAll('#reader-body p')][0].firstChild;
+    const m = t.data.match(/\p{L}{4,}/u);
+    const r = document.createRange();
+    r.setStart(t, m.index); r.setEnd(t, m.index + m[0].length);
+    getSelection().removeAllRanges(); getSelection().addRange(r);
+    return m[0];
+  });
+  await page.getByRole('button', { name: 'Significado' }).click();
+  await expect(page.locator('.word-defs li')).toHaveText(['sem pressa, lentamente', 'com calma']);
+  await expect(page.locator('.word-modal .word-ctx')).toContainText(palavra);
+  await page.getByRole('button', { name: 'Salvar e criar card' }).click();
+  await expect.poll(async () => (await lerBanco(page, 'words')).map((w) => w.word)).toEqual([palavra.toLowerCase()]);
+  const [c] = await lerBanco(page, 'cards');
+  expect(c.front).toContain(palavra.toLowerCase());
+  expect(c.back).toContain('sem pressa');
+  await page.goto('/#/vocabulario');
+  await expect(page.locator('#word-list .word-item')).toHaveCount(1);
+  await expect(page.locator('#word-list .word-item')).toContainText('card');
+});
+
+test('vocabulário: procurar uma palavra digitando (livro de papel)', async ({ page }) => {
+  await dicionarioFalso(page);
+  await semear(page);
+  await page.goto('/#/notas');
+  await page.getByRole('link', { name: 'Palavras' }).click();
+  await page.getByPlaceholder('Procurar uma palavra…').fill('Devagar,');
+  await page.getByRole('button', { name: 'Buscar' }).click();
+  await expect(page.locator('.word-modal .word-title')).toHaveText('devagar');
+  await page.getByRole('button', { name: 'Salvar', exact: true }).click();
+  await expect(page.locator('#word-list .word-item')).toHaveCount(1);
 });

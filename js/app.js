@@ -229,6 +229,8 @@ const closeModal = () => modal.close();
 modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
 
 // ---------------- componentes ----------------
+const READ_SEG = [['#/livros', '📚 Livros', 'books'], ['#/artigos', '📰 Artigos e PDFs', 'articles']];
+const IDEAS_SEG = [['#/notas', '✍️ Notas', 'list'], ['#/mapa', '🕸️ Mapa', 'map'], ['#/vocabulario', '🔤 Palavras', 'words'], ['#/perguntar', '✨ Perguntar', 'ask']];
 function cover(b, cls = '') {
   if (b.cover) return `<img class="cover ${cls}" src="${esc(b.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">`;
   const initials = (b.title || '?').split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
@@ -479,7 +481,7 @@ function booksView() {
     .filter((b) => (filter === 'all' || b.status === filter) && (purpose === 'all' || (b.purpose || 'hobby') === purpose))
     .sort((a, b) => (b.endDate || b.startDate || '').localeCompare(a.endDate || a.startDate || '') || b.createdAt - a.createdAt);
   const count = (st) => state.books.filter((b) => b.status === st).length;
-  return `${seg([['#/livros', '📚 Livros', 'books'], ['#/artigos', '📰 Artigos', 'articles']], 'books')}
+  return `${seg(READ_SEG, 'books')}
   <div class="row between"><h2>Meus livros</h2><button class="btn primary" data-action="newBook">➕ Novo</button></div>
   <div class="row gap-s wrap page-actions"><button class="btn small" data-action="recommend" title="Sugestões de leitura com IA">✨ O que ler</button><button class="btn small" data-action="shareShelf" title="Arte da sua estante para o Instagram">📸 Estante</button><button class="btn small" data-action="importFile" title="Importar do Kindle, Goodreads ou Skoob">⬆️ Importar</button></div>
   <input class="search" type="search" placeholder="Buscar por título, autor, tema ou subtema…" data-filter-list="#book-list">
@@ -569,7 +571,7 @@ function bookDetail(id) {
 function notesView() {
   const scope = getScope('notesScope');
   const notes = state.notes.filter((n) => noteInScope(n, scope)).sort((a, b) => b.createdAt - a.createdAt);
-  return `${seg([['#/notas', '✍️ Notas', 'list'], ['#/mapa', '🕸️ Mapa', 'map'], ['#/perguntar', '✨ Perguntar', 'ask']], 'list')}
+  return `${seg(IDEAS_SEG, 'list')}
   <div class="row between"><h2 style="margin-top:0">Notas</h2>
     <div class="row gap-s"><button class="btn" data-action="scan">📷 Grifo</button><button class="btn primary" data-action="newNote">✍️ Nova</button></div></div>
   <p class="small muted">Dica: escreva <b>[[</b> numa nota para ligá-la a um livro, a outra nota ou a um conceito. As ligações formam o mapa mental.</p>
@@ -579,6 +581,111 @@ function notesView() {
     : state.notes.length ? empty('Nenhuma nota com esses filtros.', '<button class="btn" data-action="clearScope" data-key="notesScope">✕ Limpar filtros</button>')
     : empty('Suas citações e reflexões aparecem aqui.', '<button class="btn primary" data-action="scan">📷 Capturar um grifo</button>')}</div>`;
 }
+
+// ---------- vocabulário ----------
+// Palavras procuradas no dicionário (ao selecionar num artigo ou PDF, ou digitando), com a frase onde apareceram
+const wordByText = (w) => state.words.find((x) => norm(x.word) === norm(w));
+function wordDefsHtml(r, max = 8) {
+  const groups = [];
+  for (const d of r.defs.slice(0, max)) {
+    const g = groups.at(-1);
+    if (g && g.pos === d.pos) g.items.push(d.text); else groups.push({ pos: d.pos, items: [d.text] });
+  }
+  return groups.map((g) => `${g.pos ? `<div class="word-pos">${esc(g.pos)}</div>` : ''}<ol class="word-defs">${g.items.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>`).join('');
+}
+function wordModal(r, { context = '', sourceId = null } = {}) {
+  const saved = wordByText(r.word);
+  const hasCard = saved && state.cards.some((c) => c.wordId === saved.id);
+  openModal(`<div class="form word-modal">
+    <h3 class="word-title">${esc(r.word)}${r.phonetic ? ` <small class="muted">${esc(r.phonetic)}</small>` : ''}</h3>
+    ${r.base ? `<p class="small muted" style="margin:0">Forma de <b>${esc(r.base)}</b></p>` : ''}
+    ${wordDefsHtml(r)}
+    ${context ? `<blockquote class="word-ctx">${esc(context)}</blockquote>` : ''}
+    <p class="small muted" style="margin:0">Fonte: <a href="${esc(r.source?.url || '#')}" target="_blank" rel="noopener">${esc(r.source?.name || '')}</a></p>
+    <div class="actions">
+      <button type="button" class="btn ghost" data-action="close">Fechar</button>
+      ${saved ? '<span class="chip">✓ No seu vocabulário</span>' : '<button type="button" class="btn" id="word-save">➕ Salvar</button>'}
+      ${hasCard ? '' : '<button type="button" class="btn primary" id="word-card">🧠 Salvar e criar card</button>'}
+    </div>
+  </div>`, (root) => {
+    const save = async () => {
+      const cur = wordByText(r.word);
+      if (cur) return cur;
+      const rec = { id: uid(), createdAt: Date.now(), word: r.word, lang: r.lang, base: r.base || '', defs: r.defs.slice(0, 8), context, sourceId, source: r.source || null };
+      await commit(() => persist('words', rec), { rerender: false });
+      return rec;
+    };
+    const s = $('#word-save', root);
+    if (s) s.onclick = async () => { await save(); closeModal(); toast(`🔤 “${esc(r.word)}” no seu vocabulário · <u>ver</u>`, '', () => { location.hash = '#/vocabulario'; }); if (location.hash.startsWith('#/vocabulario')) render(); };
+    const c = $('#word-card', root);
+    if (c) c.onclick = async () => { const w = await save(); await makeWordCard(w); closeModal(); if (location.hash.startsWith('#/vocabulario')) render(); };
+  });
+}
+async function makeWordCard(w) {
+  if (state.cards.some((c) => c.wordId === w.id)) return;
+  const front = `O que significa “${w.word}”?${w.context ? `\n\n“${w.context}”` : ''}`;
+  const back = w.defs.slice(0, 2).map((d) => d.text).join('\n');
+  await commit(() => persist('cards', S.newCard({ id: uid(), noteId: null, wordId: w.id, bookId: w.sourceId || null, createdAt: Date.now(), type: 'qa', front, back, source: 'vocab' }, G.ymd())));
+  toast('🧠 Card criado: a palavra entra na sua revisão');
+}
+// procura e mostra o resultado (com aviso enquanto busca)
+async function wordLookup(raw, opts = {}) {
+  const D = await import('./dict.js');
+  const word = D.cleanWord(raw);
+  if (!word) return;
+  const saved = wordByText(word);
+  if (saved) { wordModal(saved, { context: opts.context || saved.context, sourceId: saved.sourceId }); return; }
+  openModal(`<div class="form"><h3 class="word-title">${esc(word)}</h3><p class="muted">📖 Procurando no dicionário…</p></div>`);
+  const r = await D.lookup(word);
+  if (!modal.open) return;
+  if (!r) {
+    openModal(`<div class="form"><h3 class="word-title">${esc(word)}</h3>
+      <p>Não encontrei “${esc(word)}” nos dicionários gratuitos. Confira a grafia ou tente a forma básica (ex.: “correr” em vez de “correram”).</p>
+      <p class="small"><a href="https://www.dicio.com.br/pesquisa.php?q=${encodeURIComponent(word)}" target="_blank" rel="noopener">Procurar no Dicio ↗</a></p>
+      <div class="actions"><button type="button" class="btn" data-action="close">Fechar</button></div></div>`);
+    return;
+  }
+  wordModal(r, opts);
+}
+function wordItem(w) {
+  const src = bookById(w.sourceId);
+  const hasCard = state.cards.some((c) => c.wordId === w.id);
+  return `<article class="card word-item" data-search="${esc(`${norm(w.word)} ${norm(w.defs[0]?.text || '')} ${norm(src?.title || '')}`)}">
+    <div class="row between gap-s">
+      <button class="word-open" data-action="showWord" data-id="${w.id}"><b class="word-title">${esc(w.word)}</b></button>
+      <span class="row gap-s">${hasCard ? '<span class="chip">🧠 card</span>' : `<button class="icon-btn" data-action="wordCard" data-id="${w.id}" title="Criar card de revisão" aria-label="Criar card de ${esc(w.word)}">🧠</button>`}
+        <button class="icon-btn" data-action="delWord" data-id="${w.id}" title="Tirar do vocabulário" aria-label="Tirar ${esc(w.word)} do vocabulário">🗑️</button></span>
+    </div>
+    <div class="small">${w.defs[0]?.pos ? `<i class="muted">${esc(w.defs[0].pos)}</i> · ` : ''}${esc(w.defs[0]?.text || '')}</div>
+    ${w.context ? `<div class="word-ctx small">“${esc(w.context)}”</div>` : ''}
+    ${src ? `<a class="small muted" href="${srcHref(src)}">${esc(src.title)}</a>` : ''}
+  </article>`;
+}
+function vocabView() {
+  const words = [...state.words].sort((a, b) => b.createdAt - a.createdAt);
+  return `${seg(IDEAS_SEG, 'words')}
+  <h2 style="margin-top:0">Vocabulário</h2>
+  <p class="small muted">Num artigo ou PDF, selecione uma palavra e toque em <b>📖 Significado</b>. Lendo no papel? Procure aqui.</p>
+  <form class="row gap-s" id="word-form"><input name="q" class="search grow" required placeholder="Procurar uma palavra…" autocomplete="off" autocapitalize="off" style="margin:0"><button class="btn primary">Buscar</button></form>
+  ${words.length ? `<h3>Suas palavras (${words.length})</h3><input class="search" type="search" placeholder="Filtrar suas palavras…" data-filter-list="#word-list"><div id="word-list">${words.map(wordItem).join('')}</div>`
+    : empty('As palavras que você procurar e salvar aparecem aqui, com a frase onde estavam. Vire card e elas entram na revisão.')}`;
+}
+vocabView.mount = () => {
+  const form = $('#word-form');
+  form.onsubmit = (e) => { e.preventDefault(); wordLookup(form.q.value); form.q.value = ''; };
+};
+const wordActions = {
+  showWord: ({ id }) => { const w = state.words.find((x) => x.id === id); if (w) wordModal(w, { context: w.context, sourceId: w.sourceId }); },
+  wordCard: async ({ id }) => { const w = state.words.find((x) => x.id === id); if (w) await makeWordCard(w); },
+  delWord: async ({ id }) => {
+    const w = state.words.find((x) => x.id === id);
+    if (!w || !confirm(`Tirar “${w.word}” do vocabulário? O card de revisão dela também sai.`)) return;
+    await commit(async () => {
+      for (const c of state.cards.filter((x) => x.wordId === id)) await remove('cards', c.id);
+      await remove('words', id);
+    });
+  },
+};
 
 // Tags de todas as notas, sem diferenciar maiúsculas: a grafia mais usada dá o nome
 function tagIndex() {
@@ -918,7 +1025,7 @@ function mapView() {
   const scope = getScope('mapScope');
   const show = mapShow();
   const d = applyShow(graphData(scope), show);
-  return `${seg([['#/notas', '✍️ Notas', 'list'], ['#/mapa', '🕸️ Mapa', 'map'], ['#/perguntar', '✨ Perguntar', 'ask']], 'map')}
+  return `${seg(IDEAS_SEG, 'map')}
   <input type="search" class="search" id="graph-search" placeholder="Encontrar no mapa…" style="margin-bottom:8px">
   ${scopeFilters('mapScope')}
   <div class="map-show"><span class="small muted">Mostrar:</span>${MAP_SHOW.map(([k, label]) => `<label class="chip-toggle"><input type="checkbox" data-map-show="${k}" ${show[k] ? 'checked' : ''}> ${label}</label>`).join('')}</div>
@@ -1148,10 +1255,10 @@ function articlesView() {
   const all = [...state.articles].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   const list = filter === 'all' ? all : all.filter((a) => (a.status || 'want') === filter);
   const count = (k) => all.filter((a) => (a.status || 'want') === k).length;
-  return `${seg([['#/livros', '📚 Livros', 'books'], ['#/artigos', '📰 Artigos', 'articles']], 'articles')}
-  <h2>Artigos</h2>
+  return `${seg(READ_SEG, 'articles')}
+  <h2>Artigos e PDFs</h2>
   <form class="row gap-s" id="art-form"><input name="url" type="url" class="search grow" required placeholder="Cole o link de um artigo…" autocomplete="off" style="margin:0"><button class="btn primary" id="art-save">Salvar</button></form>
-  <div class="row gap-s wrap" style="margin-top:8px"><button class="btn small" data-action="addPdf">📄 Abrir PDF</button><input type="file" id="pdf-file" accept="application/pdf,.pdf" hidden></div>
+  <div class="row gap-s wrap" style="margin-top:8px"><button class="btn" data-action="addPdf">📄 Adicionar PDF</button><input type="file" id="pdf-file" accept="application/pdf,.pdf" hidden></div>
   <p class="hint">No celular, em qualquer site ou app de notícias: <b>Compartilhar → Grifo</b>. Depois é só selecionar um trecho e tocar em <b>Grifar</b>.</p>
   ${!isPlus() ? `<p class="small muted">${state.articles.length} de ${FREE_ARTICLES} artigos do plano grátis · <a href="#/plus">ilimitados no Plus</a></p>` : ''}
   ${all.length ? `<div class="tabs">${[['all', `Todos (${all.length})`], ...Object.entries(ART_QUEUE).map(([k, v]) => [k, `${v} (${count(k)})`])]
@@ -1205,10 +1312,14 @@ function articleView(id) {
   </article>
   <h3>Seus grifos (${notes.length})</h3>
   ${notes.length ? notes.map((n) => noteCard(n, false)).join('') : '<p class="small muted">Selecione um trecho do texto e toque em <b>Grifar</b>.</p>'}
-  <button class="btn primary grifar-btn" id="grifar-btn" hidden>🖍️ Grifar trecho</button>`;
+  <div class="sel-bar" id="sel-bar" hidden><button class="btn primary" id="grifar-btn">🖍️ Grifar trecho</button><button class="btn" id="define-btn" hidden>📖 Significado</button></div>`;
 }
 // Seleção de texto + botão "Grifar" (artigos e PDFs). onSave recebe o texto e a página (no PDF).
-function attachGrifar(bodyEl, btn, onSave) {
+function attachGrifar(bodyEl, btn, onSave, { sourceId = null } = {}) {
+  // a barra tem o Grifar e, com uma palavra (ou expressão curta) selecionada, o Significado
+  const bar = btn.closest('.sel-bar') || btn;
+  const defineBtn = bar.querySelector('#define-btn');
+  const shortSel = (t) => t && t.text.length <= 40 && t.text.split(' ').length <= 3;
   const isW = (ch) => /[\p{L}\p{N}]/u.test(ch || '');
   // trecho selecionado, completado até o fim das palavras cortadas pela seleção ("faz a m" → "faz a memória")
   const sel = () => {
@@ -1228,25 +1339,40 @@ function attachGrifar(bodyEl, btn, onSave) {
       r.setEnd(r.endContainer, i);
     }
     const el = r.startContainer.nodeType === 3 ? r.startContainer.parentElement : r.startContainer;
-    return { text: r.toString().replace(/\s+/g, ' ').trim(), page: Number(el?.closest('[data-page]')?.dataset.page) || null };
+    const block = el?.closest('p, li, blockquote, h1, h2, h3, h4, .pdf-page, figcaption, td') || el;
+    return { text: r.toString().replace(/\s+/g, ' ').trim(), page: Number(el?.closest('[data-page]')?.dataset.page) || null, around: block?.textContent || '' };
   };
   // guarda o último trecho selecionado: no toque, a seleção pode sumir antes do clique chegar ao botão
   let last = null;
   const onSel = () => {
     if (!btn.isConnected) { document.removeEventListener('selectionchange', onSel); return; }
     const t = sel();
-    if (t && t.text.length >= 3) { last = t; btn.hidden = false; } else if (!btn.matches(':hover, :active, :focus')) btn.hidden = true;
+    if (t && t.text.length >= 2) {
+      last = t;
+      bar.hidden = false;
+      btn.hidden = t.text.length < 3;
+      if (defineBtn) defineBtn.hidden = !shortSel(t);
+    } else if (!bar.matches(':hover') && !bar.contains(document.activeElement)) bar.hidden = true;
   };
   document.addEventListener('selectionchange', onSel);
-  // o mousedown no botão não desfaz a seleção (cancelar o pointerdown impediria o clique no Chrome)
-  btn.addEventListener('mousedown', (e) => e.preventDefault());
+  // o mousedown nos botões não desfaz a seleção (cancelar o pointerdown impediria o clique no Chrome)
+  bar.addEventListener('mousedown', (e) => e.preventDefault());
   btn.onclick = async () => {
     const t = sel() || last;
     if (!t || t.text.length < 3) return;
     last = null;
-    btn.hidden = true;
+    bar.hidden = true;
     getSelection().removeAllRanges();
     await onSave(t.text, t.page);
+  };
+  if (defineBtn) defineBtn.onclick = async () => {
+    const t = sel() || last;
+    if (!shortSel(t)) return;
+    last = null;
+    bar.hidden = true;
+    getSelection().removeAllRanges();
+    const D = await import('./dict.js');
+    wordLookup(t.text, { sourceId, context: D.sentenceAround(t.around, D.cleanWord(t.text)) });
   };
 }
 
@@ -1278,7 +1404,7 @@ articleView.mount = (id) => {
     const note = { id: uid(), createdAt: Date.now(), bookId: id, text, kind: 'quote', source: 'article', tags: [], page: null };
     await commit(() => persist('notes', note));
     toast('🖍️ Trecho grifado · <u>adicionar reflexão</u>', '', () => noteForm(noteById(note.id)));
-  });
+  }, { sourceId: id });
 };
 // ---------- PDFs ----------
 // O arquivo fica no aparelho (IndexedDB); no Plus também vai para o armazenamento da conta e é baixado em outro aparelho.
@@ -1314,7 +1440,7 @@ function pdfView(id) {
     <div class="pdf-pages" id="reader-body"></div>
   </article>
   <div id="pdf-notes">${pdfNotesHtml(id)}</div>
-  <button class="btn primary grifar-btn" id="grifar-btn" hidden>🖍️ Grifar trecho</button>`;
+  <div class="sel-bar" id="sel-bar" hidden><button class="btn primary" id="grifar-btn">🖍️ Grifar trecho</button><button class="btn" id="define-btn" hidden>📖 Significado</button></div>`;
 }
 pdfView.mount = async (id) => {
   const a = state.articles.find((x) => x.id === id && x.kind === 'pdf');
@@ -1353,7 +1479,7 @@ pdfView.mount = async (id) => {
     await commit(() => persist('notes', note), { rerender: false });
     $('#pdf-notes').innerHTML = pdfNotesHtml(id);
     toast(`🖍️ Grifado${page ? ` (p. ${page})` : ''} · <u>adicionar reflexão</u>`, '', () => noteForm(noteById(note.id)));
-  });
+  }, { sourceId: id });
   // na primeira vez, traz os grifos que já estavam no arquivo
   if (!a.imported) importPdfHighlights(a, doc, P, true);
 };
@@ -1387,6 +1513,7 @@ const pdfActions = {
       const f = input.files[0];
       if (!f) return;
       if (f.size > 50 * 1024 * 1024) { toast('PDF grande demais (máximo 50 MB).', 'err'); return; }
+      toast('📄 Abrindo o PDF…');
       try {
         const P = await import('./pdf.js');
         const doc = await P.openPdf(f);
@@ -1398,14 +1525,18 @@ const pdfActions = {
         };
         await db.setFile(rec.id, f);
         if (canSyncPdf()) {
-          try { await Cloud.uploadPdf(rec.id, f); rec.synced = true; } catch { toast('O PDF ficou só neste aparelho (não foi possível enviar para a conta agora).', 'err'); }
+          // sem esperar mais que 30 s: a conexão lenta não pode impedir de abrir o PDF
+          const slow = new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado')), 30_000));
+          try { await Promise.race([Cloud.uploadPdf(rec.id, f), slow]); rec.synced = true; } catch { toast('O PDF ficou só neste aparelho (não foi possível enviar para a conta agora).', 'err'); }
         }
         await commit(() => persist('books', rec));
         Cloud.track('pdf_add');
         location.hash = `#/pdf/${rec.id}`;
         if (old) render();
       } catch (e) {
-        toast(`Não consegui abrir esse PDF: ${esc(e.message)}`, 'err');
+        console.error(e);
+        const why = e?.name === 'PasswordException' ? 'o arquivo tem senha' : e?.name === 'InvalidPDFException' ? 'o arquivo não é um PDF válido' : e?.message || String(e);
+        toast(`Não consegui abrir esse PDF: ${esc(why)}`, 'err');
       }
     };
     input.click();
@@ -2102,7 +2233,7 @@ function askView() {
   const cited = a ? a.sources.map((id) => noteById(id)).filter(Boolean) : [];
   const num = new Map(cited.map((n, i) => [n.id, i + 1]));
   const answerHtml = a ? esc(a.answer).replace(/\[n([\w-]+)\]/g, (m, id) => (num.has(id) ? `<a class="cite" href="#/nota/${id}">[${num.get(id)}]</a>` : '')).replace(/\n/g, '<br>') : '';
-  return `${seg([['#/notas', '✍️ Notas', 'list'], ['#/mapa', '🕸️ Mapa', 'map'], ['#/perguntar', '✨ Perguntar', 'ask']], 'ask')}
+  return `${seg(IDEAS_SEG, 'ask')}
   <form class="card form" id="ask-form">
     <h3>✨ Pergunte à sua biblioteca</h3>
     <p class="hint" style="margin:0">A IA responde usando só as suas notas e grifos, citando de onde veio cada ideia.</p>
@@ -2626,6 +2757,7 @@ function privacyView() {
     <li><b>Stripe:</b> pagamentos do Grifo Plus, se você assinar.</li>
     <li><b>Cloudflare Turnstile:</b> verificação anti-robô no login por e-mail.</li>
     <li><b>Buscas de livros:</b> o título ou ISBN pesquisado é enviado à BrasilAPI, Google Livros e Open Library.</li>
+    <li><b>Dicionário:</b> a palavra procurada (só a palavra, sem o texto em volta) é enviada ao Wikcionário, ao Dicionário Aberto e à Free Dictionary API.</li>
   </ul>
   <p>Não vendemos seus dados e não usamos publicidade.</p>
   <h3>O que é público</h3>
@@ -3751,6 +3883,7 @@ const actions = {
   ...exportActions,
   ...pdfActions,
   ...tagActions,
+  ...wordActions,
   ...timerActions,
   ...reminderActions,
   ...cloudActions,
@@ -3929,12 +4062,12 @@ document.addEventListener('submit', async (e) => {
 const routes = {
   '': home, livros: booksView, livro: bookDetail, notas: notesView, nota: noteDetail, conceito: conceptView,
   mapa: mapView, revisar: reviewView, stats: statsView, conquistas: achievementsView, ajustes: settingsView,
-  conta: accountView, admin: adminView, busca: searchView, tags: tagsView, artigos: articlesView, pdf: pdfView, artigo: articleView, u: publicProfileView, clubes: clubsView, perguntar: askView, plus: plusView,
+  conta: accountView, admin: adminView, busca: searchView, tags: tagsView, vocabulario: vocabView, artigos: articlesView, pdf: pdfView, artigo: articleView, u: publicProfileView, clubes: clubsView, perguntar: askView, plus: plusView,
   privacidade: privacyView, termos: termsView,
 };
 // páginas que qualquer pessoa pode abrir sem login
 const OPEN_ROUTES = ['u', 'privacidade', 'termos'];
-const TAB_OF = { tags: 'notas', pdf: 'livros', busca: 'nenhuma', artigos: 'livros', artigo: 'livros', livro: 'livros', nota: 'notas', conceito: 'notas', mapa: 'notas', perguntar: 'notas', stats: 'progresso', conquistas: 'progresso', clubes: 'progresso' };
+const TAB_OF = { vocabulario: 'notas', tags: 'notas', pdf: 'livros', busca: 'nenhuma', artigos: 'livros', artigo: 'livros', livro: 'livros', nota: 'notas', conceito: 'notas', mapa: 'notas', perguntar: 'notas', stats: 'progresso', conquistas: 'progresso', clubes: 'progresso' };
 
 function render() {
   const [hashPath, query = ''] = location.hash.slice(1).split('?');

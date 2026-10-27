@@ -5,7 +5,7 @@
 export const EMOJI_ICONS = {
   '🏠': 'home', '📚': 'books', '🕸️': 'affiliate', '🧠': 'cards', '📊': 'chart-bar', '🏆': 'trophy', '⚙️': 'settings', '👤': 'user',
   '🌓': 'sun-moon', '☀️': 'sun', '🌙': 'moon', '✨': 'sparkles', '📸': 'photo', '✍️': 'pencil', '📷': 'camera', '🔗': 'link',
-  '➕': 'plus', '👥': 'users', '⬆️': 'upload', '⬇️': 'download', '✏️': 'edit', '📖': 'book-2', '☁️': 'cloud', '📱': 'device-mobile',
+  '➕': 'plus', '👥': 'users', '⬆️': 'upload', '⬇️': 'download', '✏️': 'edit', '📖': 'book-2', '🔤': 'abc', '☁️': 'cloud', '📱': 'device-mobile',
   '⭐': 'star', '🖍️': 'highlight', '✕': 'x', '✉️': 'mail', '🏷️': 'tag', '🎯': 'target-arrow', '⏱️': 'stopwatch', '💜': 'heart',
   '🤍': 'heart', '▥': 'barcode', '✅': 'circle-check', '🗑️': 'trash', '💡': 'bulb', '🔒': 'lock', '📘': 'file-spreadsheet',
   '📗': 'file-spreadsheet', '🔎': 'search', '🏁': 'flag', '📄': 'file-text', '🌐': 'world', '⏰': 'alarm', '📅': 'calendar-plus',
