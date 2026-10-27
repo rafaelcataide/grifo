@@ -1569,8 +1569,38 @@ function articleTags(a) {
   const pp = PURPOSE[a.purpose || 'hobby'];
   const parts = [a.genre, a.subtheme].filter(Boolean);
   return parts.length
-    ? `<div class="chips art-tags"><span class="chip p-${a.purpose || 'hobby'}">${pp.icon} ${pp.label}</span>${parts.map((x) => `<a class="chip tag" href="${conceptHref(x)}">${esc(x)}</a>`).join('')}<button class="chip chip-btn" data-action="classifyArticle" data-id="${a.id}">✏️ Classificar</button></div>`
+    ? `<div class="chips art-tags"><span class="chip p-${a.purpose || 'hobby'}">${pp.icon} ${pp.label}</span>${parts.map((x) => `<a class="chip tag" href="${conceptHref(x)}">${esc(x)}</a>`).join('')}<button class="chip chip-btn" data-action="classifyArticle" data-id="${a.id}">✏️ Editar</button></div>`
     : `<button class="card art-classify" data-action="classifyArticle" data-id="${a.id}">🏷️ <span><b>Classifique este artigo</b><br><span class="small muted">Finalidade, tema e subtema: ele passa a aparecer no mapa, nos filtros e junto dos livros do mesmo tema.</span></span></button>`;
+}
+
+// O Grifo não conseguiu ler a página (site com proteção contra robôs, login, link de PDF…):
+// oferece baixar o PDF no próprio site e adicionar, ou guardar só o link com o nome escolhido
+function articleFallback(url, why) {
+  const guess = decodeURIComponent(url.replace(/[?#].*$/, '').replace(/\/+$/, '').split('/').pop() || '').replace(/\.(html?|pdf|php|aspx?)$/i, '').replace(/[-_]+/g, ' ').trim();
+  const host = (() => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; } })();
+  openModal(`<form class="form" id="artfb-form"><h3>📰 Não consegui ler essa página</h3>
+    <p class="small muted" style="margin:0">${esc(why || '')} Alguns sites (como o SciELO) bloqueiam leitores automáticos.</p>
+    <div class="card" style="margin:0"><b>📄 Melhor opção: o PDF</b>
+      <p class="small" style="margin:4px 0 8px">Abra o site, baixe o PDF do artigo e adicione aqui. Você grifa no próprio PDF.</p>
+      <div class="row gap-s wrap"><a class="btn small" href="${esc(url)}" target="_blank" rel="noopener noreferrer">↗ Abrir o site</a><button type="button" class="btn small primary" id="artfb-pdf">📄 Adicionar PDF</button></div></div>
+    <div class="card" style="margin:0"><b>🔗 Ou guarde só o link</b>
+      <label style="margin-top:6px">Nome <input name="title" required value="${esc(guess)}" placeholder="Título do artigo"></label>
+      <span class="hint">Fica na fila “Ler depois”, com o link para o original. Dá para criar notas nele.</span></div>
+    <div class="actions"><button type="button" class="btn ghost" data-action="close">Cancelar</button><button class="btn">Salvar só o link</button></div>
+  </form>`, (root) => {
+    const form = $('#artfb-form', root);
+    $('#artfb-pdf', root).onclick = () => { closeModal(); actions.addPdf(); };
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      const art = {
+        id: uid(), createdAt: Date.now(), kind: 'article', status: 'want', purpose: 'hobby', genre: '', subtheme: '', pages: 0, currentPage: 0, rating: 0, isbn: '',
+        title: form.title.value.trim(), author: '', site: host, url, sourceUrl: url, blocks: [], linkOnly: true,
+      };
+      closeModal();
+      await commit(() => persist('books', art));
+      location.hash = `#/artigo/${art.id}`;
+    };
+  });
 }
 
 // Marca no texto os trechos já grifados (as notas de citação deste artigo)
@@ -1601,14 +1631,14 @@ function articleView(id) {
       <button class="btn small ghost" data-action="deleteArticle" data-id="${a.id}">🗑️ Excluir</button>
     </div>
     ${articleTags(a)}
-    <div class="reader-body" id="reader-body">${body}</div>
+    <div class="reader-body" id="reader-body">${body || `<p class="nudge">Este artigo foi guardado só como link. Leia no <a href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">site original ↗</a> e registre aqui seus grifos com <b>✍️ Nota</b>, ou baixe o PDF de lá e use <a href="#" data-action="addPdf">📄 Adicionar PDF</a>.</p>`}</div>
   </article>
   <h3>Seus grifos (${notes.length})</h3>
   ${notes.length ? notes.map((n) => noteCard(n, false)).join('') : '<p class="small muted">Selecione um trecho do texto e toque em <b>Grifar</b>.</p>'}
   <div class="sel-bar" id="sel-bar" hidden><button class="btn primary" id="grifar-btn">🖍️ Grifar trecho</button><button class="btn" id="define-btn" hidden>📖 Significado</button></div>`;
 }
 // Seleção de texto + botão "Grifar" (artigos e PDFs). onSave recebe o texto e a página (no PDF).
-function attachGrifar(bodyEl, btn, onSave, { sourceId = null } = {}) {
+function attachGrifar(bodyEl, btn, onSave, { sourceId = null, refine = null } = {}) {
   // a barra tem o Grifar e, com uma palavra (ou expressão curta) selecionada, o Significado
   const bar = btn.closest('.sel-bar') || btn;
   const defineBtn = bar.querySelector('#define-btn');
@@ -1633,7 +1663,9 @@ function attachGrifar(bodyEl, btn, onSave, { sourceId = null } = {}) {
     }
     const el = r.startContainer.nodeType === 3 ? r.startContainer.parentElement : r.startContainer;
     const block = el?.closest('p, li, blockquote, h1, h2, h3, h4, .pdf-page, figcaption, td') || el;
-    return { text: r.toString().replace(/\s+/g, ' ').trim(), page: Number(el?.closest('[data-page]')?.dataset.page) || null, around: block?.textContent || '' };
+    // refine: no PDF em duas colunas, refaz o texto seguindo a coluna onde a seleção começou
+    const text = (refine && refine(r)) || r.toString();
+    return { text: text.replace(/\s+/g, ' ').trim(), page: Number(el?.closest('[data-page]')?.dataset.page) || null, around: block?.textContent || '' };
   };
   // guarda o último trecho selecionado: no toque, a seleção pode sumir antes do clique chegar ao botão
   let last = null;
@@ -1772,7 +1804,7 @@ pdfView.mount = async (id) => {
     await commit(() => persist('notes', note), { rerender: false });
     $('#pdf-notes').innerHTML = pdfNotesHtml(id);
     toast(`🖍️ Grifado${page ? ` (p. ${page})` : ''} · <u>adicionar reflexão</u>`, '', () => noteForm(noteById(note.id)));
-  }, { sourceId: id });
+  }, { sourceId: id, refine: P.columnText });
   // na primeira vez, traz os grifos que já estavam no arquivo
   if (!a.imported) importPdfHighlights(a, doc, P, true);
 };
@@ -1825,6 +1857,7 @@ const pdfActions = {
         await commit(() => persist('books', rec));
         Cloud.track('pdf_add');
         location.hash = `#/pdf/${rec.id}`;
+        if (!old) toast(`📄 “${esc(rec.title)}” adicionado · <u>mudar o nome</u>`, '', () => actions.classifyArticle({ id: rec.id }));
         if (old) render();
       } catch (e) {
         console.error(e);
@@ -1890,17 +1923,19 @@ const articleActions = {
       await commit(() => persist('books', art));
       Cloud.track('article_save');
       location.hash = `#/artigo/${art.id}`;
+      toast(`📰 “${esc(art.title)}” salvo · <u>mudar o nome</u>`, '', () => actions.classifyArticle({ id: art.id }));
       autoClassify(art.id);
     } catch (e) {
-      toast(esc(e.message), 'err');
+      articleFallback(url, e.message);
     } finally {
       if (btn?.isConnected) { btn.disabled = false; btn.textContent = 'Salvar'; }
     }
   },
   classifyArticle({ id }) {
     const a = state.articles.find((x) => x.id === id);
-    openModal(`<form class="form" id="artcat-form"><h3>🏷️ Classificar artigo</h3>
-      <p class="small muted" style="margin:0">${esc(a.title)}</p>
+    openModal(`<form class="form" id="artcat-form"><h3>✏️ ${a.kind === 'pdf' ? 'Editar PDF' : 'Editar artigo'}</h3>
+      <label>Nome <input name="title" required value="${esc(a.title)}" autocomplete="off"></label>
+      <label>Autor <input name="author" value="${esc(a.author || '')}" placeholder="ex: Silva, M.; Souza, A." autocomplete="off"></label>
       <label>Finalidade
         <div class="radio-pills">${Object.entries(PURPOSE).map(([k, p]) => `<input type="radio" name="purpose" id="ap-${k}" value="${k}" ${(a.purpose || 'hobby') === k ? 'checked' : ''}><label for="ap-${k}">${p.icon} ${p.label}</label>`).join('')}</div>
       </label>
@@ -1931,7 +1966,21 @@ const articleActions = {
         e.preventDefault();
         const fd = Object.fromEntries(new FormData(form));
         closeModal();
-        await commit(() => persist('books', { ...a, purpose: fd.purpose || 'hobby', genre: fd.genre.trim(), subtheme: fd.subtheme.trim() }));
+        const title = fd.title.trim() || a.title;
+        await commit(async () => {
+          await persist('books', { ...a, title, author: fd.author.trim(), purpose: fd.purpose || 'hobby', genre: fd.genre.trim(), subtheme: fd.subtheme.trim() });
+          // as notas que citavam o nome antigo com [[ ]] passam a citar o novo
+          if (title !== a.title) {
+            const old = norm(a.title);
+            for (const n of state.notes) {
+              const text = n.text.replace(LINK_RE, (m, x) => {
+                const [t, alias] = x.split('|');
+                return norm(t) === old ? `[[${title}${alias !== undefined ? `|${alias}` : ''}]]` : m;
+              });
+              if (text !== n.text) await persist('notes', { ...n, text });
+            }
+          }
+        });
       };
     });
   },

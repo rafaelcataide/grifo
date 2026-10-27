@@ -826,3 +826,19 @@ EN_PATTERNS.unshift(
   [/^🔗 (.+) ↔ (.+) · ver nota$/, '🔗 $1 ↔ $2 · see note'],
   [/^Ignorar (.+)$/, 'Ignore $1'],
 );
+
+// artigos: editar, link bloqueado, PDF
+Object.assign(EN, {
+  '✏️ Editar': '✏️ Edit', '✏️ Editar PDF': '✏️ Edit PDF', '✏️ Editar artigo': '✏️ Edit article', 'Nome': 'Name', 'Autor': 'Author', 'ex: Silva, M.; Souza, A.': 'e.g. Silva, M.; Souza, A.',
+  '📰 Não consegui ler essa página': "📰 Couldn't read this page", 'Alguns sites (como o SciELO) bloqueiam leitores automáticos.': 'Some sites (like SciELO) block automatic readers.',
+  '📄 Melhor opção: o PDF': '📄 Best option: the PDF', 'Abra o site, baixe o PDF do artigo e adicione aqui. Você grifa no próprio PDF.': "Open the site, download the article's PDF and add it here. You highlight right on the PDF.",
+  '↗ Abrir o site': '↗ Open the site', '🔗 Ou guarde só o link': '🔗 Or keep just the link', 'Título do artigo': 'Article title',
+  'Fica na fila “Ler depois”, com o link para o original. Dá para criar notas nele.': 'It goes to “Read later”, with the link to the original. You can add notes to it.',
+  'Salvar só o link': 'Save just the link', 'O site bloqueou a leitura automática da página.': 'The site blocked automatic reading of the page.',
+  'Este artigo foi guardado só como link. Leia no': 'This article was saved as a link only. Read it on the', 'site original ↗': 'original site ↗',
+  'e registre aqui seus grifos com': 'and log your highlights here with', ', ou baixe o PDF de lá e use': ', or download the PDF there and use',
+});
+EN_PATTERNS.unshift(
+  [/^📄 “(.+)” adicionado · mudar o nome$/, '📄 “$1” added · rename'],
+  [/^📰 “(.+)” salvo · mudar o nome$/, '📰 “$1” saved · rename'],
+);

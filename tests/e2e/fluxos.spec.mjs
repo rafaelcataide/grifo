@@ -436,3 +436,48 @@ test('mapa: nota sem ligação aparece na caixa e pode ser ligada a uma ideia', 
   await expect.poll(async () => (await lerBanco(page, 'notes')).find((n) => n.id === 'n3').text).toContain('→ [[Sistema 1]]');
   await expect(page.locator('details.orphans')).toHaveCount(0);
 });
+
+test('PDF em duas colunas: seleção que escorrega para a outra coluna fica na coluna do começo', async ({ page }) => {
+  await page.goto('/#/privacidade'); // qualquer página do app serve: o teste monta a camada de texto
+  const r = await page.evaluate(async () => {
+    const { columnText } = await import('/js/pdf.js');
+    const layer = Object.assign(document.createElement('div'), { className: 'textLayer' });
+    layer.style.cssText = 'position:relative;width:600px;height:400px';
+    document.body.append(layer);
+    const lines = [];
+    // como no pdf.js: o texto vem coluna por coluna (toda a esquerda, depois a direita)
+    for (const [col, x] of [['E', 10], ['D', 320]]) {
+      for (let i = 0; i < 6; i++) {
+        const s = document.createElement('span');
+        s.textContent = `${col}${i} linha da coluna ${col === 'E' ? 'esquerda' : 'direita'}`;
+        s.style.cssText = `position:absolute;left:${x}px;top:${20 + i * 20}px;white-space:nowrap;font-size:12px`;
+        layer.append(s);
+        lines.push(s);
+      }
+    }
+    const at = (col, i) => lines[(col === 'E' ? 0 : 6) + i].firstChild;
+    const range = (a, b) => { const x = document.createRange(); x.setStart(a, 0); x.setEnd(b, b.length); return x; };
+    return {
+      escorregou: columnText(range(at('E', 1), at('D', 3))), // começa na esquerda, fim cai na direita mais abaixo
+      continua: columnText(range(at('E', 4), at('D', 1))), // fim acima, na direita: continua no topo da coluna seguinte
+      mesma: columnText(range(at('E', 1), at('E', 2))),
+    };
+  });
+  expect(r.escorregou).toBe('E1 linha da coluna esquerda E2 linha da coluna esquerda E3 linha da coluna esquerda');
+  expect(r.continua).toBe('E4 linha da coluna esquerda E5 linha da coluna esquerda D0 linha da coluna direita D1 linha da coluna direita');
+  expect(r.mesma).toBeNull(); // mesma coluna: vale a seleção normal
+});
+
+test('artigo: mudar o nome atualiza as notas que citavam o nome antigo; artigo só com link mostra o original', async ({ page }) => {
+  await semear(page, { books: [artigo('a1', { genre: 'Psicologia' }), artigo('a2', { title: 'Link do SciELO', blocks: [], url: 'https://www.scielosp.org/article/x/' }), livro('b1')],
+    notes: [nota('n1', 'b1', 'Ver [[Por que ler devagar ajuda a lembrar]] sobre isso.')] });
+  await page.goto('/#/artigo/a1');
+  await page.getByRole('button', { name: 'Editar' }).click();
+  await page.getByLabel('Nome').fill('Ler devagar');
+  await page.getByRole('button', { name: 'Salvar' }).click();
+  await expect(page.getByRole('heading', { name: 'Ler devagar', level: 1 })).toBeVisible();
+  await expect.poll(async () => (await lerBanco(page, 'notes'))[0].text).toBe('Ver [[Ler devagar]] sobre isso.');
+  await page.goto('/#/artigo/a2');
+  await expect(page.locator('#reader-body')).toContainText('guardado só como link');
+  await expect(page.getByRole('link', { name: /site original/ })).toHaveAttribute('href', 'https://www.scielosp.org/article/x/');
+});

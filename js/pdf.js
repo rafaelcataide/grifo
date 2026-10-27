@@ -124,3 +124,48 @@ export async function existingHighlights(doc) {
   }
   return out;
 }
+
+// Seleção em PDF de duas colunas (artigos científicos): o navegador costuma levar a seleção para a
+// coluna do lado quando o mouse/dedo passa pelo vão entre elas. Refaz o texto seguindo a coluna onde a
+// seleção começou: se o fim caiu na outra coluna na mesma altura (ou abaixo), é a mesma coluna até ali;
+// se caiu acima, a leitura continua no topo da coluna seguinte. Devolve null quando não se aplica.
+export function columnText(range) {
+  const el = (n) => (n.nodeType === 3 ? n.parentElement : n);
+  const layer = el(range.startContainer)?.closest('.textLayer');
+  if (!layer || layer !== el(range.endContainer)?.closest('.textLayer')) return null;
+  const spans = [...layer.querySelectorAll('span')].filter((s) => !s.querySelector('span') && s.textContent.trim());
+  if (spans.length < 8) return null;
+  const box = layer.getBoundingClientRect();
+  const mid = box.left + box.width / 2;
+  const rect = new Map(spans.map((s) => [s, s.getBoundingClientRect()]));
+  const colOf = (s) => { const r = rect.get(s); return r.right <= mid + 6 ? 0 : r.left >= mid - 6 ? 1 : -1; }; // -1: largura toda
+  const left = spans.filter((s) => colOf(s) === 0).length, right = spans.filter((s) => colOf(s) === 1).length;
+  if (left < spans.length * 0.25 || right < spans.length * 0.25) return null; // não é página em duas colunas
+  const spanOf = (n) => { const e = el(n); return e?.closest('.textLayer span') && spans.includes(e.closest('.textLayer span')) ? e.closest('.textLayer span') : null; };
+  const a = spanOf(range.startContainer), b = spanOf(range.endContainer);
+  if (!a || !b) return null;
+  const ca = colOf(a), cb = colOf(b);
+  if (ca === -1 || cb === -1 || (ca === cb)) return null; // mesma coluna: a seleção normal já está certa
+  const ya = rect.get(a).top, yb = rect.get(b).top;
+  const inCol = (c) => spans.filter((s) => colOf(s) === c).sort((p, q) => rect.get(p).top - rect.get(q).top || rect.get(p).left - rect.get(q).left);
+  const startCut = range.startContainer.nodeType === 3 ? range.startOffset : 0;
+  let pick, endCut = null;
+  if (yb >= ya - 2) {
+    // o fim "escorregou" para a outra coluna: fica na coluna do começo, até a altura do fim
+    pick = inCol(ca).filter((s) => rect.get(s).top >= ya - 1 && rect.get(s).top <= yb + 1);
+  } else {
+    pick = [...inCol(ca).filter((s) => rect.get(s).top >= ya - 1), ...inCol(cb).filter((s) => rect.get(s).top <= yb + 1)];
+    endCut = range.endContainer.nodeType === 3 ? range.endOffset : null;
+  }
+  let out = '';
+  for (const s of pick) {
+    let t = s.textContent;
+    if (s === b && endCut != null) t = t.slice(0, endCut);
+    if (s === a) t = t.slice(startCut);
+    t = t.replace(/\s+/g, ' ').trim();
+    if (!t) continue;
+    // palavra quebrada no fim da linha ("pre- visão") volta a ser uma só
+    out = /\p{L}-$/u.test(out) && /^\p{Ll}/u.test(t) ? out.slice(0, -1) + t : out ? `${out} ${t}` : t;
+  }
+  return out.trim() || null;
+}

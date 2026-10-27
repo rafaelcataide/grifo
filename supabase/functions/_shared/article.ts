@@ -31,6 +31,7 @@ async function download(start: URL): Promise<{ html: string; url: URL }> {
       url = next;
       continue;
     }
+    if ([401, 403, 429, 503].includes(res.status)) throw new Error("O site bloqueou a leitura automática da página.");
     if (!res.ok) throw new Error(`A página respondeu com erro (${res.status}).`);
     const type = res.headers.get("content-type") || "";
     if (!/html|xml/.test(type)) throw new Error("Esse link não é uma página de texto (PDF e imagens ainda não são lidos).");
