@@ -761,7 +761,14 @@ function graphData(scope = {}) {
   const nodes = new Map();
   const links = new Map();
   const groups = new Map();
-  const node = (id, label, type, extra = {}) => { if (!nodes.has(id)) nodes.set(id, { id, label, type, ...extra }); return id; };
+  // tag e ideia com o mesmo nome ("umbanda" e [[Umbanda]]) viram um ponto só, que fica como ideia
+  // (senão a ideia virava tag e sumia ao esconder as tags)
+  const node = (id, label, type, extra = {}) => {
+    const cur = nodes.get(id);
+    if (!cur) nodes.set(id, { id, label, type, ...extra });
+    else if (cur.type === 'tag' && type === 'concept') nodes.set(id, { ...cur, label, type, ...extra });
+    return id;
+  };
   const link = (a, b) => { if (a && b && a !== b) links.set(a < b ? `${a}|${b}` : `${b}|${a}`, { source: a, target: b }); };
   const books = sources().filter((b) => bookInScope(b, scope));
   const ids = new Set(books.map((b) => b.id));
