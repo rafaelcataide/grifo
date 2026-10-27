@@ -710,3 +710,4 @@ body.gated { padding-bottom: 24px; }
 .chip-toggle input { accent-color: var(--accent); margin: 0; }
 .search-row { margin-bottom: 10px; }
 .search-row .search { margin-bottom: 0; }
+a.nudge { display: block; text-decoration: none; }

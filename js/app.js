@@ -431,6 +431,8 @@ function home() {
   const s = state.stats, set = state.settings;
   const ch = G.weeklyChallenge(s);
   const reading = state.books.filter((b) => b.status === 'reading');
+  const readingArts = state.articles.filter(articleStarted).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const queued = state.articles.filter((a) => (a.status || 'want') === 'want' && !articleStarted(a)).length;
   const recentBadges = G.BADGES.filter((b) => state.badges[b.id])
     .sort((a, b) => state.badges[b.id].localeCompare(state.badges[a.id])).slice(0, 4);
   const streakMsg = s.pagesToday > 0
@@ -461,9 +463,12 @@ function home() {
     <button class="btn" data-action="scanBook">▥ Escanear livro</button>
     <button class="btn" data-action="newNote">✍️ Nota</button>
     <button class="btn" data-action="scan">📷 Grifo</button>
+    <a class="btn" href="#/artigos">📰 Artigo</a>
   </div>
   <h2>Lendo agora</h2>
-  ${reading.length ? reading.map(bookCard).join('') : empty('Nenhum livro em andamento.', '<button class="btn primary" data-action="newBook">Adicionar um livro</button>')}
+  ${reading.length ? reading.map(bookCard).join('') : readingArts.length ? '' : empty('Nenhum livro em andamento.', '<button class="btn primary" data-action="newBook">Adicionar um livro</button>')}
+  ${readingArts.length ? `<h3>Artigos</h3>${readingArts.slice(0, 5).map(articleItem).join('')}` : ''}
+  ${queued ? `<a class="nudge" href="#/artigos">📰 ${queued} ${queued === 1 ? 'artigo' : 'artigos'} para ler depois →</a>` : ''}
   ${recentBadges.length ? `<h2>Conquistas recentes</h2><div class="badges">${recentBadges.map(badgeTile).join('')}</div>` : ''}`;
 }
 
@@ -1124,17 +1129,25 @@ function readPos(id) {
 }
 const ART_QUEUE = { want: 'Ler depois', reading: 'Lendo', finished: 'Lidos' };
 
+// artigo ou PDF começado: marcado como lendo ou com parte do texto já lida
+const articleStarted = (a) => a.status !== 'finished' && (a.status === 'reading' || readPos(a.id).p > 0.05);
+function articleItem(a) {
+  const notes = state.notes.filter((n) => n.bookId === a.id).length;
+  const pos = readPos(a.id).p;
+  const status = a.status === 'finished' ? '<span class="chip">✓ Lido</span>'
+    : articleStarted(a) ? `<span class="chip p-academic">Lendo${pos > 0.05 ? ` · ${Math.round(pos * 100)}%` : ''}</span>` : '<span class="chip">Ler depois</span>';
+  return `<a class="card book art-item" href="${srcHref(a)}">
+      ${a.cover ? `<img class="art-thumb" src="${esc(a.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="art-thumb ph">${a.kind === 'pdf' ? '📄' : '📰'}</span>`}
+      <div class="grow"><div class="book-title">${esc(a.title)}</div>
+        <div class="small muted">${a.kind === 'pdf' ? `PDF · ${a.pages || '?'} páginas` : `${esc(a.site || '')} · ${readMinutes(a)} min`}${notes ? ` · ${notes} ${notes === 1 ? 'grifo' : 'grifos'}` : ''}</div>
+        <div class="chips" style="margin-top:4px">${status}${a.genre ? `<span class="chip tag">${esc(a.genre)}</span>` : ''}</div></div></a>`;
+}
+
 function articlesView() {
   const filter = sessionStorage.getItem('artFilter') || 'all';
   const all = [...state.articles].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   const list = filter === 'all' ? all : all.filter((a) => (a.status || 'want') === filter);
   const count = (k) => all.filter((a) => (a.status || 'want') === k).length;
-  const notesOf = (id) => state.notes.filter((n) => n.bookId === id).length;
-  const status = (a) => {
-    if (a.status === 'finished') return '<span class="chip">✓ Lido</span>';
-    const pos = readPos(a.id).p;
-    return a.status === 'reading' || pos > 0.05 ? `<span class="chip p-academic">Lendo${pos > 0.05 ? ` · ${Math.round(pos * 100)}%` : ''}</span>` : '<span class="chip">Ler depois</span>';
-  };
   return `${seg([['#/livros', '📚 Livros', 'books'], ['#/artigos', '📰 Artigos', 'articles']], 'articles')}
   <h2>Artigos</h2>
   <form class="row gap-s" id="art-form"><input name="url" type="url" class="search grow" required placeholder="Cole o link de um artigo…" autocomplete="off" style="margin:0"><button class="btn primary" id="art-save">Salvar</button></form>
@@ -1143,11 +1156,7 @@ function articlesView() {
   ${!isPlus() ? `<p class="small muted">${state.articles.length} de ${FREE_ARTICLES} artigos do plano grátis · <a href="#/plus">ilimitados no Plus</a></p>` : ''}
   ${all.length ? `<div class="tabs">${[['all', `Todos (${all.length})`], ...Object.entries(ART_QUEUE).map(([k, v]) => [k, `${v} (${count(k)})`])]
     .map(([k, v]) => `<button class="tab ${filter === k ? 'active' : ''}" data-action="artFilter" data-v="${k}">${v}</button>`).join('')}</div>` : ''}
-  ${list.length ? list.map((a) => `<a class="card book art-item" href="${srcHref(a)}">
-      ${a.cover ? `<img class="art-thumb" src="${esc(a.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="art-thumb ph">${a.kind === 'pdf' ? '📄' : '📰'}</span>`}
-      <div class="grow"><div class="book-title">${esc(a.title)}</div>
-        <div class="small muted">${a.kind === 'pdf' ? `PDF · ${a.pages || '?'} páginas` : `${esc(a.site || '')} · ${readMinutes(a)} min`}${notesOf(a.id) ? ` · ${notesOf(a.id)} ${notesOf(a.id) === 1 ? 'grifo' : 'grifos'}` : ''}</div>
-        <div class="chips" style="margin-top:4px">${status(a)}${a.genre ? `<span class="chip tag">${esc(a.genre)}</span>` : ''}</div></div></a>`).join('')
+  ${list.length ? list.map(articleItem).join('')
     : all.length ? '<p class="nudge">Nenhum artigo aqui.</p>' : empty('Salve artigos, posts e notícias para ler, grifar e conectar com seus livros.')}`;
 }
 articlesView.mount = () => {

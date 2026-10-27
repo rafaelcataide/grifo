@@ -763,3 +763,7 @@ Object.assign(EN, {
   'Digite para buscar…': 'Type to search…', 'Opcional: deixe sem livro para uma ideia solta.': 'Optional: leave it without a book for a loose idea.',
   'Nenhuma nota com esses filtros.': 'No notes match these filters.',
 });
+
+// início: artigos
+Object.assign(EN, { '📰 Artigo': '📰 Article', 'Artigo': 'Article' });
+EN_PATTERNS.unshift([/^📰 (\d+) (artigo|artigos) para ler depois →$/, (m) => `📰 ${m[1]} article${m[1] === '1' ? '' : 's'} to read later →`]);

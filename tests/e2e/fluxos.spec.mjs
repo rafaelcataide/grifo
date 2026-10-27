@@ -258,3 +258,12 @@ test('nota: escolher o livro digitando parte do título', async ({ page }) => {
   await page.getByRole('button', { name: 'Salvar' }).click();
   await expect.poll(async () => (await lerBanco(page, 'notes'))[0]?.bookId).toBe('b2');
 });
+
+test('início: artigos em leitura aparecem em "Lendo agora" e os da fila num atalho', async ({ page }) => {
+  await semear(page, { books: [livro('b1'), artigo('a1', { status: 'reading' }), artigo('a2', { title: 'Para depois' })] });
+  await page.goto('/#/');
+  await expect(page.locator('.art-item')).toHaveCount(1);
+  await expect(page.locator('.art-item')).toContainText('Por que ler devagar');
+  await page.getByRole('link', { name: /1 artigo para ler depois/ }).click();
+  await expect(page).toHaveURL(/#\/artigos/);
+});
