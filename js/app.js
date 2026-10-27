@@ -138,6 +138,18 @@ async function remove(store, id) {
   if (store === 'books') state.articles = state.articles.filter((x) => x.id !== id);
 }
 
+// Outras abas do Grifo no mesmo navegador: avisa quando os dados mudam, para todas mostrarem o mesmo
+// (sem isso, um item excluído numa aba continua aparecendo na outra)
+const otherTabs = 'BroadcastChannel' in globalThis ? new BroadcastChannel('grifo-dados') : null;
+let tabsTimer = 0;
+if (otherTabs) {
+  otherTabs.onmessage = () => {
+    clearTimeout(tabsTimer);
+    tabsTimer = setTimeout(async () => { await load(); if (!modal.open) render(); }, 150);
+  };
+}
+const tellOtherTabs = () => otherTabs?.postMessage('mudou');
+
 // Toda alteração passa por aqui: recalcula XP, desafios, conquistas e comemora.
 async function commit(fn, { quiet = false, rerender = true } = {}) {
   const before = refreshStats().xp;
@@ -170,6 +182,7 @@ async function commit(fn, { quiet = false, rerender = true } = {}) {
   if (lv.level > levelBefore) { toast(`⬆️ Você subiu para o nível ${lv.level}: <b>${lv.title}</b>! · <u>compartilhar</u>`, 'gold', () => actions.shareLevel()); confetti(); }
   if (rerender) render();
   scheduleSync();
+  tellOtherTabs();
 }
 
 // ---------------- tema ----------------
@@ -1994,7 +2007,7 @@ async function runSync({ silent = true } = {}) {
   if (!Cloud.user()) return;
   try {
     const applied = await Cloud.sync();
-    if (applied) { await load(); render(); }
+    if (applied) { await load(); render(); tellOtherTabs(); }
     await Cloud.publishStats(publicStats());
     if (!silent) toast('☁️ Sincronizado');
   } catch (e) {

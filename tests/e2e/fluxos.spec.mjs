@@ -346,3 +346,16 @@ test('revisão: cada resposta passa para o próximo card, e toque duplo não pul
   await expect(page.getByText('2 feitas · 2 restantes')).toBeVisible();
   await expect.poll(async () => (await lerBanco(page, 'reviews')).length).toBe(2);
 });
+
+test('duas abas abertas: o que é excluído numa some da outra', async ({ page, context }) => {
+  await semear(page, { books: [livro('b1')], notes: [nota('n1', 'b1', 'Nota que vai embora.'), nota('n2', 'b1', 'Nota que fica.')] });
+  const outra = await context.newPage();
+  await modoPessoal(outra);
+  await outra.goto('/#/notas');
+  await expect(outra.locator('#note-list .note')).toHaveCount(2);
+  await page.goto('/#/nota/n1');
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: 'Excluir nota' }).click();
+  await expect(outra.locator('#note-list .note')).toHaveCount(1);
+  await expect(outra.locator('#note-list')).not.toContainText('vai embora');
+});

@@ -40,10 +40,23 @@ function tx(store, mode, fn) {
 const getKV = (key) => tx('kv', 'readonly', (s) => s.get(key));
 const rawSetKV = (key, value) => tx('kv', 'readwrite', (s) => s.put(value, key));
 
+// lê e grava a mesma chave numa transação só: uma exclusão feita enquanto a sincronização limpa
+// as lápides (ou em outra aba) não se perde entre a leitura e a gravação
+function updateKV(key, fn) {
+  return open().then((d) => new Promise((resolve, reject) => {
+    const t = d.transaction('kv', 'readwrite');
+    const s = t.objectStore('kv');
+    const r = s.get(key);
+    r.onsuccess = () => s.put(fn(r.result), key);
+    t.oncomplete = () => resolve();
+    t.onerror = () => reject(t.error);
+    t.onabort = () => reject(t.error);
+  }));
+}
+
 async function addTombstones(list) {
   if (!list.length) return;
-  const cur = (await getKV(TOMBS)) || [];
-  await rawSetKV(TOMBS, [...cur, ...list]);
+  await updateKV(TOMBS, (cur) => [...(cur || []), ...list]);
 }
 
 export const db = {
@@ -93,7 +106,7 @@ export const db = {
     const keys = await tx('kv', 'readonly', (st) => st.getAllKeys());
     for (const k of keys.filter((x) => String(x).startsWith('file:'))) await tx('kv', 'readwrite', (st) => st.delete(k));
   },
-  pruneTombstones: async (upTo) => rawSetKV(TOMBS, ((await getKV(TOMBS)) || []).filter((t) => t.ts > upTo)),
+  pruneTombstones: (upTo) => updateKV(TOMBS, (cur) => (cur || []).filter((t) => t.ts > upTo)),
 };
 
 export function uid() {
