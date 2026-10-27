@@ -755,3 +755,11 @@ EN_PATTERNS.unshift(
   [/^🗑️ #(.+) removida$/, '🗑️ #$1 removed'],
   [/^Remover #(.+) de (\d+) nota\(s\)\? As notas continuam\.$/, 'Remove #$1 from $2 note(s)? The notes stay.'],
 );
+
+// filtros com busca e notas soltas
+Object.assign(EN, {
+  'Todos os livros e artigos': 'All books and articles', 'Só livros': 'Books only', 'Só artigos': 'Articles only', 'artigo': 'article',
+  'Sem livro (notas soltas)': 'No book (loose notes)', 'Sem livro (nota solta)': 'No book (loose note)', 'Livro ou artigo': 'Book or article',
+  'Digite para buscar…': 'Type to search…', 'Opcional: deixe sem livro para uma ideia solta.': 'Optional: leave it without a book for a loose idea.',
+  'Nenhuma nota com esses filtros.': 'No notes match these filters.',
+});

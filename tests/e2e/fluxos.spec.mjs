@@ -226,3 +226,35 @@ test('OCR: depois da foto, dá para marcar só a área que vai ser lida @celular
   await expect(crop).toBeHidden();
   await expect(page.locator('#ocr-status')).toContainText('Fotografe a página');
 });
+
+test('nota solta: criar sem livro e achar pelo filtro "Sem livro"', async ({ page }) => {
+  await semear(page, { books: [livro('b1')], notes: [nota('n1', 'b1', 'Nota do livro.')] });
+  await page.goto('/#/notas');
+  await page.getByRole('button', { name: 'Nova' }).click();
+  const campo = page.getByRole('combobox', { name: 'Digite para buscar…' });
+  await campo.fill('sem livro');
+  await page.keyboard.press('Enter');
+  await page.getByLabel('Texto').fill('Uma ideia que não veio de livro nenhum.');
+  await page.getByRole('button', { name: 'Salvar' }).click();
+  await expect.poll(async () => (await lerBanco(page, 'notes')).find((n) => n.id !== 'n1')?.bookId).toBeNull();
+  await page.goto('/#/notas');
+  await expect(page.locator('#note-list .note')).toHaveCount(2);
+  await page.getByRole('combobox', { name: 'Todos os livros e artigos' }).fill('sem liv');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#note-list .note')).toHaveCount(1);
+  await expect(page.locator('#note-list .note')).toContainText('não veio de livro');
+});
+
+test('nota: escolher o livro digitando parte do título', async ({ page }) => {
+  await semear(page, { books: [livro('b1'), livro('b2', { title: 'Hábitos Atômicos', author: 'James Clear' })] });
+  await page.goto('/#/notas');
+  await page.getByRole('button', { name: 'Nova' }).click();
+  const campo = page.getByRole('combobox', { name: 'Digite para buscar…' });
+  await campo.fill('atom');
+  await expect(page.locator('#note-form .combo-list li[data-v]:not([data-v=""])')).toHaveText(['Hábitos Atômicos']);
+  await page.keyboard.press('Enter');
+  await expect(campo).toHaveValue('Hábitos Atômicos');
+  await page.getByLabel('Texto').fill('Pequenos hábitos somam.');
+  await page.getByRole('button', { name: 'Salvar' }).click();
+  await expect.poll(async () => (await lerBanco(page, 'notes'))[0]?.bookId).toBe('b2');
+});

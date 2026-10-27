@@ -65,6 +65,11 @@ export function markdownFiles({ books = [], articles = [], notes = [] }) {
     const src = [...books, ...articles].find((b) => b.id === n.bookId);
     files.push({ path: unique('Notas', n.title), content: `---\ntipo: nota\n${src ? `fonte: "[[${fileName(src.title)}]]"\n` : ''}tags: [grifo]\n---\n\n# ${n.title}\n\n${n.kind === 'quote' ? quote(n.text) : n.text}\n${src ? `\n— [[${fileName(src.title)}]]${n.page ? `, p. ${n.page}` : ''}\n` : ''}` });
   }
+  // notas sem livro e sem título ficam juntas num arquivo
+  const loose = notes.filter((n) => !n.title && ![...books, ...articles].some((b) => b.id === n.bookId));
+  if (loose.length) {
+    files.push({ path: unique('Notas', 'Notas soltas'), content: `# Notas soltas\n\n${loose.map((n) => [n.kind === 'quote' ? quote(n.text) : n.text, (n.tags || []).map((t) => `#${String(t).replace(/\s+/g, '-')}`).join(' ')].filter(Boolean).join('\n')).join('\n\n---\n\n')}\n` });
+  }
   for (const [theme, list] of themes) {
     files.push({ path: unique('Temas', theme), content: `# ${theme}\n\n${list.map((b) => `- [[${fileName(b.title)}]]${b.subtheme ? ` · ${b.subtheme}` : ''}`).join('\n')}\n` });
   }

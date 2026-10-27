@@ -562,19 +562,17 @@ function bookDetail(id) {
 }
 
 function notesView() {
-  const notes = [...state.notes].sort((a, b) => b.createdAt - a.createdAt);
-  const withNotes = state.books.filter((b) => notes.some((n) => n.bookId === b.id));
-  const artsWithNotes = state.articles.filter((a) => notes.some((n) => n.bookId === a.id));
+  const scope = getScope('notesScope');
+  const notes = state.notes.filter((n) => noteInScope(n, scope)).sort((a, b) => b.createdAt - a.createdAt);
   return `${seg([['#/notas', '✍️ Notas', 'list'], ['#/mapa', '🕸️ Mapa', 'map'], ['#/perguntar', '✨ Perguntar', 'ask']], 'list')}
   <div class="row between"><h2 style="margin-top:0">Notas</h2>
     <div class="row gap-s"><button class="btn" data-action="scan">📷 Grifo</button><button class="btn primary" data-action="newNote">✍️ Nova</button></div></div>
   <p class="small muted">Dica: escreva <b>[[</b> numa nota para ligá-la a um livro, a outra nota ou a um conceito. As ligações formam o mapa mental.</p>
   <div class="row gap-s search-row"><input class="search grow" type="search" placeholder="Buscar em notas e tags…" data-filter-list="#note-list"><a class="btn" href="#/tags">🏷️ Tags</a></div>
-  ${withNotes.length + artsWithNotes.length > 1 ? `<select class="search" data-book-filter="#note-list"><option value="">Todos os livros e artigos</option>
-    ${withNotes.length && artsWithNotes.length ? '<option value="__books">Só livros</option><option value="__articles">Só artigos</option>' : ''}
-    ${withNotes.length ? `<optgroup label="Livros">${withNotes.map((b) => `<option value="${b.id}">${esc(b.title)}</option>`).join('')}</optgroup>` : ''}
-    ${artsWithNotes.length ? `<optgroup label="Artigos">${artsWithNotes.map((a) => `<option value="${a.id}">${esc(a.title)}</option>`).join('')}</optgroup>` : ''}</select>` : ''}
-  <div id="note-list">${notes.length ? notes.map((n) => noteCard(n)).join('') : empty('Suas citações e reflexões aparecem aqui.', '<button class="btn primary" data-action="scan">📷 Capturar um grifo</button>')}</div>`;
+  ${state.notes.length > 1 ? scopeFilters('notesScope') : ''}
+  <div id="note-list">${notes.length ? notes.map((n) => noteCard(n)).join('')
+    : state.notes.length ? empty('Nenhuma nota com esses filtros.', '<button class="btn" data-action="clearScope" data-key="notesScope">✕ Limpar filtros</button>')
+    : empty('Suas citações e reflexões aparecem aqui.', '<button class="btn primary" data-action="scan">📷 Capturar um grifo</button>')}</div>`;
 }
 
 // Tags de todas as notas, sem diferenciar maiúsculas: a grafia mais usada dá o nome
@@ -718,7 +716,15 @@ function bookInScope(b, f, skip = '') {
   return (!f.purpose || skip === 'purpose' || (b.purpose || 'hobby') === f.purpose)
     && (!f.theme || skip === 'theme' || norm(b.genre || '') === f.theme)
     && (!f.author || skip === 'author' || authorsOf(b).some((a) => norm(a) === f.author))
-    && (!f.book || skip === 'book' || b.id === f.book);
+    && (!f.book || skip === 'book' || (f.book === '__books' ? !isArticle(b) : f.book === '__articles' ? isArticle(b) : b.id === f.book));
+}
+const isArticle = (b) => b.kind === 'article' || b.kind === 'pdf';
+// nota passa no filtro pelo livro ou artigo dela; "__none" são as notas soltas (sem livro)
+function noteInScope(n, f) {
+  if (!scopeActive(f)) return true;
+  const b = bookById(n.bookId);
+  if (f.book === '__none') return !b && SCOPE_FIELDS.every((k) => k === 'book' || !f[k]);
+  return !!b && bookInScope(b, f);
 }
 function scopeOptions(key, field) {
   const f = getScope(key);
@@ -727,9 +733,12 @@ function scopeOptions(key, field) {
   if (field === 'purpose') return Object.entries(PURPOSE).map(([k, p]) => [k, tr(p.label)]);
   if (field === 'theme') return uniq(pool.map((b) => [norm(b.genre || ''), b.genre]));
   if (field === 'author') return uniq(pool.flatMap((b) => authorsOf(b).map((a) => [norm(a), a])));
-  return uniq(pool.map((b) => [b.id, b.kind === 'article' ? `${b.title} (artigo)` : b.title]));
+  const special = [];
+  if (pool.some(isArticle) && pool.some((b) => !isArticle(b))) special.push(['__books', tr('Só livros')], ['__articles', tr('Só artigos')]);
+  if (key === 'notesScope' && state.notes.some((n) => !bookById(n.bookId))) special.push(['__none', tr('Sem livro (notas soltas)')]);
+  return [...special, ...uniq(pool.map((b) => [b.id, isArticle(b) ? `${b.title} (${tr('artigo')})` : b.title]))];
 }
-const SCOPE_ALL = { purpose: 'Todas as finalidades', theme: 'Todos os temas', author: 'Todos os autores', book: 'Todos os livros' };
+const SCOPE_ALL = { purpose: 'Todas as finalidades', theme: 'Todos os temas', author: 'Todos os autores', book: 'Todos os livros e artigos' };
 function scopeFilters(key) {
   const f = getScope(key);
   const combo = (field) => {
@@ -748,37 +757,62 @@ function scopeFilters(key) {
 function applyScope(key, field, value) {
   const f = { ...getScope(key), [field]: value };
   // o livro escolhido sai do filtro se não combinar mais com tema/autor/finalidade
-  if (f.book && !(bookById(f.book) && bookInScope(bookById(f.book), f, 'book'))) delete f.book;
+  if (f.book && !f.book.startsWith('__') && !(bookById(f.book) && bookInScope(bookById(f.book), f, 'book'))) delete f.book;
   for (const k of SCOPE_FIELDS) if (!f[k]) delete f[k];
   sessionStorage.setItem(key, JSON.stringify(f));
   render();
 }
 
+// Campo de escolha com busca para formulários: o valor vai num campo escondido com o mesmo name
+function pickField(name, options, value, { all = '', placeholder = '' } = {}) {
+  const label = options.find(([v]) => v === value)?.[1] || '';
+  return `<div class="combo${value ? ' set' : ''}" data-pick data-all="${esc(all)}" data-opts="${esc(JSON.stringify(options))}">
+    <input type="hidden" name="${name}" value="${esc(value || '')}">
+    <input class="search" type="text" placeholder="${esc(placeholder)}" value="${esc(label)}" autocomplete="off" role="combobox" aria-expanded="false" aria-label="${esc(placeholder)}">
+    <ul class="combo-list" role="listbox" hidden></ul>
+  </div>`;
+}
+const comboInput = (box) => box.querySelector('input:not([type=hidden])');
+const comboOpts = (box) => (box.dataset.scope ? scopeOptions(box.dataset.scope, box.dataset.field) : (box._opts ||= JSON.parse(box.dataset.opts || '[]')));
+const comboCur = (box) => (box.dataset.scope ? getScope(box.dataset.scope)[box.dataset.field] || '' : box.querySelector('input[type=hidden]').value);
+const comboAll = (box) => (box.dataset.scope ? SCOPE_ALL[box.dataset.field] : box.dataset.all); // primeira opção (nenhuma escolha)
+function comboChoose(box, v) {
+  if (box.dataset.scope) { applyScope(box.dataset.scope, box.dataset.field, v); return; }
+  const hidden = box.querySelector('input[type=hidden]');
+  hidden.value = v;
+  box.classList.toggle('set', !!v);
+  comboClose(box);
+  hidden.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
 // Lista do filtro: abre ao tocar, filtra ao digitar, escolhe com toque, setas + Enter; Esc fecha
 function comboRender(box) {
-  const input = box.querySelector('input');
+  const input = comboInput(box);
   const list = box.querySelector('.combo-list');
-  const { scope, field } = box.dataset;
-  const q = norm(input.value);
-  const cur = getScope(scope)[field] || '';
-  const curLabel = scopeOptions(scope, field).find(([v]) => v === cur)?.[1] || '';
+  // sem diferenciar acentos: "atom" acha "Atômicos"
+  const fold = (t) => norm(t).normalize('NFD').replace(/\p{M}/gu, '');
+  const q = fold(input.value);
+  const cur = comboCur(box);
+  const all = comboOpts(box);
+  const curLabel = all.find(([v]) => v === cur)?.[1] || '';
   // com a opção escolhida ainda escrita no campo, mostra todas; ao digitar, só as que combinam
-  const typed = q && q !== norm(curLabel);
-  const opts = scopeOptions(scope, field).filter(([, l]) => !typed || norm(l).includes(q));
-  list.innerHTML = [['', SCOPE_ALL[field]], ...opts].map(([v, l], i) => `<li role="option" data-v="${esc(v)}" class="${v === cur ? 'cur' : ''}${i === (typed && opts.length ? 1 : 0) ? ' hi' : ''}">${esc(l)}</li>`).join('')
+  const typed = q && q !== fold(curLabel);
+  const opts = all.filter(([, l]) => !typed || fold(l).includes(q));
+  const first = comboAll(box) ? [['', comboAll(box)]] : [];
+  list.innerHTML = [...first, ...opts].map(([v, l], i) => `<li role="option" data-v="${esc(v)}" class="${v === cur ? 'cur' : ''}${i === (typed && opts.length ? 1 : 0) ? ' hi' : ''}">${esc(l)}</li>`).join('')
     + (typed && !opts.length ? '<li class="none">Nada encontrado</li>' : '');
+  if (!first.length && !list.querySelector('.hi')) list.querySelector('li[data-v]')?.classList.add('hi');
   list.hidden = false;
   input.setAttribute('aria-expanded', 'true');
 }
 function comboClose(box, restore = true) {
   const list = box.querySelector('.combo-list');
-  const input = box.querySelector('input');
+  const input = comboInput(box);
   list.hidden = true;
   input.setAttribute('aria-expanded', 'false');
   if (restore) {
-    const { scope, field } = box.dataset;
-    const cur = getScope(scope)[field];
-    input.value = cur ? scopeOptions(scope, field).find(([v]) => v === cur)?.[1] || '' : '';
+    const cur = comboCur(box);
+    input.value = cur ? comboOpts(box).find(([v]) => v === cur)?.[1] || '' : '';
   }
 }
 document.addEventListener('focusin', (e) => { const box = e.target.closest?.('.combo'); if (box) { e.target.select?.(); comboRender(box); } });
@@ -795,8 +829,7 @@ document.addEventListener('mousedown', (e) => {
   const li = e.target.closest?.('.combo-list li[data-v]');
   if (!li) return;
   e.preventDefault(); // não tira o foco antes de escolher
-  const box = li.closest('.combo');
-  applyScope(box.dataset.scope, box.dataset.field, li.dataset.v);
+  comboChoose(li.closest('.combo'), li.dataset.v);
 });
 document.addEventListener('keydown', (e) => {
   const box = e.target.closest?.('.combo');
@@ -812,7 +845,7 @@ document.addEventListener('keydown', (e) => {
   } else if (e.key === 'Enter') {
     e.preventDefault();
     const pick = items[i];
-    if (pick) applyScope(box.dataset.scope, box.dataset.field, pick.dataset.v);
+    if (pick) comboChoose(box, pick.dataset.v);
   } else if (e.key === 'Escape') {
     comboClose(box);
     e.target.blur();
@@ -3025,10 +3058,11 @@ function noteForm(existing, { bookId, autoOCR, link } = {}) {
   const n = existing || { bookId: bookId || state.books.find((b) => b.status === 'reading')?.id, kind: link ? 'thought' : 'quote', source: 'manual', tags: [], text: link ? `[[${link}]] ` : '' };
   const lastPage = n.page ?? bookById(n.bookId)?.currentPage ?? '';
   // (nota de um artigo: o artigo entra na lista para a nota continuar ligada a ele)
-  const books = [...state.books, ...state.articles.filter((a) => a.id === n.bookId)].sort((a, b) => (a.status === 'reading' ? -1 : 0) - (b.status === 'reading' ? -1 : 0) || a.title.localeCompare(b.title));
+  const books = [...state.books, ...state.articles].sort((a, b) => (a.status === 'reading' ? -1 : 0) - (b.status === 'reading' ? -1 : 0) || a.title.localeCompare(b.title));
   openModal(`<form class="form" id="note-form">
     <h3>${existing ? 'Editar nota' : 'Nova nota'}</h3>
-    <label>Livro <select name="bookId" required>${books.map((b) => `<option value="${b.id}" ${b.id === n.bookId ? 'selected' : ''}>${esc(b.title)}</option>`).join('')}</select></label>
+    <label>Livro ou artigo ${pickField('bookId', books.map((b) => [b.id, isArticle(b) ? `${b.title} (${tr('artigo')})` : b.title]), bookById(n.bookId) ? n.bookId : '', { all: 'Sem livro (nota solta)', placeholder: 'Digite para buscar…' })}
+      <span class="hint">Opcional: deixe sem livro para uma ideia solta.</span></label>
     <div class="ocr-box">
       <div class="radio-pills ocr-mode">
         <input type="radio" name="ocr-mode" id="ocr-m-h" value="highlight" checked><label for="ocr-m-h">🖍️ Só os grifos</label>
@@ -3147,7 +3181,7 @@ function noteForm(existing, { bookId, autoOCR, link } = {}) {
       const fd = Object.fromEntries(new FormData(form));
       const note = existing ? { ...existing } : { id: uid(), createdAt: Date.now() };
       Object.assign(note, {
-        bookId: fd.bookId, title: plainText(fd.title).trim(), text: fd.text.trim(), page: Number(fd.page) || null, kind: fd.kind, source: fd.source,
+        bookId: fd.bookId || null, title: plainText(fd.title).trim(), text: fd.text.trim(), page: Number(fd.page) || null, kind: fd.kind, source: fd.source,
         tags: splitTags(fd.tags), updatedAt: Date.now(),
       });
       closeModal();
@@ -3848,12 +3882,6 @@ document.addEventListener('change', async (e) => {
     try { localStorage.setItem('grifo.mapShow', JSON.stringify(show)); } catch { /* sem armazenamento */ }
     render();
     return;
-  }
-  if (e.target.dataset.bookFilter) {
-    const v = e.target.value;
-    // "__books"/"__articles": só livros ou só artigos; senão, um livro ou artigo específico
-    const hide = (el) => (v === '__books' ? el.dataset.src === 'article' : v === '__articles' ? el.dataset.src !== 'article' : v && el.dataset.book !== v);
-    document.querySelectorAll(`${e.target.dataset.bookFilter} [data-book]`).forEach((el) => { el.hidden = hide(el); });
   }
   if (e.target.matches('[data-theme-pick]')) applyTheme(e.target.value);
   if (e.target.matches('[data-lang-pick]')) { setLang(e.target.value); location.reload(); }
