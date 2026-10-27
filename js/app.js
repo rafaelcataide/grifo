@@ -5,7 +5,7 @@ import * as G from './game.js';
 import * as C from './charts.js';
 import * as S from './srs.js';
 import { runOCR } from './ocr.js';
-import { createGraph } from './graph.js';
+import { createGraph, applyShow } from './graph.js';
 import * as Share from './share.js';
 import * as Scanner from './scanner.js';
 import * as Importers from './importers.js';
@@ -783,14 +783,23 @@ function graphData(scope = {}) {
   return { nodes: [...nodes.values()], groups: [...groups.values()], links: [...links.values()].filter((l) => nodes.has(l.source) && nodes.has(l.target)) };
 }
 
+// O que aparece no mapa (escolha de cada pessoa, guardada no aparelho)
+const MAP_SHOW = [['books', 'Livros'], ['areas', 'Áreas'], ['subthemes', 'Subtemas'], ['ideas', 'Ideias'], ['tags', 'Tags']];
+function mapShow() {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem('grifo.mapShow')) || {}; } catch { /* sem armazenamento */ }
+  return Object.fromEntries(MAP_SHOW.map(([k]) => [k, saved[k] !== false]));
+}
 const TYPE_LABEL = { book: 'Livro', theme: 'Tema', subtheme: 'Subtema', tag: 'Tag', note: 'Nota', concept: 'Ideia' };
 
 function mapView() {
   const scope = getScope('mapScope');
-  const d = graphData(scope);
+  const show = mapShow();
+  const d = applyShow(graphData(scope), show);
   return `${seg([['#/notas', '✍️ Notas', 'list'], ['#/mapa', '🕸️ Mapa', 'map'], ['#/perguntar', '✨ Perguntar', 'ask']], 'map')}
   <input type="search" class="search" id="graph-search" placeholder="Encontrar no mapa…" style="margin-bottom:8px">
   ${scopeFilters('mapScope')}
+  <div class="map-show"><span class="small muted">Mostrar:</span>${MAP_SHOW.map(([k, label]) => `<label class="chip-toggle"><input type="checkbox" data-map-show="${k}" ${show[k] ? 'checked' : ''}> ${label}</label>`).join('')}</div>
   ${d.nodes.length ? `<section class="card graph-wrap">
     <canvas id="graph" aria-label="Mapa de ideias: cada tema é uma ilha com seus livros"></canvas>
     <div class="graph-tools">
@@ -813,7 +822,7 @@ mapView.mount = (arg) => {
   const canvas = $('#graph');
   if (!canvas) return;
   const panel = $('#graph-panel');
-  graphApi = createGraph(canvas, graphData(getScope('mapScope')), {
+  graphApi = createGraph(canvas, applyShow(graphData(getScope('mapScope')), mapShow()), {
     onSelect(n, near) {
       if (!n) { panel.innerHTML = '<p class="small muted" style="margin:0">Toque num livro para ver as notas dele, ou numa ilha para ver o tema.</p>'; return; }
       const order = ['subtheme', 'book', 'concept', 'tag', 'note'];
@@ -829,7 +838,7 @@ mapView.mount = (arg) => {
     },
   });
   $('#graph-legend').innerHTML = graphApi.groups().map((g) => `<a href="#" data-island="${esc(g.key)}"><i class="dot" style="background:${g.color}"></i>${esc(g.label)}</a>`).join('')
-    || '<span class="muted">Dê um tema aos livros para formar as ilhas.</span>';
+    || (mapShow().areas ? '<span class="muted">Dê um tema aos livros para formar as ilhas.</span>' : '<span class="muted">Áreas escondidas: só as ligações entre os pontos.</span>');
   $('#graph-legend').onclick = (e) => {
     const a = e.target.closest('[data-island]');
     if (!a) return;
@@ -2924,7 +2933,7 @@ function noteForm(existing, { bookId, autoOCR, link } = {}) {
       <label>Página <input name="page" type="number" min="0" value="${lastPage}"></label>
       <label>Tipo <select name="kind"><option value="quote" ${n.kind === 'quote' ? 'selected' : ''}>Citação</option><option value="thought" ${n.kind === 'thought' ? 'selected' : ''}>Reflexão</option></select></label>
     </div>
-    <label>Tags <input name="tags" value="${esc((n.tags || []).join(', '))}" placeholder="ex: normalização, sql"></label>
+    <label>Tags <input name="tags" value="${esc((n.tags || []).join('; '))}" placeholder="ex: normalização; sql; banco de dados"><span class="hint">Separe várias tags com ponto e vírgula (;) ou vírgula.</span></label>
     ${existing ? '' : '<label class="check"><input type="checkbox" name="makeCard"> Criar um card de memorização em seguida</label>'}
     <input type="hidden" name="source" value="${n.source}">
     <div class="actions"><button type="button" class="btn ghost" data-action="close">Cancelar</button><button class="btn primary">Salvar</button></div>
@@ -3007,7 +3016,7 @@ function noteForm(existing, { bookId, autoOCR, link } = {}) {
       const note = existing ? { ...existing } : { id: uid(), createdAt: Date.now() };
       Object.assign(note, {
         bookId: fd.bookId, title: plainText(fd.title).trim(), text: fd.text.trim(), page: Number(fd.page) || null, kind: fd.kind, source: fd.source,
-        tags: fd.tags.split(',').map((t) => t.trim().replace(/^#/, '')).filter(Boolean), updatedAt: Date.now(),
+        tags: [...new Set(fd.tags.split(/[;,]/).map((t) => t.trim().replace(/^#/, '')).filter(Boolean))], updatedAt: Date.now(),
       });
       closeModal();
       await commit(() => persist('notes', note));
@@ -3701,6 +3710,12 @@ document.addEventListener('input', (e) => {
 });
 
 document.addEventListener('change', async (e) => {
+  if (e.target.dataset.mapShow) {
+    const show = { ...mapShow(), [e.target.dataset.mapShow]: e.target.checked };
+    try { localStorage.setItem('grifo.mapShow', JSON.stringify(show)); } catch { /* sem armazenamento */ }
+    render();
+    return;
+  }
   if (e.target.dataset.bookFilter) {
     const v = e.target.value;
     // "__books"/"__articles": só livros ou só artigos; senão, um livro ou artigo específico

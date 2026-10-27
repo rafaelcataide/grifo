@@ -673,3 +673,11 @@ Object.assign(EN, {
   'ex: Psicologia': 'e.g. Psychology', 'ex: Memória': 'e.g. Memory',
 });
 EN_PATTERNS.unshift([/^(.+) \(artigo\)$/, '$1 (article)']);
+
+// Tags com ponto e vírgula e o que mostrar no mapa
+Object.assign(EN, {
+  'ex: normalização; sql; banco de dados': 'e.g. normalization; sql; databases',
+  'Separe várias tags com ponto e vírgula (;) ou vírgula.': 'Separate several tags with a semicolon (;) or comma.',
+  'Mostrar:': 'Show:', 'Áreas': 'Areas', 'Subtemas': 'Subthemes', 'Ideias': 'Ideas', 'Tags': 'Tags',
+  'Áreas escondidas: só as ligações entre os pontos.': 'Areas hidden: only the links between points.',
+});

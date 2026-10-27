@@ -22,6 +22,29 @@ function palette() {
 
 const trunc = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
+// Esconde tipos de ponto; os pontos que se ligavam por um ponto escondido passam a se ligar entre si
+export function applyShow(d, show) {
+  const hidden = (n) => (n.type === 'book' && !show.books) || (n.type === 'tag' && !show.tags) || (n.type === 'concept' && !show.ideas)
+    || (n.type === 'subtheme' && !show.subthemes) || (n.parent && !show.books);
+  const keep = new Set(d.nodes.filter((n) => !hidden(n)).map((n) => n.id));
+  const adj = new Map();
+  for (const l of d.links) {
+    for (const [a, b] of [[l.source, l.target], [l.target, l.source]]) { if (!adj.has(a)) adj.set(a, new Set()); adj.get(a).add(b); }
+  }
+  const links = new Map();
+  const add = (a, b) => { if (a !== b && keep.has(a) && keep.has(b)) links.set(a < b ? `${a}|${b}` : `${b}|${a}`, { source: a, target: b }); };
+  for (const l of d.links) add(l.source, l.target);
+  for (const n of d.nodes) {
+    if (keep.has(n.id)) continue;
+    const near = [...(adj.get(n.id) || [])].filter((x) => keep.has(x)).slice(0, 8);
+    for (let i = 0; i < near.length; i++) for (let j = i + 1; j < near.length; j++) add(near[i], near[j]);
+  }
+  const nodes = d.nodes.filter((n) => keep.has(n.id) || n.parent).filter((n) => !n.parent || show.books)
+    .map((n) => (show.areas ? n : { ...n, group: '' }));
+  return { nodes, links: [...links.values()], groups: show.areas ? d.groups : [] };
+}
+
+
 export function createGraph(canvas, data, { onSelect = () => {} } = {}) {
   const ctx = canvas.getContext('2d');
   // g.i escolhe a cor da ilha; vem pronto do app (fixo por tema) ou segue a ordem

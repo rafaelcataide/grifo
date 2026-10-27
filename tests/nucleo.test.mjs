@@ -213,3 +213,33 @@ test('PDF: texto embaixo de um grifo feito em outro app', async () => {
   assert.equal(textUnder(items, [[152, 699, 232, 712], [72, 683, 222, 696]]), 'ajuda a lembrar o que importa de verdade.');
   assert.equal(textUnder(items, [[300, 600, 400, 610]]), '');
 });
+
+test('mapa: esconder tipos de ponto sem desfazer as ligações', async () => {
+  const { applyShow } = await import('../js/graph.js');
+  const d = {
+    groups: [{ key: 'psi', label: 'Psicologia' }],
+    nodes: [
+      { id: 'b:1', type: 'book', group: 'psi' }, { id: 'b:2', type: 'book', group: 'psi' },
+      { id: 'c:sis', type: 'concept' }, { id: 'c:mente', type: 'tag' }, { id: 'c:vieses', type: 'subtheme', group: 'psi' },
+      { id: 'n:1', type: 'note', parent: 'b:1' },
+    ],
+    links: [{ source: 'b:1', target: 'c:sis' }, { source: 'b:2', target: 'c:sis' }, { source: 'b:1', target: 'c:mente' }, { source: 'b:1', target: 'c:vieses' }],
+  };
+  const all = { books: true, areas: true, subthemes: true, ideas: true, tags: true };
+  assert.equal(applyShow(d, all).nodes.length, 6);
+  // sem ideias: os dois livros que citavam a mesma ideia passam a se ligar direto
+  const noIdeas = applyShow(d, { ...all, ideas: false });
+  assert.ok(!noIdeas.nodes.some((n) => n.id === 'c:sis'));
+  assert.ok(noIdeas.links.some((l) => [l.source, l.target].sort().join() === 'b:1,b:2'));
+  // sem tags e sem subtemas
+  const clean = applyShow(d, { ...all, tags: false, subthemes: false });
+  assert.deepEqual(clean.nodes.map((n) => n.id).sort(), ['b:1', 'b:2', 'c:sis', 'n:1']);
+  // sem livros: somem também as notas (que aparecem em volta do livro); a ideia fica
+  const noBooks = applyShow(d, { ...all, books: false });
+  assert.ok(!noBooks.nodes.some((n) => n.type === 'book' || n.type === 'note'));
+  assert.ok(noBooks.links.some((l) => [l.source, l.target].includes('c:sis') && [l.source, l.target].includes('c:mente')));
+  // sem áreas: nenhuma ilha
+  const noAreas = applyShow(d, { ...all, areas: false });
+  assert.equal(noAreas.groups.length, 0);
+  assert.ok(noAreas.nodes.every((n) => !n.group));
+});

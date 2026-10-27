@@ -697,3 +697,9 @@ body.gated { padding-bottom: 24px; }
 .pdf-page canvas { display: block; }
 .pdf-pn { position: absolute; inset: 0; display: grid; place-items: center; color: #999; font-size: .9rem; }
 .pdf-page .textLayer ::selection { background: rgba(255, 214, 64, .55); }
+
+/* mapa: o que mostrar */
+.map-show { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 10px; }
+.chip-toggle { display: inline-flex; align-items: center; gap: 4px; font-size: .78rem; font-weight: 600; padding: 4px 10px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; color: var(--muted); }
+.chip-toggle:has(input:checked) { background: var(--accent-soft); border-color: var(--accent); color: var(--text); }
+.chip-toggle input { accent-color: var(--accent); margin: 0; }
