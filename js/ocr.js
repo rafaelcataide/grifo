@@ -48,12 +48,13 @@ function hue(r, g, b, mx, d) {
   return h < 0 ? h + 360 : h;
 }
 
-// Cor de marca-texto: clara, saturada. Tons de pele/madeira (vermelho-alaranjado pouco saturado) são ignorados.
+// Cor de marca-texto: saturada; clara, ou mais escura se a cor for forte (marca-texto na sombra da página).
+// Tons de pele/madeira (vermelho-alaranjado pouco saturado) são ignorados.
 function isHighlight(r, g, b) {
   const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
-  if (mx < 130 || d < 45) return false;
+  if (mx < 80 || d < 40) return false;
   const sat = d / mx;
-  if (sat < 0.25) return false;
+  if (sat < 0.25 || (mx < 130 && sat < 0.45)) return false;
   const h = hue(r, g, b, mx, d);
   if ((h < 45 || h >= 345) && sat < 0.55) return false;
   return true;
@@ -159,20 +160,21 @@ export function textiness(img, p) {
   }
   return { dark: dark / n, flips: flips / rows / Math.max(1, p.x1 - p.x0) };
 }
-const looksLikeText = (t) => t.dark > 0.04 && t.dark < 0.45 && t.flips > 0.03;
+const looksLikeText = (t) => t.dark > 0.04 && t.dark < 0.45 && t.flips > 0.022;
 
-function findPassages(img) {
+// Trechos grifados de um tipo: 'color' (marca-texto colorido) ou 'gray' (grifo cinza do Kindle)
+function findPassages(img, kind = 'color') {
   const { width: w, height: h } = img;
   const B = Math.max(6, Math.round(Math.max(w, h) / 300));
   const gw = Math.ceil(w / B), gh = Math.ceil(h / B);
+  const gray = kind === 'gray';
   // um grifo tem ao menos a altura de uma linha de texto e uma largura razoável; o resto é borda de letra ou ruído
   // (no grifo cinza, bordas de letras em negrito também parecem cinza: exige a altura de uma linha inteira)
-  const bigEnough = (p, gray) => p.y1 - p.y0 >= Math.max(h * 0.018, gray ? w * 0.028 : 0) && p.x1 - p.x0 >= w * 0.12;
-  const keepText = (found, gray = false) => ({ ...found, passages: found.passages.filter((p) => bigEnough(p, gray) && looksLikeText(textiness(img, p))) });
-  const found = keepText(passagesFrom(colorMask(img, B, gw, gh), w, h, B, gw, gh));
-  // sem marca-texto colorido: tenta o grifo cinza do Kindle
-  // (a faixa cinza começa colada na primeira letra, que é escura: estende mais para os lados)
-  return found.passages.length ? found : { ...keepText(passagesFrom(grayMask(img, B, gw, gh), w, h, B, gw, gh, 5, 3), true), gray: true };
+  const bigEnough = (p) => p.y1 - p.y0 >= Math.max(h * 0.018, gray ? w * 0.028 : 0) && p.x1 - p.x0 >= w * 0.12;
+  // espalha 5 blocos para os lados e fecha os buracos dentro do trecho: o traço do marca-texto falha nas pontas
+  // das linhas, e a faixa cinza do Kindle começa colada na primeira letra (que é escura)
+  const found = passagesFrom(gray ? grayMask(img, B, gw, gh) : colorMask(img, B, gw, gh), w, h, B, gw, gh, 5, 3);
+  return { ...found, gray, passages: found.passages.filter((p) => bigEnough(p) && looksLikeText(textiness(img, p))) };
 }
 export const __test = { colorMask, grayMask, passagesFrom };
 
@@ -323,15 +325,16 @@ function trimEdges(data, gray = false) {
   while (first.length > 1 && first[0].c < 45) first.shift();
   while (last.length > 1 && last[last.length - 1].c < 45) last.pop();
   const join = () => lines.map((l) => l.words.map((w) => w.t).join(' ')).join('\n');
-  if (!gray) return join();
-  // grifo cinza: espaço muito maior que o normal entre palavras = o resto da linha que ficou fora do grifo
-  const gaps = lines.flatMap((l) => l.words.slice(1).map((w, i) => w.x0 - l.words[i].x1)).filter((g) => g > 0).sort((a, b) => a - b);
-  const big = Math.max(12, (gaps[gaps.length >> 1] || 0) * 3);
-  const cutAt = (ws) => ws.findIndex((w, i) => i > 0 && w.x0 - ws[i - 1].x1 > big);
-  const k = cutAt(last);
-  if (k > 0) last.splice(k);
-  const j = cutAt(first);
-  if (j > 0 && lines.length > 1) first.splice(0, j);
+  if (gray) {
+    // grifo cinza: espaço muito maior que o normal entre palavras = o resto da linha que ficou fora do grifo
+    const gaps = lines.flatMap((l) => l.words.slice(1).map((w, i) => w.x0 - l.words[i].x1)).filter((g) => g > 0).sort((a, b) => a - b);
+    const big = Math.max(12, (gaps[gaps.length >> 1] || 0) * 3);
+    const cutAt = (ws) => ws.findIndex((w, i) => i > 0 && w.x0 - ws[i - 1].x1 > big);
+    const k = cutAt(last);
+    if (k > 0) last.splice(k);
+    const j = cutAt(first);
+    if (j > 0 && lines.length > 1) first.splice(0, j);
+  }
   // letra solta ou símbolo nas pontas (pedaço de palavra cortada pela borda do grifo)
   const stray = (w) => w && (!/\p{L}/u.test(w.t) || (/^[^\p{L}]*\p{L}[^\p{L}]*$/u.test(w.t) && !/^[aeoéàAEOÉÀ]$/.test(w.t)));
   while (last.length > 1 && stray(last[last.length - 1])) last.pop();
@@ -341,7 +344,9 @@ function trimEdges(data, gray = false) {
 
 // Preto e branco pelo método de Otsu, só sobre o que não é fundo branco. O cinza das faixas
 // de marca-texto confunde o OCR (ele as trata como imagem); em preto e branco vira texto limpo.
-function binarize(canvas, adaptive = false) {
+// how: 'otsu' (um limite só), 'gray' (adaptativo forte, grifo cinza) ou 'soft' (adaptativo suave, marca-texto na sombra)
+const ADAPT = { gray: { div: 8, k: 0.82, lo: 0.6, hi: 1.25 }, soft: { div: 4, k: 0.75, lo: 0.5, hi: 1.6 } };
+function binarize(canvas, how = 'otsu') {
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   const im = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const d = im.data;
@@ -361,12 +366,13 @@ function binarize(canvas, adaptive = false) {
     const between = wB * wF * (sumB / wB - (sum - sumB) / wF) ** 2;
     if (between > best) { best = between; thr = t; }
   }
-  if (!adaptive) {
+  const A = ADAPT[how];
+  if (!A) {
     for (let i = 0; i < d.length; i += 4) d[i] = d[i + 1] = d[i + 2] = d[i] < thr ? 0 : 255;
     ctx.putImageData(im, 0, 0);
     return;
   }
-  // Grifo cinza: limiar adaptativo (Bradley): cada pixel é comparado com a média da vizinhança, então a luz desigual
+  // Limiar adaptativo (Bradley): cada pixel é comparado com a média da vizinhança, então a luz desigual
   // da foto (um canto mais claro, sombra da mão) não apaga letras. O Otsu global só limita os extremos.
   const { width: W, height: H } = canvas;
   const S = new Float64Array((W + 1) * (H + 1));
@@ -377,7 +383,7 @@ function binarize(canvas, adaptive = false) {
       S[(y + 1) * (W + 1) + x + 1] = S[y * (W + 1) + x + 1] + row;
     }
   }
-  const r = Math.max(8, Math.round(Math.min(W, H) / 8));
+  const r = Math.max(8, Math.round(Math.min(W, H) / A.div));
   const out = new Uint8Array(W * H);
   for (let y = 0; y < H; y++) {
     const y0 = Math.max(0, y - r), y1 = Math.min(H, y + r + 1);
@@ -386,7 +392,7 @@ function binarize(canvas, adaptive = false) {
       if (v >= 250) { out[y * W + x] = 255; continue; }
       const x0 = Math.max(0, x - r), x1 = Math.min(W, x + r + 1);
       const mean = (S[y1 * (W + 1) + x1] - S[y0 * (W + 1) + x1] - S[y1 * (W + 1) + x0] + S[y0 * (W + 1) + x0]) / ((y1 - y0) * (x1 - x0));
-      out[y * W + x] = v < thr * 0.6 || (v < mean * 0.82 && v < thr * 1.25) ? 0 : 255;
+      out[y * W + x] = v < thr * A.lo || (v < mean * A.k && v < thr * A.hi) ? 0 : 255;
     }
   }
   for (let i = 0; i < out.length; i++) d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = out[i];
@@ -428,19 +434,69 @@ export async function runOCR(file, mode, onProgress = () => {}) {
   sctx.drawImage(bmp, 0, 0, w, h);
   const img = sctx.getImageData(0, 0, w, h);
 
-  const out = canvasOf(w, h);
-  const octx = out.getContext('2d');
-  const proc = octx.createImageData(w, h);
-  let boxes = [];
-  let gray = false;
+  const worker = await getWorker();
+  // grifo: cada recorte é um bloco de texto (modo 6); página inteira: detecção automática de colunas (modo 3)
+  await worker.setParameters({ tessedit_pageseg_mode: mode === 'highlight' ? '6' : '3' });
 
-  if (mode === 'highlight') {
-    onProgress('Procurando grifos');
-    const { passages, dil, gw, B, gray: grayHl } = findPassages(img);
-    gray = !!grayHl;
-    if (!passages.length) return { text: '', regions: 0, preview: preview(src, w, h, []) };
-    boxes = passages;
+  // Lê os recortes de uma imagem já preparada (out) e devolve o texto
+  async function read(out, boxes, gray) {
+    const texts = [];
+    try {
+      for (let k = 0; k < boxes.length; k++) {
+        const b = boxes[k];
+        const pad = mode === 'highlight' ? 10 : 0;
+        const x0 = Math.max(0, b.x0 - pad), y0 = Math.max(0, b.y0 - pad);
+        const cw = Math.min(w, b.x1 + pad) - x0, ch = Math.min(h, b.y1 + pad) - y0;
+        logger = (msg, p) => onProgress(boxes.length > 1 ? `${msg} (trecho ${k + 1}/${boxes.length})` : msg, p);
+        // marca-texto colorido: a sombra da página escurece parte da faixa, e nenhum preto e branco serve para todas
+        // as fotos; lê com o limite único e com o adaptativo suave e fica com a leitura de maior confiança
+        const ways = mode === 'page' ? [null] : gray ? ['gray'] : ['otsu', 'soft'];
+        let data = null;
+        for (const how of ways) {
+          const crop = canvasOf(cw, ch);
+          crop.getContext('2d').drawImage(out, x0, y0, cw, ch, 0, 0, cw, ch);
+          if (how) binarize(crop, how);
+          globalThis.__ocrDebug?.push(crop); // inspeção em testes: o que exatamente vai para o OCR
+          const r = (await worker.recognize(crop)).data;
+          // pontuação: letras das palavras lidas com confiança razoável (mais texto bom, sem premiar lixo)
+          r.score = (r.words || []).filter((x) => x.confidence >= 60).reduce((n, x) => n + (x.text.match(/\p{L}/gu) || []).length, 0);
+          globalThis.__ocrScores?.push([how, r.score, Math.round(r.confidence)]);
+          if (!data || r.score > data.score) data = r;
+        }
+        const t = cleanText(mode === 'highlight' ? trimEdges(data, gray) : data.text, mode === 'page');
+        if (t) texts.push(t);
+      }
+    } finally {
+      logger = null;
+    }
+    return texts.join('\n\n');
+  }
+
+  if (mode === 'page') {
+    const out = canvasOf(w, h);
+    const octx = out.getContext('2d');
+    const proc = octx.createImageData(w, h);
+    for (let i = 0; i < img.data.length; i += 4) {
+      const v = 0.299 * img.data[i] + 0.587 * img.data[i + 1] + 0.114 * img.data[i + 2];
+      proc.data[i] = proc.data[i + 1] = proc.data[i + 2] = v;
+      proc.data[i + 3] = 255;
+    }
+    octx.putImageData(proc, 0, 0);
+    return { text: await read(out, [{ x0: 0, y0: 0, x1: w, y1: h }], false), regions: 0, preview: preview(src, w, h, []) };
+  }
+
+  // Grifos: primeiro marca-texto colorido; se não achar ou não sair texto, o grifo cinza do Kindle
+  onProgress('Procurando grifos');
+  let last = { passages: [] };
+  for (const kind of ['color', 'gray']) {
+    const found = findPassages(img, kind);
+    if (!found.passages.length) continue;
+    last = found;
+    const { passages, dil, gw, B } = found;
     // Mantém só o que está grifado; max(r,g,b) deixa o fundo colorido quase branco e o texto escuro
+    const out = canvasOf(w, h);
+    const octx = out.getContext('2d');
+    const proc = octx.createImageData(w, h);
     for (let y = 0; y < h; y++) {
       const row = ((y / B) | 0) * gw;
       for (let x = 0; x < w; x++) {
@@ -450,41 +506,9 @@ export async function runOCR(file, mode, onProgress = () => {}) {
         proc.data[i + 3] = 255;
       }
     }
-  } else {
-    for (let i = 0; i < img.data.length; i += 4) {
-      const v = 0.299 * img.data[i] + 0.587 * img.data[i + 1] + 0.114 * img.data[i + 2];
-      proc.data[i] = proc.data[i + 1] = proc.data[i + 2] = v;
-      proc.data[i + 3] = 255;
-    }
-    boxes = [{ x0: 0, y0: 0, x1: w, y1: h }];
+    octx.putImageData(proc, 0, 0);
+    const text = await read(out, passages, found.gray);
+    if (text.replace(/[^\p{L}]/gu, '').length >= 8) return { text, regions: passages.length, preview: preview(src, w, h, passages) };
   }
-  octx.putImageData(proc, 0, 0);
-
-  const worker = await getWorker();
-  // grifo: cada recorte é um bloco de texto (modo 6); página inteira: detecção automática de colunas (modo 3)
-  await worker.setParameters({ tessedit_pageseg_mode: mode === 'highlight' ? '6' : '3' });
-  const texts = [];
-  try {
-    for (let k = 0; k < boxes.length; k++) {
-      const b = boxes[k];
-      const pad = mode === 'highlight' ? 10 : 0;
-      const x0 = Math.max(0, b.x0 - pad), y0 = Math.max(0, b.y0 - pad);
-      const cw = Math.min(w, b.x1 + pad) - x0, ch = Math.min(h, b.y1 + pad) - y0;
-      const crop = canvasOf(cw, ch);
-      crop.getContext('2d').drawImage(out, x0, y0, cw, ch, 0, 0, cw, ch);
-      if (mode === 'highlight') binarize(crop, gray);
-      logger = (msg, p) => onProgress(boxes.length > 1 ? `${msg} (trecho ${k + 1}/${boxes.length})` : msg, p);
-      globalThis.__ocrDebug?.push(crop); // inspeção em testes: o que exatamente vai para o OCR
-      const { data } = await worker.recognize(crop);
-      const t = cleanText(mode === 'highlight' ? trimEdges(data, gray) : data.text, mode === 'page');
-      if (t) texts.push(t);
-    }
-  } finally {
-    logger = null;
-  }
-  return {
-    text: texts.join('\n\n'),
-    regions: mode === 'highlight' ? boxes.length : 0,
-    preview: preview(src, w, h, mode === 'highlight' ? boxes : []),
-  };
+  return { text: '', regions: last.passages.length, preview: preview(src, w, h, last.passages) };
 }
