@@ -418,20 +418,25 @@ function preview(source, w, h, boxes) {
  * @param {File} file foto da página
  * @param {'highlight'|'page'} mode só os grifos ou a página inteira
  * @param {(msg:string, progress?:number)=>void} onProgress
+ * @param {{crop?: {x0:number, y0:number, x1:number, y1:number}}} [opts] crop: área escolhida, em frações (0 a 1) da foto
  * @returns {Promise<{text:string, regions:number, preview:string}>}
  */
-export async function runOCR(file, mode, onProgress = () => {}) {
+export async function runOCR(file, mode, onProgress = () => {}, { crop } = {}) {
   onProgress('Preparando imagem');
   const bmp = await createImageBitmap(file);
-  // Fotos grandes são reduzidas; imagens pequenas (prints, fotos comprimidas por apps de mensagem)
+  // só a área escolhida pela pessoa (o resto da foto nem entra na detecção)
+  const sx = crop ? Math.round(crop.x0 * bmp.width) : 0, sy = crop ? Math.round(crop.y0 * bmp.height) : 0;
+  const sw = crop ? Math.max(1, Math.round((crop.x1 - crop.x0) * bmp.width)) : bmp.width;
+  const sh = crop ? Math.max(1, Math.round((crop.y1 - crop.y0) * bmp.height)) : bmp.height;
+  // Fotos grandes são reduzidas; imagens pequenas (prints, fotos comprimidas por apps de mensagem, recortes)
   // são ampliadas, porque o OCR erra muito com letras de poucos pixels.
-  const side = Math.max(bmp.width, bmp.height);
+  const side = Math.max(sw, sh);
   const scale = side > MAX_SIDE ? MAX_SIDE / side : side < MIN_SIDE ? Math.min(4, MIN_SIDE / side) : 1;
-  const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
+  const w = Math.round(sw * scale), h = Math.round(sh * scale);
   const src = canvasOf(w, h);
   const sctx = src.getContext('2d', { willReadFrequently: true });
   sctx.imageSmoothingQuality = 'high';
-  sctx.drawImage(bmp, 0, 0, w, h);
+  sctx.drawImage(bmp, sx, sy, sw, sh, 0, 0, w, h);
   const img = sctx.getImageData(0, 0, w, h);
 
   const worker = await getWorker();

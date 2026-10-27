@@ -171,11 +171,58 @@ test('apresentação: quem não entrou vê a página do Grifo e o convite fica g
 test('em inglês: telas principais sem texto faltando na tradução', async ({ page }) => {
   await semear(page, { books: [livro('b1'), artigo('a1')], notes: [nota('n1', 'b1', 'x', { tags: ['mente'] })], cards: [card('c1', 'b1', 'n1')], settings: { firstStepsHidden: false } });
   await page.evaluate(() => localStorage.setItem('grifo.lang', 'en'));
-  for (const r of ['#/', '#/livros', '#/artigos', '#/artigo/a1', '#/notas', '#/mapa', '#/revisar', '#/busca', '#/ajustes', '#/plus']) {
+  for (const r of ['#/', '#/livros', '#/artigos', '#/artigo/a1', '#/notas', '#/mapa', '#/revisar', '#/busca', '#/tags', '#/ajustes', '#/plus']) {
     await page.goto(`/${r}`);
     await page.waitForTimeout(300);
   }
   // textos do próprio usuário (títulos, notas) não entram na conta
   const faltando = await page.evaluate(() => [...(globalThis.__i18nMissing || [])].filter((s) => !/Rápido e Devagar|Kahneman|Vieses|Psicologia|Por que ler devagar|Revista|Ler devagar|Revisar em intervalos|O que é o Sistema 1|Rápido e intuitivo|^RE$|^x$|^#?mente$/.test(s)));
   expect(faltando).toEqual([]);
+});
+
+test('tags: renomear, juntar com outra e remover', async ({ page }) => {
+  await semear(page, { books: [livro('b1')], notes: [
+    nota('n1', 'b1', 'um', { tags: ['psico', 'mente'] }),
+    nota('n2', 'b1', 'dois', { tags: ['Psicologia'] }),
+    nota('n3', 'b1', 'três', { tags: ['rascunho'] }),
+  ] });
+  await page.goto('/#/notas');
+  await page.getByRole('link', { name: 'Tags' }).click();
+  await expect(page).toHaveURL(/#\/tags/);
+  await expect(page.locator('#tag-list .tag-row')).toHaveCount(4);
+  // juntar: renomear "psico" para o nome de uma tag que já existe
+  await page.getByRole('button', { name: 'Renomear ou juntar #psico', exact: true }).click();
+  await page.getByLabel('Novo nome').fill('psicologia');
+  await page.getByRole('button', { name: 'Salvar' }).click();
+  await expect(page.locator('#tag-list .tag-row')).toHaveCount(3);
+  await expect(page.locator('#tag-list .tag-row').first()).toContainText('2 notas');
+  // remover
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: 'Remover #rascunho' }).click();
+  await expect(page.locator('#tag-list .tag-row')).toHaveCount(2);
+  const notes = Object.fromEntries((await lerBanco(page, 'notes')).map((n) => [n.id, n.tags]));
+  expect(notes).toEqual({ n1: ['psicologia', 'mente'], n2: ['Psicologia'], n3: [] });
+});
+
+test('OCR: depois da foto, dá para marcar só a área que vai ser lida @celular', async ({ page }) => {
+  await semear(page, { books: [livro('b1')] });
+  await page.goto('/#/notas');
+  await page.getByRole('button', { name: 'Nova' }).click();
+  // uma imagem pequena qualquer (PNG 1x1 ampliado pelo navegador)
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  await page.locator('#ocr-file').setInputFiles({ name: 'pagina.png', mimeType: 'image/png', buffer: png });
+  const crop = page.locator('#ocr-crop');
+  await expect(crop).toBeVisible();
+  await expect(page.locator('#crop-go')).toHaveText(/Ler a foto toda/);
+  await page.locator('#crop-img').evaluate((img) => { img.style.width = '300px'; img.style.height = '200px'; });
+  const box = await page.locator('#crop-img').boundingBox();
+  await page.mouse.move(box.x + 30, box.y + 30);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 200, box.y + 120, { steps: 6 });
+  await page.mouse.up();
+  await expect(page.locator('#crop-rect')).toBeVisible();
+  await expect(page.locator('#crop-go')).toHaveText(/Ler esta área/);
+  await page.locator('#crop-cancel').click();
+  await expect(crop).toBeHidden();
+  await expect(page.locator('#ocr-status')).toContainText('Fotografe a página');
 });

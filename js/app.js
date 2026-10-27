@@ -569,13 +569,83 @@ function notesView() {
   <div class="row between"><h2 style="margin-top:0">Notas</h2>
     <div class="row gap-s"><button class="btn" data-action="scan">📷 Grifo</button><button class="btn primary" data-action="newNote">✍️ Nova</button></div></div>
   <p class="small muted">Dica: escreva <b>[[</b> numa nota para ligá-la a um livro, a outra nota ou a um conceito. As ligações formam o mapa mental.</p>
-  <input class="search" type="search" placeholder="Buscar em notas e tags…" data-filter-list="#note-list">
+  <div class="row gap-s search-row"><input class="search grow" type="search" placeholder="Buscar em notas e tags…" data-filter-list="#note-list"><a class="btn" href="#/tags">🏷️ Tags</a></div>
   ${withNotes.length + artsWithNotes.length > 1 ? `<select class="search" data-book-filter="#note-list"><option value="">Todos os livros e artigos</option>
     ${withNotes.length && artsWithNotes.length ? '<option value="__books">Só livros</option><option value="__articles">Só artigos</option>' : ''}
     ${withNotes.length ? `<optgroup label="Livros">${withNotes.map((b) => `<option value="${b.id}">${esc(b.title)}</option>`).join('')}</optgroup>` : ''}
     ${artsWithNotes.length ? `<optgroup label="Artigos">${artsWithNotes.map((a) => `<option value="${a.id}">${esc(a.title)}</option>`).join('')}</optgroup>` : ''}</select>` : ''}
   <div id="note-list">${notes.length ? notes.map((n) => noteCard(n)).join('') : empty('Suas citações e reflexões aparecem aqui.', '<button class="btn primary" data-action="scan">📷 Capturar um grifo</button>')}</div>`;
 }
+
+// Tags de todas as notas, sem diferenciar maiúsculas: a grafia mais usada dá o nome
+function tagIndex() {
+  const groups = new Map();
+  for (const n of state.notes) {
+    for (const t of n.tags || []) {
+      const g = groups.get(norm(t)) || { spell: new Map(), notes: new Set() };
+      g.spell.set(t, (g.spell.get(t) || 0) + 1);
+      g.notes.add(n.id);
+      groups.set(norm(t), g);
+    }
+  }
+  return [...groups].map(([key, g]) => ({ key, name: [...g.spell].sort((a, b) => b[1] - a[1])[0][0], count: g.notes.size }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+
+function tagsView() {
+  const tags = tagIndex();
+  return `<a href="#/notas" class="back">← Notas</a>
+  <h2 style="margin-top:0">Tags</h2>
+  <p class="small muted">Renomeie para corrigir a grafia, use o nome de outra tag para juntar as duas, ou remova uma tag das notas (as notas continuam).</p>
+  ${tags.length ? `<input class="search" type="search" placeholder="Buscar tag…" data-filter-list="#tag-list">
+  <div id="tag-list" class="card list">${tags.map((t) => `<div class="row between li tag-row" data-search="${esc(t.key)}">
+    <a class="chip tag" href="${conceptHref(t.name)}">#${esc(t.name)}</a>
+    <span class="row gap-s"><span class="small muted">${t.count} ${t.count === 1 ? 'nota' : 'notas'}</span>
+      <button class="icon-btn" data-action="renameTag" data-tag="${esc(t.name)}" title="Renomear ou juntar" aria-label="Renomear ou juntar #${esc(t.name)}">✏️</button>
+      <button class="icon-btn" data-action="deleteTag" data-tag="${esc(t.name)}" title="Remover das notas" aria-label="Remover #${esc(t.name)}">🗑️</button></span>
+  </div>`).join('')}</div>` : empty('Você ainda não usou tags. Ao editar uma nota, escreva as tags separadas por ponto e vírgula.', '<a class="btn" href="#/notas">Ver notas</a>')}`;
+}
+
+// troca a tag em todas as notas; com nome de outra tag, as duas viram uma só
+async function retag(from, to) {
+  const key = norm(from);
+  await commit(async () => {
+    for (const n of state.notes.filter((x) => (x.tags || []).some((t) => norm(t) === key))) {
+      await persist('notes', { ...n, tags: splitTags(n.tags.flatMap((t) => (norm(t) === key ? to : [t]))), updatedAt: Date.now() });
+    }
+  }, { quiet: true });
+}
+
+const tagActions = {
+  renameTag: ({ tag }) => {
+    const others = tagIndex().filter((t) => t.key !== norm(tag));
+    openModal(`<form class="form" id="tag-form">
+      <h3>Renomear #${esc(tag)}</h3>
+      <label>Novo nome <input name="to" value="${esc(tag)}" list="tag-names" required autocomplete="off">
+        <span class="hint">Para juntar com outra tag, escolha o nome dela. Com ponto e vírgula, vira mais de uma tag.</span></label>
+      <datalist id="tag-names">${others.map((t) => `<option value="${esc(t.name)}">`).join('')}</datalist>
+      <div class="actions"><button type="button" class="btn ghost" data-action="close">Cancelar</button><button class="btn primary">Salvar</button></div>
+    </form>`, (root) => {
+      const form = $('#tag-form', root);
+      form.to.select();
+      form.onsubmit = async (e) => {
+        e.preventDefault();
+        const to = splitTags([form.to.value]);
+        if (!to.length) return;
+        const merged = to.length === 1 && others.find((t) => t.key === norm(to[0]));
+        closeModal();
+        await retag(tag, to);
+        toast(merged ? `🏷️ #${esc(tag)} juntada com #${esc(merged.name)}` : `🏷️ Tag renomeada para ${to.map((t) => `#${esc(t)}`).join(' ')}`);
+      };
+    });
+  },
+  deleteTag: async ({ tag }) => {
+    const count = tagIndex().find((t) => t.key === norm(tag))?.count || 0;
+    if (!confirm(`Remover #${tag} de ${count} nota(s)? As notas continuam.`)) return;
+    await retag(tag, []);
+    toast(`🗑️ #${esc(tag)} removida`);
+  },
+};
 
 function noteDetail(id) {
   const n = noteById(id);
@@ -2907,6 +2977,46 @@ function attachLinkAutocomplete(ta, box) {
   };
 }
 
+// Recorte antes do OCR: mostra a foto e a pessoa arrasta sobre o trecho que quer ler.
+// Devolve a área (frações da foto), null para a foto toda ou false se cancelou.
+function attachCropper(root) {
+  const box = $('#ocr-crop', root), stage = $('#crop-stage', root), img = $('#crop-img', root), rect = $('#crop-rect', root);
+  const go = $('#crop-go', root), cancel = $('#crop-cancel', root);
+  let area = null, start = null;
+  const draw = () => {
+    rect.hidden = !area;
+    if (area) Object.assign(rect.style, { left: `${area.x0 * 100}%`, top: `${area.y0 * 100}%`, width: `${(area.x1 - area.x0) * 100}%`, height: `${(area.y1 - area.y0) * 100}%` });
+    go.textContent = area ? '🔍 Ler esta área' : '🔍 Ler a foto toda';
+  };
+  const at = (e) => {
+    const r = img.getBoundingClientRect();
+    return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) };
+  };
+  stage.onpointerdown = (e) => { e.preventDefault(); stage.setPointerCapture(e.pointerId); start = at(e); area = null; draw(); };
+  stage.onpointermove = (e) => {
+    if (!start) return;
+    const p = at(e);
+    area = { x0: Math.min(start.x, p.x), y0: Math.min(start.y, p.y), x1: Math.max(start.x, p.x), y1: Math.max(start.y, p.y) };
+    draw();
+  };
+  stage.onpointerup = stage.onpointercancel = () => {
+    start = null;
+    if (area && (area.x1 - area.x0 < 0.04 || area.y1 - area.y0 < 0.02)) area = null; // toque sem arrastar
+    draw();
+  };
+  return (file) => new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    img.src = url;
+    area = null;
+    draw();
+    box.hidden = false;
+    box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    const done = (v) => { box.hidden = true; URL.revokeObjectURL(url); go.onclick = cancel.onclick = null; resolve(v); };
+    go.onclick = () => done(area);
+    cancel.onclick = () => done(false);
+  });
+}
+
 function noteForm(existing, { bookId, autoOCR, link } = {}) {
   if (!state.books.length) {
     toast('Cadastre um livro antes de criar notas.');
@@ -2931,6 +3041,11 @@ function noteForm(existing, { bookId, autoOCR, link } = {}) {
       <input type="file" accept="image/*" hidden id="ocr-file">
       <input type="file" accept="image/*" capture="environment" hidden id="ocr-cam">
       <div id="ocr-status" class="small muted">Fotografe a página: o texto grifado vira nota. Funciona com marca-texto colorido e com o grifo cinza do Kindle.</div>
+      <div id="ocr-crop" class="ocr-crop" hidden>
+        <div class="crop-stage" id="crop-stage"><img id="crop-img" alt="Foto escolhida"><div class="crop-rect" id="crop-rect" hidden></div></div>
+        <span class="hint">Arraste o dedo (ou o mouse) sobre a foto para marcar só o trecho que quer ler.</span>
+        <div class="row gap-s wrap"><button type="button" class="btn primary" id="crop-go">🔍 Ler a foto toda</button><button type="button" class="btn ghost" id="crop-cancel">Cancelar</button></div>
+      </div>
       <button type="button" class="btn small" id="ocr-fix" hidden>✨ Corrigir com IA</button>
       <img id="ocr-preview" alt="Pré-visualização dos trechos detectados" hidden>
     </div>
@@ -2995,12 +3110,15 @@ function noteForm(existing, { bookId, autoOCR, link } = {}) {
       fixBtn.disabled = false;
       fixBtn.textContent = '✨ Corrigir com IA';
     };
+    const chooseArea = attachCropper(root);
     const onPhoto = async (e) => {
       const f = e.target.files[0];
       if (!f) return;
       btns.forEach((x) => { x.disabled = true; });
       try {
-        const r = await runOCR(f, mode, (msg, p) => { status.textContent = `${msg}…${p != null ? ` ${Math.round(p * 100)}%` : ''}`; });
+        const area = await chooseArea(f);
+        if (area === false) return; // cancelou
+        const r = await runOCR(f, mode, (msg, p) => { status.textContent = `${msg}…${p != null ? ` ${Math.round(p * 100)}%` : ''}`; }, { crop: area || undefined });
         img.src = r.preview;
         img.hidden = false;
         if (!r.text) {
@@ -3589,6 +3707,7 @@ const actions = {
   ...articleActions,
   ...exportActions,
   ...pdfActions,
+  ...tagActions,
   ...timerActions,
   ...reminderActions,
   ...cloudActions,
@@ -3773,12 +3892,12 @@ document.addEventListener('submit', async (e) => {
 const routes = {
   '': home, livros: booksView, livro: bookDetail, notas: notesView, nota: noteDetail, conceito: conceptView,
   mapa: mapView, revisar: reviewView, stats: statsView, conquistas: achievementsView, ajustes: settingsView,
-  conta: accountView, admin: adminView, busca: searchView, artigos: articlesView, pdf: pdfView, artigo: articleView, u: publicProfileView, clubes: clubsView, perguntar: askView, plus: plusView,
+  conta: accountView, admin: adminView, busca: searchView, tags: tagsView, artigos: articlesView, pdf: pdfView, artigo: articleView, u: publicProfileView, clubes: clubsView, perguntar: askView, plus: plusView,
   privacidade: privacyView, termos: termsView,
 };
 // páginas que qualquer pessoa pode abrir sem login
 const OPEN_ROUTES = ['u', 'privacidade', 'termos'];
-const TAB_OF = { pdf: 'livros', busca: 'nenhuma', artigos: 'livros', artigo: 'livros', livro: 'livros', nota: 'notas', conceito: 'notas', mapa: 'notas', perguntar: 'notas', stats: 'progresso', conquistas: 'progresso', clubes: 'progresso' };
+const TAB_OF = { tags: 'notas', pdf: 'livros', busca: 'nenhuma', artigos: 'livros', artigo: 'livros', livro: 'livros', nota: 'notas', conceito: 'notas', mapa: 'notas', perguntar: 'notas', stats: 'progresso', conquistas: 'progresso', clubes: 'progresso' };
 
 function render() {
   const [hashPath, query = ''] = location.hash.slice(1).split('?');

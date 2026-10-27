@@ -730,3 +730,28 @@ EN_PATTERNS.unshift(
   [/^Não consegui abrir esse PDF: (.+)$/, "Couldn't open this PDF: $1"],
   [/^O arquivo deste PDF está em outro aparelho(.*)\.$/, (m) => `This PDF's file is on another device${m[1] ? ' (with Plus, your PDFs sync between devices)' : ''}.`],
 );
+
+// OCR: escolher a área
+Object.assign(EN, {
+  'Arraste o dedo (ou o mouse) sobre a foto para marcar só o trecho que quer ler.': 'Drag your finger (or the mouse) over the photo to mark just the passage you want to read.',
+  '🔍 Ler a foto toda': '🔍 Read the whole photo', '🔍 Ler esta área': '🔍 Read this area', 'Foto escolhida': 'Chosen photo',
+});
+
+// página de tags
+Object.assign(EN, {
+  '🏷️ Tags': '🏷️ Tags', 'Tags': 'Tags', 'Buscar tag…': 'Search tags…', 'Ver notas': 'See notes',
+  'Renomeie para corrigir a grafia, use o nome de outra tag para juntar as duas, ou remova uma tag das notas (as notas continuam).': 'Rename to fix the spelling, use another tag\'s name to merge both, or remove a tag from your notes (the notes stay).',
+  'Você ainda não usou tags. Ao editar uma nota, escreva as tags separadas por ponto e vírgula.': "You haven't used tags yet. When editing a note, write the tags separated by semicolons.",
+  'Renomear ou juntar': 'Rename or merge', 'Remover das notas': 'Remove from notes', 'Novo nome': 'New name',
+  'Para juntar com outra tag, escolha o nome dela. Com ponto e vírgula, vira mais de uma tag.': "To merge with another tag, pick its name. With semicolons, it becomes more than one tag.",
+});
+EN_PATTERNS.unshift(
+  [/^(\d+) (nota|notas)$/, (m) => `${m[1]} note${m[1] === '1' ? '' : 's'}`],
+  [/^Renomear #(.+)$/, 'Rename #$1'],
+  [/^Renomear ou juntar #(.+)$/, 'Rename or merge #$1'],
+  [/^Remover #(.+)$/, 'Remove #$1'],
+  [/^🏷️ #(.+) juntada com #(.+)$/, '🏷️ #$1 merged into #$2'],
+  [/^🏷️ Tag renomeada para (.+)$/, '🏷️ Tag renamed to $1'],
+  [/^🗑️ #(.+) removida$/, '🗑️ #$1 removed'],
+  [/^Remover #(.+) de (\d+) nota\(s\)\? As notas continuam\.$/, 'Remove #$1 from $2 note(s)? The notes stay.'],
+);
