@@ -1,6 +1,7 @@
 // Mapa de ideias por temas, em <canvas>: cada tema vira uma ilha com seus livros e subtemas;
-// ideias que ligam livros de temas diferentes ficam entre as ilhas. As notas aparecem em volta
-// do livro quando ele é tocado. Zoom, arrasto e toque; os nomes nunca se sobrepõem.
+// ideias que ligam livros de temas diferentes ficam entre as ilhas. Tocar num ponto abre o modo foco:
+// só ele e os vizinhos (1 ou 2 passos), em anéis. Arrastar um ponto sobre outro liga os dois.
+// Zoom, arrasto e toque; os nomes nunca se sobrepõem.
 
 const RADIUS = { subtheme: 6, book: 8, concept: 6, tag: 5, note: 5 };
 const HUES = [22, 232, 158, 282, 340, 44, 196, 110, 0, 260];
@@ -45,7 +46,7 @@ export function applyShow(d, show) {
 }
 
 
-export function createGraph(canvas, data, { onSelect = () => {} } = {}) {
+export function createGraph(canvas, data, { onSelect = () => {}, onFocus = () => {}, onConnect = () => {} } = {}) {
   const ctx = canvas.getContext('2d');
   // g.i escolhe a cor da ilha; vem pronto do app (fixo por tema) ou segue a ordem
   const groups = data.groups.map((g, i) => ({ ...g, i: g.color >= 0 ? g.color : i }));
@@ -64,7 +65,7 @@ export function createGraph(canvas, data, { onSelect = () => {} } = {}) {
   const links = data.links.map((l) => ({ s: byId.get(l.source), t: byId.get(l.target) })).filter((l) => l.s && l.t && !l.s.p && !l.t.p);
   const adj = new Map(nodes.map((n) => [n, new Set()]));
   for (const l of links) { adj.get(l.s).add(l.t); adj.get(l.t).add(l.s); }
-  for (const n of nodes) n.r = (RADIUS[n.type] || 5) + Math.min(6, Math.sqrt(adj.get(n).size) * 1.2);
+  for (const n of nodes) n.r = (RADIUS[n.type] || 5) + Math.min(8, Math.sqrt(n.weight ?? adj.get(n).size) * 1.5);
 
   // Ideia sem tema próprio: fica na ilha dos vizinhos se todos forem de um tema; senão, entre as ilhas.
   for (const n of nodes) {
@@ -112,6 +113,9 @@ export function createGraph(canvas, data, { onSelect = () => {} } = {}) {
   let alpha = 1;
   let selected = null; // nó selecionado (livro, nota, ideia…)
   let selGroup = null; // ilha selecionada
+  // modo foco: ponto central, passos (1 ou 2), caminho percorrido, pontos à mostra (com o nível) e sugestões
+  let focusN = null, depth = 1, trail = [], shown = null, sugg = [], home = null, dropTarget = null;
+  const inView = (n) => !shown || shown.has(n);
   let dirty = true;
   let colors = palette();
   const dpr = window.devicePixelRatio || 1;
@@ -231,7 +235,7 @@ export function createGraph(canvas, data, { onSelect = () => {} } = {}) {
       return n === h || near.has(n) || n.p === h;
     };
 
-    const isl = islands();
+    const isl = shown ? [] : islands();
     for (const I of isl) {
       const on = selGroup ? I.g === selGroup : !h || h.group === I.g.key || [...near].some((n) => n.group === I.g.key);
       ctx.globalAlpha = on ? 1 : 0.4;
@@ -247,10 +251,19 @@ export function createGraph(canvas, data, { onSelect = () => {} } = {}) {
 
     ctx.lineWidth = 1.2 / k;
     for (const { s, t } of links) {
+      if (!inView(s) || !inView(t)) continue;
       const on = h && (s === h || t === h);
-      ctx.globalAlpha = !h && !selGroup ? 0.55 : on ? 1 : 0.1;
+      ctx.globalAlpha = shown ? (on ? 1 : 0.45) : !h && !selGroup ? 0.55 : on ? 1 : 0.1;
       ctx.strokeStyle = on ? colors.accent : colors.line;
       ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(t.x, t.y); ctx.stroke();
+    }
+    // sugestões de ligação: tracejadas, a partir do ponto em foco
+    if (focusN && sugg.length) {
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = colors.accent;
+      ctx.setLineDash([5 / k, 5 / k]);
+      for (const t of sugg) { ctx.beginPath(); ctx.moveTo(focusN.x, focusN.y); ctx.lineTo(t.x, t.y); ctx.stroke(); }
+      ctx.setLineDash([]);
     }
     if (sats.length) {
       ctx.globalAlpha = 0.6;
@@ -260,11 +273,15 @@ export function createGraph(canvas, data, { onSelect = () => {} } = {}) {
       ctx.setLineDash([]);
     }
     for (const n of [...nodes, ...sats]) {
-      ctx.globalAlpha = lit(n) ? 1 : 0.18;
+      if (!inView(n)) continue;
+      ctx.globalAlpha = shown ? (shown.get(n) === 2 ? 0.7 : 1) : lit(n) ? 1 : 0.18;
       shape(ctx, n, n.x, n.y, n.r, nodeColor(n), colors.surface);
-      if (n === selected) {
-        ctx.beginPath(); ctx.arc(n.x, n.y, n.r + 3 / k, 0, Math.PI * 2);
-        ctx.lineWidth = 2.5 / k; ctx.strokeStyle = colors.accent; ctx.stroke();
+      if (n === selected || n === dropTarget) {
+        ctx.beginPath(); ctx.arc(n.x, n.y, n.r + (n === dropTarget ? 7 : 3) / k, 0, Math.PI * 2);
+        ctx.lineWidth = 2.5 / k; ctx.strokeStyle = colors.accent;
+        if (n === dropTarget) ctx.setLineDash([4 / k, 3 / k]);
+        ctx.stroke();
+        ctx.setLineDash([]);
       }
     }
 
@@ -309,9 +326,16 @@ export function createGraph(canvas, data, { onSelect = () => {} } = {}) {
       const spot = spots.find(free) || (force ? spots[0] : null);
       if (!spot) return;
       placed.push(spot);
-      write(text, spot, n.type === 'note' ? colors.muted : colors.text, lit(n) ? 1 : 0.35, f);
+      write(text, spot, n.type === 'note' ? colors.muted : colors.text, shown || lit(n) ? 1 : 0.35, f);
     };
     const done = new Set();
+    if (shown) {
+      // no foco, todos os nomes do primeiro anel aparecem; os do segundo, se couberem
+      for (const [n, l] of [...shown].sort((a, b) => a[1] - b[1])) tryLabel(n, l <= 1);
+      ctx.globalAlpha = 1;
+      dirty = false;
+      return;
+    }
     if (h) {
       for (const n of [selected, h, ...sats]) if (!done.has(n)) { done.add(n); tryLabel(n, n === selected || n === h); }
       for (const n of near) { done.add(n); tryLabel(n, false); }
@@ -331,10 +355,11 @@ export function createGraph(canvas, data, { onSelect = () => {} } = {}) {
   }
 
   const toWorld = (sx, sy) => ({ x: (sx - cssW / 2 - view.x) / view.k, y: (sy - cssH / 2 - view.y) / view.k });
-  function hitNode(sx, sy) {
+  function hitNode(sx, sy, skip = null) {
     const p = toWorld(sx, sy);
     let best = null, bestD = Infinity;
     for (const n of [...visibleSats(), ...nodes]) {
+      if (!inView(n) || n === skip) continue;
       const d = Math.hypot(n.x - p.x, n.y - p.y);
       if (d < n.r + 10 / view.k && d < bestD) { best = n; bestD = d; }
     }
@@ -400,12 +425,87 @@ export function createGraph(canvas, data, { onSelect = () => {} } = {}) {
     dirty = true;
   }
 
-  function focus(n) {
-    const c = n.p || n;
-    view.k = Math.max(view.k, 1.2);
-    view.x = -c.x * view.k;
-    view.y = -c.y * view.k;
-    select(n);
+  // ---- modo foco ----
+  function neighborhood(c, d) {
+    const lv = new Map([[c, 0]]);
+    let frontier = [c];
+    for (let l = 1; l <= d; l++) {
+      const next = [];
+      for (const n of frontier) for (const m of adj.get(n)) if (!lv.has(m)) { lv.set(m, l); next.push(m); }
+      frontier = next;
+    }
+    return lv;
+  }
+  // anima os pontos até as posições dadas
+  let moveAnim = 0;
+  function moveTo(to) {
+    const from = new Map([...to.keys()].map((n) => [n, [n.x, n.y]]));
+    const t0 = performance.now(), id = ++moveAnim;
+    const step = (now) => {
+      if (id !== moveAnim) return;
+      const t = Math.min(1, (now - t0) / 320), e = 1 - (1 - t) ** 3;
+      for (const [n, [x, y]] of to) { const [fx, fy] = from.get(n); n.x = fx + (x - fx) * e; n.y = fy + (y - fy) * e; }
+      dirty = true;
+      if (t < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+  const ORDER = { book: 0, subtheme: 1, concept: 2, tag: 3 };
+  // o ponto no centro, os vizinhos num anel e os do segundo passo num anel de fora, perto de quem os liga
+  function layoutFocus(moveView = true) {
+    const lv = neighborhood(focusN, depth);
+    for (const t of sugg) if (!lv.has(t)) lv.set(t, 1);
+    shown = lv;
+    const ring1 = [...lv].filter(([, l]) => l === 1).map(([n]) => n)
+      .sort((a, b) => sugg.includes(a) - sugg.includes(b) || (ORDER[a.type] ?? 9) - (ORDER[b.type] ?? 9) || a.label.localeCompare(b.label));
+    const R1 = Math.max(120, ring1.length * 24);
+    const to = new Map([[focusN, [0, 0]]]);
+    const ang = new Map();
+    ring1.forEach((n, i) => {
+      const a = -Math.PI / 2 + (i / ring1.length) * Math.PI * 2;
+      ang.set(n, a);
+      to.set(n, [Math.cos(a) * R1, Math.sin(a) * R1]);
+    });
+    const kids = new Map();
+    for (const [n, l] of lv) {
+      if (l !== 2) continue;
+      const p = [...adj.get(n)].find((m) => lv.get(m) === 1) || ring1[0];
+      if (!kids.has(p)) kids.set(p, []);
+      kids.get(p).push(n);
+    }
+    const slice = (Math.PI * 2) / Math.max(1, ring1.length);
+    for (const [p, list] of kids) {
+      const R2 = R1 + 110 + Math.min(90, list.length * 8);
+      list.forEach((n, i) => {
+        const a = ang.get(p) + (list.length === 1 ? 0 : (i / (list.length - 1) - 0.5) * slice * 0.9);
+        to.set(n, [Math.cos(a) * R2, Math.sin(a) * R2]);
+      });
+    }
+    moveTo(to);
+    if (moveView) {
+      const ext = Math.max(60, ...[...to.values()].map(([x, y]) => Math.hypot(x, y))) + 70;
+      animateTo(0, 0, Math.min(1.6, Math.min(cssW, cssH) / (ext * 2)));
+    }
+  }
+  const focusState = () => (focusN ? { id: focusN.id, depth, trail: trail.map((t) => ({ id: t.id, label: t.label, type: t.type })) } : null);
+  function focusOn(n, { trailIds = null } = {}) {
+    if (!focusN) home = new Map(nodes.map((m) => [m, [m.x, m.y]]));
+    focusN = n; selected = n; selGroup = null; alpha = 0; sugg = [];
+    if (trailIds) trail = trailIds.map((id) => byId.get(id)).filter(Boolean);
+    else { const i = trail.indexOf(n); trail = i >= 0 ? trail.slice(0, i + 1) : [...trail, n].slice(-5); }
+    if (trail.at(-1) !== n) trail.push(n);
+    layoutFocus();
+    onSelect(n, [...adj.get(n)]);
+    onFocus(focusState());
+  }
+  function exitFocus() {
+    if (!focusN) return;
+    focusN = null; shown = null; sugg = []; trail = []; selected = null;
+    if (home) moveTo(home);
+    home = null;
+    setTimeout(fit, 340);
+    onSelect(null, []);
+    onFocus(null);
   }
 
   // ---- interação (mouse e toque) ----
@@ -448,7 +548,8 @@ export function createGraph(canvas, data, { onSelect = () => {} } = {}) {
     if (drag.node && drag.moved) {
       const w = toWorld(p.x, p.y);
       drag.node.x = w.x; drag.node.y = w.y;
-      alpha = Math.max(alpha, 0.3);
+      dropTarget = hitNode(p.x, p.y, drag.node); // soltar em cima de outro ponto liga os dois
+      if (!focusN) alpha = Math.max(alpha, 0.3);
     } else if (!drag.node) {
       view.x += p.x - drag.last.x;
       view.y += p.y - drag.last.y;
@@ -462,9 +563,16 @@ export function createGraph(canvas, data, { onSelect = () => {} } = {}) {
     if (pointers.size < 2) pinch = null;
     if (!drag) return;
     if (drag.node) drag.node.fixed = false;
+    if (drag.node && drag.moved) {
+      const target = dropTarget;
+      dropTarget = null;
+      if (target) onConnect(drag.node, target);
+      if (focusN) layoutFocus(false); // volta para o lugar no anel
+      dirty = true;
+    }
     if (!drag.moved) {
-      if (drag.hit) select(drag.hit === selected ? null : drag.hit);
-      else {
+      if (drag.hit) { if (drag.hit !== focusN) focusOn(drag.hit); }
+      else if (!focusN) {
         const g = hitIsland(drag.start.x, drag.start.y);
         if (g && g !== selGroup) selectGroup(g);
         else select(null);
@@ -483,7 +591,7 @@ export function createGraph(canvas, data, { onSelect = () => {} } = {}) {
 
   // enquadra de novo ao mudar de tamanho só enquanto a pessoa não mexeu no mapa
   let touched = false;
-  const ro = new ResizeObserver(() => { resize(); if (!touched) fit(); });
+  const ro = new ResizeObserver(() => { resize(); if (!touched && !focusN) fit(); });
   ro.observe(canvas);
   const mq = matchMedia('(prefers-color-scheme: dark)');
   const recolor = () => { colors = palette(); dirty = true; };
@@ -588,9 +696,15 @@ export function createGraph(canvas, data, { onSelect = () => {} } = {}) {
     groups: () => groups.filter((g) => count.get(g.key)).map((g) => ({ key: g.key, label: g.label, color: groupColor(g.i, colors.dark) })),
     stats: () => ({ nodes: nodes.length, links: links.length, books: nodes.filter((n) => n.type === 'book').length, themes: groups.length }),
     zoom: (f) => zoomAt(cssW / 2, cssH / 2, f),
+    focusOn(id, opts) { const n = byId.get(id); if (n) focusOn(n, opts); return !!n; },
+    exitFocus,
+    setDepth(d) { depth = d; if (focusN) { layoutFocus(); onFocus(focusState()); } },
+    // sugestões de ligação (ids de pontos do mapa), em tracejado a partir do ponto em foco
+    setSuggestions(ids) { if (!focusN) return; sugg = ids.map((id) => byId.get(id)).filter((n) => n && n !== focusN && !adj.get(focusN).has(n)); layoutFocus(false); },
+    has: (id) => byId.has(id),
     selectById(id) {
       const n = byId.get(id);
-      if (n) { focus(n); return; }
+      if (n) { focusOn(n); return; }
       const g = gByKey.get(id.replace(/^[cg]:/, ''));
       if (g) selectGroup(g);
     },
@@ -598,7 +712,7 @@ export function createGraph(canvas, data, { onSelect = () => {} } = {}) {
       const k = q.trim().toLowerCase();
       if (!k) return false;
       const n = findable().find((x) => x.label.toLowerCase().includes(k));
-      if (n) { focus(n); return true; }
+      if (n) { focusOn(n); return true; }
       const g = groups.find((x) => x.label.toLowerCase().includes(k));
       if (g) { selectGroup(g); return true; }
       return false;

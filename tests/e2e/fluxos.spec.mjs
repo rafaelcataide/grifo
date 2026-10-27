@@ -376,3 +376,63 @@ test('nota: mudar a página não fecha a janela (Enter vai para o próximo campo
   await page.getByRole('button', { name: 'Salvar' }).click();
   await expect.poll(async () => (await lerBanco(page, 'notes'))[0].page).toBe(34);
 });
+
+// mapa com dois temas: ideias citadas nas notas dos dois livros
+const mapaSemente = () => ({
+  books: [livro('b1'), livro('b2', { title: 'Hábitos Atômicos', author: 'James Clear', genre: 'Produtividade', subtheme: 'Rotina' })],
+  notes: [
+    nota('n1', 'b1', 'O [[Sistema 1]] decide rápido e confia na intuição automática do cérebro.'),
+    nota('n2', 'b2', 'Hábitos são [[Automatismo]]: o cérebro decide rápido sem pensar, pela intuição automática.'),
+    nota('n3', 'b1', 'Uma reflexão sem ligação nenhuma ainda.'),
+  ],
+});
+
+test('mapa: tocar num ponto abre o modo foco, com caminho, passos e notas no painel', async ({ page }) => {
+  await semear(page, mapaSemente());
+  await page.goto('/#/mapa');
+  await page.locator('#graph-search').fill('Sistema 1');
+  await page.locator('#graph-search').press('Enter');
+  const trilha = page.locator('#map-trail');
+  await expect(trilha).toBeVisible();
+  await expect(trilha).toContainText('Mapa geral');
+  await expect(trilha.locator('b')).toHaveText('Sistema 1');
+  await expect(page.locator('#graph-panel .map-note')).toHaveCount(1);
+  await expect(page.locator('#graph-panel')).toContainText('Rápido e Devagar');
+  // vai para o vizinho pelo painel: o caminho cresce
+  await page.locator('#graph-panel [data-focus="b:b1"]').click();
+  await expect(trilha).toContainText('Sistema 1');
+  await expect(trilha.locator('b')).toHaveText('Rápido e Devagar');
+  await page.getByRole('button', { name: '2 passos' }).click();
+  await expect(page.getByRole('button', { name: '2 passos' })).toHaveClass(/active/);
+  await page.getByRole('button', { name: /Mapa geral/ }).click();
+  await expect(trilha).toBeHidden();
+});
+
+test('mapa: sugestão por palavras em comum e "Ligar com…" cria a nota com o porquê', async ({ page }) => {
+  await semear(page, mapaSemente());
+  await page.goto('/#/mapa');
+  await page.locator('#graph-search').fill('Sistema 1');
+  await page.locator('#graph-search').press('Enter');
+  await expect(page.locator('#map-sugg')).toContainText('Automatismo');
+  await page.locator('#map-sugg [data-sugg-link]').first().click();
+  await expect(page.locator('#connect-form [name=to]')).toHaveValue('Automatismo');
+  await page.locator('#connect-form [name=why]').fill('os dois são decisões sem esforço');
+  await page.locator('#connect-form').getByRole('button', { name: 'Ligar', exact: true }).click();
+  await expect.poll(async () => (await lerBanco(page, 'notes')).find((n) => n.source === 'map')?.text).toBe('[[Sistema 1]] ↔ [[Automatismo]] — os dois são decisões sem esforço');
+  // o mapa volta no mesmo foco, agora com a ligação
+  await expect(page.locator('#map-trail b')).toHaveText('Sistema 1');
+  await expect(page.locator('#graph-panel [data-focus="c:automatismo"]')).toBeVisible();
+});
+
+test('mapa: nota sem ligação aparece na caixa e pode ser ligada a uma ideia', async ({ page }) => {
+  await semear(page, mapaSemente());
+  await page.goto('/#/mapa');
+  const caixa = page.locator('details.orphans');
+  await caixa.locator('summary').click();
+  await expect(caixa).toContainText('Uma reflexão sem ligação');
+  await caixa.getByRole('button', { name: 'Ligar' }).click();
+  await page.locator('#connect-form [name=to]').fill('Sistema 1');
+  await page.locator('#connect-form').getByRole('button', { name: 'Ligar', exact: true }).click();
+  await expect.poll(async () => (await lerBanco(page, 'notes')).find((n) => n.id === 'n3').text).toContain('→ [[Sistema 1]]');
+  await expect(page.locator('details.orphans')).toHaveCount(0);
+});

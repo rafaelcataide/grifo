@@ -802,3 +802,27 @@ EN_PATTERNS.unshift(
 );
 EN_PATTERNS.unshift([/^Não foi possível salvar esta revisão: (.+)$/, "Couldn't save this review: $1"]);
 Object.assign(EN, { 'Sair sem salvar o que você mudou?': 'Leave without saving your changes?' });
+// mapa: modo foco, ligar, sugestões e notas sem ligação
+Object.assign(EN, {
+  'Ideia ou tag': 'Idea or tag', 'Tamanho = nº de notas': 'Size = number of notes', '← Mapa geral': '← Full map', 'Mapa geral': 'Full map',
+  'Toque num ponto para focar nele: ficam só ele e as ligações. No computador, arraste um ponto até outro para ligar os dois.': 'Tap a point to focus on it: only it and its links stay. On a computer, drag one point onto another to link them.',
+  '🔗 Ligar com…': '🔗 Link with…', 'Ligar com…': 'Link with…', '✨ Sugerir com IA': '✨ Suggest with AI', 'Ligado a': 'Linked to', 'Notas': 'Notes', 'Nota solta': 'Loose note',
+  'Talvez se ligue a': 'May connect to', '(tracejado no mapa)': '(dashed on the map)', '✨ Sugestões da IA': '✨ AI suggestions', 'ideia nova': 'new idea', 'Ligar': 'Link',
+  '🔗 Ligar': '🔗 Link', 'Com': 'With', 'Por que se ligam?': 'Why are they linked?', 'Livro, ideia, #tag ou um conceito novo': 'Book, idea, #tag or a new concept',
+  'ex: os dois falam de decisões rápidas que parecem certas': 'e.g. both are about quick decisions that feel right',
+  'Escrever o porquê é o que fixa a ligação na memória. Vira uma nota com as duas ideias.': 'Writing the why is what makes the link stick. It becomes a note with both ideas.',
+  'ligue cada uma a uma ideia ou livro': 'link each one to an idea or book', 'Nenhuma ligação nova encontrada.': 'No new links found.', 'Caminho no mapa': 'Map path', 'Quantos passos mostrar': 'How many steps to show',
+});
+EN_PATTERNS.unshift(
+  [/^(\d+) (passo|passos)$/, (m) => `${m[1]} step${m[1] === '1' ? '' : 's'}`],
+  [/^(\d+) (ligação|ligações)$/, (m) => `${m[1]} link${m[1] === '1' ? '' : 's'}`],
+  [/^(\d+) na ilha · toque para focar$/, '$1 on the island · tap to focus'],
+  [/^🧩 Notas sem ligação \((\d+)\)$/, '🧩 Unlinked notes ($1)'],
+  [/^(\d+) palavras em comum nas notas$/, '$1 words in common in the notes'],
+  [/^Ver todas as (\d+) notas$/, 'See all $1 notes'],
+  [/^\+ (\d+) outras em$/, '+ $1 more in'],
+  [/^🔗 Ligar “(.+)”$/, '🔗 Link “$1”'],
+  [/^🔗 Nota ligada a (.+)$/, '🔗 Note linked to $1'],
+  [/^🔗 (.+) ↔ (.+) · ver nota$/, '🔗 $1 ↔ $2 · see note'],
+  [/^Ignorar (.+)$/, 'Ignore $1'],
+);

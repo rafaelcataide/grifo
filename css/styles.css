@@ -719,3 +719,21 @@ body.gated { padding-bottom: 24px; }
 .search-row { margin-bottom: 10px; }
 .search-row .search { margin-bottom: 0; }
 a.nudge { display: block; text-decoration: none; }
+/* mapa: caminho do modo foco, notas no painel e notas sem ligação */
+.map-trail { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 8px; font-size: .85rem; }
+.map-trail .trail { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
+.link-btn { background: none; border: 0; padding: 2px 0; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; }
+.seg-mini { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+.seg-mini button { background: none; border: 0; padding: 4px 12px; font: inherit; font-size: .8rem; color: var(--muted); cursor: pointer; }
+.seg-mini button.active { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.map-notes { display: grid; gap: 6px; }
+.map-note { display: grid; gap: 2px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; color: inherit; text-decoration: none; font-size: .88rem; line-height: 1.45; }
+.map-note:hover { border-color: var(--accent); }
+.map-sugg .li { padding: 6px 0; border-bottom: 1px dashed var(--border); }
+.orphans summary { cursor: pointer; list-style: none; display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.orphans[open] summary { margin-bottom: 8px; }
+.orphan-row { padding: 8px 0; border-top: 1px solid var(--border); }
+.chips .chip-btn[data-focus] { border-style: solid; color: var(--text); font-size: .78rem; }
+/* 4 abas no celular: nome numa linha só; em telas bem estreitas o ícone sai */
+.seg a { white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 440px) { .seg a { padding: 7px 4px; font-size: .82rem; } .seg a .ic { display: none; } }
