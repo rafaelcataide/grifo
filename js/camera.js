@@ -57,15 +57,17 @@ export async function capturePage({ texts = {} } = {}) {
   const s = track.getSettings?.() || {};
   ui.querySelector('.cam-res').textContent = s.width ? `${s.width}×${s.height}` : '';
 
-  // foto na resolução máxima: ImageCapture (Android) ou o quadro do vídeo
+  // foto na resolução máxima: ImageCapture (Android) ou o quadro do vídeo.
+  // Algumas câmeras demoram ou travam no takePhoto: depois de 5 s, vale o quadro do vídeo.
+  const limit = (p, ms) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error('demorou')), ms))]);
   async function take() {
     try {
       if ('ImageCapture' in window) {
         const ic = new window.ImageCapture(track);
-        const pc = await ic.getPhotoCapabilities().catch(() => null);
+        const pc = await limit(ic.getPhotoCapabilities(), 2000).catch(() => null);
         const opts = pc?.imageWidth?.max ? { imageWidth: pc.imageWidth.max, imageHeight: pc.imageHeight?.max } : {};
         if (torchOn) opts.fillLightMode = 'flash';
-        return await ic.takePhoto(opts).catch(() => ic.takePhoto());
+        return await limit(ic.takePhoto(opts).catch(() => ic.takePhoto()), 5000);
       }
     } catch { /* cai no quadro do vídeo */ }
     const c = document.createElement('canvas');
@@ -122,5 +124,6 @@ export async function capturePage({ texts = {} } = {}) {
     };
     // voltar do Android / Esc fecha a câmera
     ui.addEventListener('cancel', (e) => { e.preventDefault(); finish(false); });
+    ui.dataset.ready = '1'; // botões prontos (os testes esperam por isto)
   });
 }
