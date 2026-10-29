@@ -1,8 +1,9 @@
 // Service worker: app funciona offline depois da primeira visita.
-const CACHE = 'grifo-v50';
+const SHARE_CACHE = 'grifo-compartilhado';
+const CACHE = 'grifo-v51';
 const SHELL = [
   './', 'index.html', 'css/styles.css', 'manifest.webmanifest',
-  'js/app.js', 'js/util.js', 'js/i18n.js', 'js/i18n-en.js', 'js/icons.js', 'js/landing.js', 'js/export.js', 'js/pdf.js', 'js/dict.js', 'icons/ui.svg', 'js/db.js', 'js/game.js', 'js/ocr.js', 'js/charts.js', 'js/graph.js', 'js/srs.js', 'js/share.js', 'js/scanner.js', 'js/importers.js', 'js/cloud.js', 'js/ai.js', 'config.js', 'supabase/functions/_shared/ai-tasks.js',
+  'js/app.js', 'js/camera.js', 'js/util.js', 'js/i18n.js', 'js/i18n-en.js', 'js/icons.js', 'js/landing.js', 'js/export.js', 'js/pdf.js', 'js/dict.js', 'icons/ui.svg', 'js/db.js', 'js/game.js', 'js/ocr.js', 'js/charts.js', 'js/graph.js', 'js/srs.js', 'js/share.js', 'js/scanner.js', 'js/importers.js', 'js/cloud.js', 'js/ai.js', 'config.js', 'supabase/functions/_shared/ai-tasks.js',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/og.png',
 ];
 
@@ -14,15 +15,37 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k !== SHARE_CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('fetch', (e) => {
   const req = e.request;
-  if (req.method !== 'GET') return;
   const url = new URL(req.url);
+  // "Compartilhar → Grifo" (manifest share_target): o link vira ?url=… (como antes) e o PDF fica
+  // guardado num cache até o app abrir e importá-lo
+  if (req.method === 'POST' && url.origin === location.origin && url.pathname.endsWith('/compartilhar')) {
+    e.respondWith((async () => {
+      const scope = self.registration.scope;
+      try {
+        const form = await req.formData();
+        const file = form.get('pdf');
+        if (file && file.size) {
+          const c = await caches.open(SHARE_CACHE);
+          await c.put('pdf', new Response(file, { headers: { 'content-type': 'application/pdf', 'x-name': encodeURIComponent(file.name || 'documento.pdf') } }));
+          return Response.redirect(`${scope}#/artigos?acao=pdf`, 303);
+        }
+        const q = new URLSearchParams();
+        for (const k of ['url', 'text', 'title']) if (form.get(k)) q.set(k, form.get(k));
+        return Response.redirect(`${scope}?${q}#/artigos`, 303);
+      } catch {
+        return Response.redirect(scope, 303);
+      }
+    })());
+    return;
+  }
+  if (req.method !== 'GET') return;
 
   // Arquivos do app: rede primeiro (pega atualizações), cache como reserva.
   // "no-cache" revalida com o servidor: o GitHub Pages manda o navegador guardar arquivos por 10 min.

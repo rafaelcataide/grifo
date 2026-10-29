@@ -847,3 +847,4 @@ Object.assign(EN, {
   'Texto da nota': 'Note text', 'Mais opções…': 'More options…', 'A nota precisa de algum texto.': 'The note needs some text.', '✔ Nota salva': '✔ Note saved',
 });
 EN_PATTERNS.unshift([/^(.*) A foto chegou pequena \((\d+)×(\d+)\): para ler melhor, tire a foto com o app da câmera do celular e escolha em 🖼️ Galeria\.$/, (m, tr) => `${tr(m[1], true)} The photo came in small (${m[2]}×${m[3]}): for a better read, take it with your phone's camera app and pick it in 🖼️ Gallery.`]);
+Object.assign(EN, { 'Enquadre a página e segure firme': 'Frame the page and hold steady', 'Segure firme…': 'Hold steady…', 'Foto automática': 'Auto photo', 'Lanterna': 'Flashlight', 'Tirar foto': 'Take photo', 'Fechar': 'Close' });

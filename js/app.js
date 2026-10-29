@@ -1834,38 +1834,17 @@ const pdfActions = {
   addPdf({ id } = {}) {
     const input = $('#pdf-file') || Object.assign(document.createElement('input'), { type: 'file', accept: 'application/pdf,.pdf' });
     input.value = '';
-    input.onchange = async () => {
-      const f = input.files[0];
-      if (!f) return;
-      if (f.size > 50 * 1024 * 1024) { toast('PDF grande demais (máximo 50 MB).', 'err'); return; }
-      toast('📄 Abrindo o PDF…');
-      try {
-        const P = await import('./pdf.js');
-        const doc = await P.openPdf(f);
-        const meta = await P.info(doc, f.name);
-        const old = id && state.articles.find((x) => x.id === id);
-        const rec = old ? { ...old, pages: meta.pages } : {
-          id: uid(), createdAt: Date.now(), kind: 'pdf', status: 'reading', startDate: G.ymd(), purpose: 'hobby', genre: '', subtheme: '', pages: meta.pages, currentPage: 0, rating: 0, isbn: '',
-          title: meta.title || 'PDF sem título', author: meta.author, fileName: f.name, size: f.size,
-        };
-        await db.setFile(rec.id, f);
-        if (canSyncPdf()) {
-          // sem esperar mais que 30 s: a conexão lenta não pode impedir de abrir o PDF
-          const slow = new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado')), 30_000));
-          try { await Promise.race([Cloud.uploadPdf(rec.id, f), slow]); rec.synced = true; } catch { toast('O PDF ficou só neste aparelho (não foi possível enviar para a conta agora).', 'err'); }
-        }
-        await commit(() => persist('books', rec));
-        Cloud.track('pdf_add');
-        location.hash = `#/pdf/${rec.id}`;
-        if (!old) toast(`📄 “${esc(rec.title)}” adicionado · <u>mudar o nome</u>`, '', () => actions.classifyArticle({ id: rec.id }));
-        if (old) render();
-      } catch (e) {
-        console.error(e);
-        const why = e?.name === 'PasswordException' ? 'o arquivo tem senha' : e?.name === 'InvalidPDFException' ? 'o arquivo não é um PDF válido' : e?.message || String(e);
-        toast(`Não consegui abrir esse PDF: ${esc(why)}`, 'err');
-      }
-    };
+    input.onchange = () => { if (input.files[0]) importPdfFile(input.files[0], id); };
     input.click();
+  },
+  // PDF recebido pelo "Compartilhar" do celular: o service worker guardou num cache até o app abrir
+  async sharedPdf() {
+    let c, res;
+    try { c = await caches.open(SHARE_CACHE); res = await c.match('pdf'); } catch { /* sem cache */ }
+    if (!res) return;
+    await c.delete('pdf');
+    const name = decodeURIComponent(res.headers.get('x-name') || 'documento.pdf');
+    importPdfFile(new File([await res.blob()], name, { type: 'application/pdf' }));
   },
   async pdfImport({ id }) {
     const a = state.articles.find((x) => x.id === id);
@@ -1875,6 +1854,39 @@ const pdfActions = {
     importPdfHighlights(a, await P.openPdf(blob), P, false);
   },
 };
+
+// Abre um PDF escolhido (ou recebido pelo "Compartilhar") e guarda no aparelho (e na conta, no Plus).
+// id: trocar o arquivo de um PDF já salvo
+const SHARE_CACHE = 'grifo-compartilhado';
+async function importPdfFile(f, id) {
+  if (f.size > 50 * 1024 * 1024) { toast('PDF grande demais (máximo 50 MB).', 'err'); return; }
+  toast('📄 Abrindo o PDF…');
+  try {
+    const P = await import('./pdf.js');
+    const doc = await P.openPdf(f);
+    const meta = await P.info(doc, f.name);
+    const old = id && state.articles.find((x) => x.id === id);
+    const rec = old ? { ...old, pages: meta.pages } : {
+      id: uid(), createdAt: Date.now(), kind: 'pdf', status: 'reading', startDate: G.ymd(), purpose: 'hobby', genre: '', subtheme: '', pages: meta.pages, currentPage: 0, rating: 0, isbn: '',
+      title: meta.title || 'PDF sem título', author: meta.author, fileName: f.name, size: f.size,
+    };
+    await db.setFile(rec.id, f);
+    if (canSyncPdf()) {
+      // sem esperar mais que 30 s: a conexão lenta não pode impedir de abrir o PDF
+      const slow = new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado')), 30_000));
+      try { await Promise.race([Cloud.uploadPdf(rec.id, f), slow]); rec.synced = true; } catch { toast('O PDF ficou só neste aparelho (não foi possível enviar para a conta agora).', 'err'); }
+    }
+    await commit(() => persist('books', rec));
+    Cloud.track('pdf_add');
+    location.hash = `#/pdf/${rec.id}`;
+    if (!old) toast(`📄 “${esc(rec.title)}” adicionado · <u>mudar o nome</u>`, '', () => actions.classifyArticle({ id: rec.id }));
+    if (old) render();
+  } catch (e) {
+    console.error(e);
+    const why = e?.name === 'PasswordException' ? 'o arquivo tem senha' : e?.name === 'InvalidPDFException' ? 'o arquivo não é um PDF válido' : e?.message || String(e);
+    toast(`Não consegui abrir esse PDF: ${esc(why)}`, 'err');
+  }
+}
 
 // Sugestão de finalidade, tema e subtema pela IA (Plus), usando os temas que a pessoa já tem
 async function suggestCategory(a) {
@@ -3616,8 +3628,22 @@ function noteForm(existing, { bookId, autoOCR, link } = {}) {
     let mode = 'highlight';
     const cam = $('#ocr-cam', root);
     btns.forEach((btn) => {
-      btn.onclick = () => {
+      btn.onclick = async () => {
         mode = root.querySelector('[name="ocr-mode"]:checked')?.value || 'highlight';
+        // Câmera: a do próprio Grifo (resolução máxima, moldura, foto quando firme); sem permissão
+        // ou sem câmera, a do sistema
+        if (btn.dataset.ocr === 'cam') {
+          const Cam = await import('./camera.js');
+          if (Cam.cameraAvailable()) {
+            try {
+              const blob = await Cam.capturePage({ texts: { hint: tr('Enquadre a página e segure firme'), steady: tr('Segure firme…'), auto: tr('Foto automática'), close: tr('Fechar'), torch: tr('Lanterna'), shot: tr('Tirar foto') } });
+              if (blob) handlePhoto(blob);
+              return;
+            } catch (err) {
+              console.warn('câmera do Grifo indisponível, usando a do sistema', err);
+            }
+          }
+        }
         const input = btn.dataset.ocr === 'cam' ? cam : file;
         input.value = '';
         input.click();
@@ -3643,9 +3669,8 @@ function noteForm(existing, { bookId, autoOCR, link } = {}) {
       fixBtn.textContent = '✨ Corrigir com IA';
     };
     const chooseArea = attachCropper(root);
-    const onPhoto = async (e) => {
-      const f = e.target.files[0];
-      if (!f) return;
+    const onPhoto = (e) => { if (e.target.files[0]) handlePhoto(e.target.files[0]); };
+    const handlePhoto = async (f) => {
       btns.forEach((x) => { x.disabled = true; });
       try {
         const area = await chooseArea(f);
@@ -4463,6 +4488,7 @@ const OPEN_ROUTES = ['u', 'privacidade', 'termos'];
 const TAB_OF = { vocabulario: 'notas', tags: 'notas', pdf: 'livros', busca: 'nenhuma', artigos: 'livros', artigo: 'livros', livro: 'livros', nota: 'notas', conceito: 'notas', mapa: 'notas', perguntar: 'notas', stats: 'progresso', conquistas: 'progresso', clubes: 'progresso' };
 
 function render() {
+  if (!state.stats) return; // ainda carregando (ex.: o endereço mudou durante a abertura): o início desenha depois
   const [hashPath, query = ''] = location.hash.slice(1).split('?');
   const [, name = '', arg] = hashPath.split('/');
   const gated = Cloud.enabled() && !Cloud.user() && !OPEN_ROUTES.includes(name);
@@ -4470,7 +4496,7 @@ function render() {
   const acao = new URLSearchParams(query).get('acao');
   if (acao && !gated) {
     history.replaceState(null, '', `${location.pathname}${location.search}#${hashPath}`);
-    setTimeout(() => (acao === 'escanear' ? actions.scanBook() : acao === 'grifo' ? actions.scan({}) : null), 0);
+    setTimeout(() => (acao === 'escanear' ? actions.scanBook() : acao === 'grifo' ? actions.scan({}) : acao === 'pdf' ? actions.sharedPdf() : null), 0);
   }
   document.body.classList.toggle('gated', gated);
   let fn = gated ? (name === 'conta' ? accountView : landing) : routes[name] || home;

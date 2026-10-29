@@ -1,8 +1,9 @@
 // Ajudantes dos testes de tela: modo pessoal (sem servidor), dados de exemplo e um PDF de teste.
 
 // Modo pessoal: o app funciona só no aparelho (sem login), como no uso sem conta
-export async function modoPessoal(page) {
-  await page.route('**/config.js', async (route) => {
+// alvo: a página, ou o contexto inteiro (precisa quando o service worker está ligado, porque é ele que busca os arquivos)
+export async function modoPessoal(page, alvo = page) {
+  await alvo.route('**/config.js', async (route) => {
     const res = await route.fetch();
     const body = (await res.text()).replace(/supabaseUrl: '[^']*'/, "supabaseUrl: ''");
     await route.fulfill({ response: res, body, headers: { ...res.headers(), 'content-type': 'text/javascript' } });

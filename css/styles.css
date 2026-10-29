@@ -741,3 +741,27 @@ a.nudge { display: block; text-decoration: none; }
 .inline-edit { width: 100%; min-height: 120px; resize: vertical; font: inherit; line-height: 1.55; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--accent); background: var(--surface); color: var(--text); }
 /* "📷 Grifo": a escolha entre Câmera e Galeria fica em destaque */
 .ocr-box.pick { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
+/* câmera do Grifo (grifos): tela cheia, moldura da página, disparo manual ou automático */
+dialog.cam { position: fixed; inset: 0; width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: #000; color: #fff; overflow: hidden; }
+dialog.cam::backdrop { background: #000; }
+.cam video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cam-frame { position: absolute; inset: 12% 7% 18%; border-radius: 14px; box-shadow: 0 0 0 9999px rgb(0 0 0 / .35); transition: box-shadow .2s; }
+.cam-frame i { position: absolute; width: 34px; height: 34px; border: 4px solid #fff; }
+.cam-frame i:nth-child(1) { top: -2px; left: -2px; border-right: 0; border-bottom: 0; border-radius: 14px 0 0 0; }
+.cam-frame i:nth-child(2) { top: -2px; right: -2px; border-left: 0; border-bottom: 0; border-radius: 0 14px 0 0; }
+.cam-frame i:nth-child(3) { bottom: -2px; left: -2px; border-right: 0; border-top: 0; border-radius: 0 0 0 14px; }
+.cam-frame i:nth-child(4) { bottom: -2px; right: -2px; border-left: 0; border-top: 0; border-radius: 0 0 14px 0; }
+.cam.steady .cam-frame i { border-color: #6ee7a8; }
+.cam-top, .cam-bottom { position: absolute; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px; }
+.cam-top { top: env(safe-area-inset-top); }
+.cam-bottom { bottom: calc(10px + env(safe-area-inset-bottom)); }
+.cam-hint { flex: 1; text-align: center; font-weight: 600; text-shadow: 0 1px 4px #000; }
+.cam-btn { width: 44px; height: 44px; border-radius: 50%; border: 0; background: rgb(0 0 0 / .45); color: #fff; font-size: 1.2rem; cursor: pointer; }
+.cam-btn.on { background: #ffd66b; color: #3a2a10; }
+.cam-shutter { width: 76px; height: 76px; border-radius: 50%; border: 4px solid #fff; background: transparent; padding: 5px; cursor: pointer; }
+.cam-shutter span { display: block; width: 100%; height: 100%; border-radius: 50%; background: #fff; }
+.cam.steady .cam-shutter span { background: #6ee7a8; }
+.cam-auto, .cam-res { width: 130px; white-space: nowrap; font-size: .78rem; text-shadow: 0 1px 4px #000; }
+.cam-res { text-align: right; opacity: .75; }
+.cam.flash::after { content: ''; position: absolute; inset: 0; background: #fff; animation: camflash .25s ease-out forwards; }
+@keyframes camflash { to { opacity: 0; } }
