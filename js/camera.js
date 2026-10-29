@@ -50,6 +50,9 @@ export async function capturePage({ texts = {} } = {}) {
   await video.play().catch(() => {});
   const hint = ui.querySelector('.cam-hint');
   const auto = ui.querySelector('.cam-auto input');
+  // a escolha da foto automática fica guardada no aparelho
+  try { auto.checked = localStorage.getItem('grifo.camAuto') !== '0'; } catch { /* sem armazenamento */ }
+  auto.onchange = () => { try { localStorage.setItem('grifo.camAuto', auto.checked ? '1' : '0'); } catch { /* sem armazenamento */ } };
   const shutter = ui.querySelector('.cam-shutter');
   const caps = track.getCapabilities?.() || {};
   let torchOn = false;

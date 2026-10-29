@@ -13,17 +13,16 @@ test('câmera do Grifo: abre por cima da nota, tira a foto e segue para escolher
   await semear(page, { books: [livro('b1')] });
   await page.goto('/#/notas');
   await page.getByRole('button', { name: 'Grifo' }).first().click();
+  await page.evaluate(() => localStorage.setItem('grifo.camAuto', '0')); // foto só pelo botão: o teste não depende do vídeo parecer firme
   await page.getByRole('button', { name: 'Câmera' }).click();
   const cam = page.locator('dialog.cam');
   await expect(cam).toBeVisible();
   await expect(cam.locator('video')).toHaveJSProperty('paused', false);
   await expect(cam).toHaveAttribute('data-ready', '1');
-  // foto pelo botão (a automática depende de o vídeo de teste parecer firme; se ela já disparou, tudo bem)
-  await cam.locator('.cam-auto input').evaluate((e) => { e.checked = false; });
   const shutter = cam.locator('.cam-shutter');
   await shutter.dispatchEvent('click'); // clique direto: o vídeo ao vivo deixa a checagem de "parado" do Playwright instável
   await expect(cam).toHaveCount(0, { timeout: 20_000 });
-  await expect(page.locator('#ocr-crop')).toBeVisible(); // a foto chegou: agora escolhe a área
+  await expect(page.locator('#ocr-crop')).toBeVisible({ timeout: 20_000 }); // a foto chegou: agora escolhe a área
   await page.locator('#crop-cancel').click();
 });
 
@@ -31,10 +30,10 @@ test('câmera do Grifo: fechar não muda nada', async ({ page }) => {
   await semear(page, { books: [livro('b1')] });
   await page.goto('/#/notas');
   await page.getByRole('button', { name: 'Grifo' }).first().click();
+  await page.evaluate(() => localStorage.setItem('grifo.camAuto', '0')); // foto só pelo botão: o teste não depende do vídeo parecer firme
   await page.getByRole('button', { name: 'Câmera' }).click();
   const cam = page.locator('dialog.cam');
   await expect(cam).toHaveAttribute('data-ready', '1');
-  await cam.locator('.cam-auto input').evaluate((e) => { e.checked = false; }); // sem foto automática: só fechar
   await cam.getByRole('button', { name: 'Fechar' }).dispatchEvent('click');
   await expect(cam).toHaveCount(0, { timeout: 15_000 });
   await expect(page.locator('#ocr-crop')).toBeHidden();
