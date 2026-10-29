@@ -832,7 +832,7 @@ function noteDetail(id) {
   return `<a href="#/notas" class="back">← Notas</a>
   <section class="card note ${n.kind === 'quote' ? 'quote' : ''}">
     ${n.title ? `<h2 style="margin-top:0">${esc(noteTitle(n))}</h2>` : ''}
-    <div class="note-text">${renderText(n.text)}</div>
+    <div class="note-text" id="note-body">${renderText(n.text)}</div>
     <div class="small muted">${b ? `<a href="#/livro/${b.id}">${esc(b.title)}</a>` : ''}${n.page ? ` · pág. ${n.page}` : ''} · ${n.kind === 'quote' ? 'Citação' : 'Reflexão'}
       ${n.source === 'ocr' ? '<span class="chip">📷 OCR</span>' : ''}
       ${(n.tags || []).map((t) => `<a class="chip tag" href="${conceptHref(t)}">#${esc(t)}</a>`).join('')}</div>
@@ -846,7 +846,7 @@ function noteDetail(id) {
     <a class="btn" href="#/mapa/${encodeURIComponent(`n:${n.id}`)}">🕸️ No mapa</a>
     <button class="btn" data-action="shareNote" data-id="${n.id}">↗ Compartilhar</button>
     ${Cloud.user() ? `<button class="btn" data-action="noteToClub" data-id="${n.id}">👥 No clube</button>` : ''}
-    <button class="btn ghost" data-action="editNote" data-id="${n.id}">✏️ Editar</button>
+    <button class="btn ghost" data-action="editNoteInline" data-id="${n.id}">✏️ Editar</button>
   </div>
   ${out.length ? `<h3>Liga-se a</h3><div class="chips">${out.map((l) => { const r = resolveLink(l); return `<a class="wl ${r.type}" href="${r.href}">${esc(l)}</a>`; }).join(' ')}</div>` : ''}
   ${backlinks.length ? `<h3>Notas que citam esta</h3><section class="card backlinks">${backlinks.map((x) => `<a href="#/nota/${x.id}">${esc(noteLabel(x))}<br><small>${esc(bookById(x.bookId)?.title || '')}</small></a>`).join('')}</section>` : ''}
@@ -3333,7 +3333,7 @@ function bookForm(existing, opts = {}) {
 
 // Foto da capa → JPEG pequeno (até 320×480) guardado no próprio livro, para caber na sincronização
 async function coverFromFile(file) {
-  const bmp = await createImageBitmap(file);
+  const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }); // respeita a rotação da foto da câmera
   const scale = Math.min(1, 320 / bmp.width, 480 / bmp.height);
   const c = document.createElement('canvas');
   c.width = Math.round(bmp.width * scale);
@@ -3572,7 +3572,7 @@ function noteForm(existing, { bookId, autoOCR, link } = {}) {
       </div>
       <input type="file" accept="image/*" hidden id="ocr-file">
       <input type="file" accept="image/*" capture="environment" hidden id="ocr-cam">
-      <div id="ocr-status" class="small muted">Fotografe a página: o texto grifado vira nota. Funciona com marca-texto colorido e com o grifo cinza do Kindle.</div>
+      <div id="ocr-status" class="small muted">Fotografe a página ou escolha uma foto: o texto grifado vira nota. Funciona com marca-texto colorido e com o grifo cinza do Kindle. Dica: fotos tiradas pelo app da câmera (e escolhidas na Galeria) costumam ler melhor.</div>
       <div id="ocr-crop" class="ocr-crop" hidden>
         <div class="crop-stage" id="crop-stage"><img id="crop-img" alt="Foto escolhida"><div class="crop-rect" id="crop-rect" hidden></div></div>
         <span class="hint">Arraste o dedo (ou o mouse) sobre a foto para marcar só o trecho que quer ler.</span>
@@ -3665,6 +3665,9 @@ function noteForm(existing, { bookId, autoOCR, link } = {}) {
           lastOcr = r.text;
           fixBtn.hidden = false;
         }
+        // foto pequena (câmera aberta pelo navegador às vezes entrega em resolução baixa): diz o que fazer
+        const [pw, ph] = r.size || [];
+        if (pw && Math.max(pw, ph) < 1500) status.textContent += ` A foto chegou pequena (${pw}×${ph}): para ler melhor, tire a foto com o app da câmera do celular e escolha em 🖼️ Galeria.`;
       } catch (err) {
         status.textContent = `Erro no OCR: ${err.message}`;
       } finally {
@@ -3686,7 +3689,8 @@ function noteForm(existing, { bookId, autoOCR, link } = {}) {
       await commit(() => persist('notes', note));
       if (fd.makeCard) cardForm({ note });
     };
-    if (autoOCR) btns[0].click();
+    // "📷 Grifo": não abre a câmera sozinho; destaca a escolha entre Câmera e Galeria
+    if (autoOCR) { const box = root.querySelector('.ocr-box'); box.classList.add('pick'); box.scrollIntoView({ block: 'nearest' }); }
     else if (link) { form.text.focus(); form.text.setSelectionRange(form.text.value.length, form.text.value.length); }
   });
 }
@@ -3858,7 +3862,7 @@ function shareStudio({ title, groups = [], render, filename = 'grifo', text = ''
       $('#studio-photo', root).onchange = async (e) => {
         const f = e.target.files[0];
         if (!f) return;
-        photoImg = await createImageBitmap(f);
+        photoImg = await createImageBitmap(f, { imageOrientation: 'from-image' });
         draw();
       };
     }
@@ -4267,6 +4271,33 @@ const actions = {
   newNote: ({ id, link }) => noteForm(null, { bookId: id, link }),
   scan: ({ id }) => noteForm(null, { bookId: id, autoOCR: true }),
   editNote: ({ id }) => noteForm(noteById(id)),
+  // Editar o texto ali mesmo, num campo comum (seleção, copiar e colar do próprio celular);
+  // título, tags, livro e página ficam em "Mais opções"
+  editNoteInline({ id }) {
+    const n = noteById(id);
+    const box = $('#note-body');
+    if (!n || !box) { noteForm(n); return; }
+    box.innerHTML = `<div class="textarea-wrap"><textarea class="inline-edit" aria-label="Texto da nota">${esc(n.text)}</textarea><div class="suggest" id="inline-suggest" hidden></div></div>
+      <div class="row gap-s wrap" style="margin-top:8px"><button type="button" class="btn small primary" data-inline="save">Salvar</button>
+        <button type="button" class="btn small ghost" data-inline="cancel">Cancelar</button><button type="button" class="btn small ghost" data-inline="more">Mais opções…</button></div>`;
+    const ta = box.querySelector('textarea');
+    const grow = () => { ta.style.height = 'auto'; ta.style.height = `${ta.scrollHeight + 2}px`; };
+    ta.addEventListener('input', grow);
+    attachLinkAutocomplete(ta, $('#inline-suggest'));
+    grow();
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+    box.onclick = async (e) => {
+      const b = e.target.closest('[data-inline]');
+      if (!b) return;
+      if (b.dataset.inline === 'cancel') { render(); return; }
+      if (b.dataset.inline === 'more') { const text = ta.value; render(); noteForm({ ...n, text }); return; } // o formulário completo leva o que já foi digitado
+      const text = ta.value.trim();
+      if (!text) { toast('A nota precisa de algum texto.', 'err'); ta.focus(); return; }
+      await commit(() => persist('notes', { ...n, text }));
+      toast('✔ Nota salva');
+    };
+  },
   newCard: ({ id }) => cardForm({ note: noteById(id) }),
   editCard: ({ id }) => cardForm({ card: state.cards.find((c) => c.id === id) }),
   async deleteCard({ id }) {

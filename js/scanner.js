@@ -38,7 +38,7 @@ async function detectIsbn(source) {
 }
 
 export async function scanImage(file) {
-  const bmp = await createImageBitmap(file);
+  const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }); // respeita a rotação da foto da câmera
   return detectIsbn(bmp);
 }
 

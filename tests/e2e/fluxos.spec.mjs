@@ -50,6 +50,7 @@ test('nota: várias tags com ponto e vírgula e vírgula, sem repetir', async ({
   await semear(page, { books: [livro('b1')], notes: [nota('n1', 'b1', 'O [[Sistema 1]] é rápido.', { tags: ['mente'] })] });
   await page.goto('/#/nota/n1');
   await page.getByRole('button', { name: 'Editar' }).click();
+  await page.getByRole('button', { name: 'Mais opções…' }).click();
   await page.getByLabel('Tags').fill('mente; vieses;decisão, Mente');
   await page.getByRole('button', { name: 'Salvar' }).click();
   await expect.poll(async () => (await lerBanco(page, 'notes'))[0].tags).toEqual(['mente', 'vieses', 'decisão']);
@@ -364,6 +365,7 @@ test('nota: mudar a página não fecha a janela (Enter vai para o próximo campo
   await semear(page, { books: [livro('b1')], notes: [nota('n1', 'b1', 'Texto da nota', { page: 12 })] });
   await page.goto('/#/nota/n1');
   await page.getByRole('button', { name: 'Editar' }).click();
+  await page.getByRole('button', { name: 'Mais opções…' }).click();
   const aberta = () => page.evaluate(() => document.querySelector('#modal').open);
   const pg = page.locator('#note-form [name=page]');
   await pg.fill('34');
@@ -480,4 +482,32 @@ test('artigo: mudar o nome atualiza as notas que citavam o nome antigo; artigo s
   await page.goto('/#/artigo/a2');
   await expect(page.locator('#reader-body')).toContainText('guardado só como link');
   await expect(page.getByRole('link', { name: /site original/ })).toHaveAttribute('href', 'https://www.scielosp.org/article/x/');
+});
+
+test('nota: editar o texto ali mesmo, num campo comum do aparelho @celular', async ({ page }) => {
+  await semear(page, { books: [livro('b1')], notes: [nota('n1', 'b1', 'Texto antigo da nota.', { tags: ['mente'] })] });
+  await page.goto('/#/nota/n1');
+  await page.getByRole('button', { name: 'Editar' }).click();
+  const campo = page.getByRole('textbox', { name: 'Texto da nota' });
+  await expect(campo).toBeFocused();
+  expect(await page.evaluate(() => document.querySelector('#modal').open)).toBe(false); // nada de janela por cima
+  await campo.fill('Texto novo, editado direto.');
+  await page.getByRole('button', { name: 'Salvar' }).click();
+  await expect(page.locator('#note-body')).toHaveText('Texto novo, editado direto.');
+  const [n] = await lerBanco(page, 'notes');
+  expect(n.text).toBe('Texto novo, editado direto.');
+  expect(n.tags).toEqual(['mente']);
+});
+
+test('grifo: "📷 Grifo" não abre a câmera sozinho, deixa escolher', async ({ page }) => {
+  await semear(page, { books: [livro('b1')] });
+  await page.goto('/#/notas');
+  let abriu = false;
+  page.on('filechooser', () => { abriu = true; });
+  await page.getByRole('button', { name: 'Grifo' }).first().click();
+  await expect(page.locator('.ocr-box.pick')).toBeVisible();
+  await page.waitForTimeout(500);
+  expect(abriu).toBe(false);
+  await expect(page.getByRole('button', { name: 'Câmera' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Galeria' })).toBeVisible();
 });

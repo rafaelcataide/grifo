@@ -737,3 +737,7 @@ a.nudge { display: block; text-decoration: none; }
 /* 4 abas no celular: nome numa linha só; em telas bem estreitas o ícone sai */
 .seg a { white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 440px) { .seg a { padding: 7px 4px; font-size: .82rem; } .seg a .ic { display: none; } }
+/* edição do texto da nota ali mesmo */
+.inline-edit { width: 100%; min-height: 120px; resize: vertical; font: inherit; line-height: 1.55; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--accent); background: var(--surface); color: var(--text); }
+/* "📷 Grifo": a escolha entre Câmera e Galeria fica em destaque */
+.ocr-box.pick { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }

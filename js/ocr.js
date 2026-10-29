@@ -419,11 +419,12 @@ function preview(source, w, h, boxes) {
  * @param {'highlight'|'page'} mode só os grifos ou a página inteira
  * @param {(msg:string, progress?:number)=>void} onProgress
  * @param {{crop?: {x0:number, y0:number, x1:number, y1:number}}} [opts] crop: área escolhida, em frações (0 a 1) da foto
- * @returns {Promise<{text:string, regions:number, preview:string}>}
+ * @returns {Promise<{text:string, regions:number, preview:string, size:number[]}>} size: largura e altura da foto original
  */
 export async function runOCR(file, mode, onProgress = () => {}, { crop } = {}) {
   onProgress('Preparando imagem');
-  const bmp = await createImageBitmap(file);
+  // foto da câmera vem "deitada" com a rotação só no EXIF: aplica a rotação (senão o OCR lê o texto de lado)
+  const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
   // só a área escolhida pela pessoa (o resto da foto nem entra na detecção)
   const sx = crop ? Math.round(crop.x0 * bmp.width) : 0, sy = crop ? Math.round(crop.y0 * bmp.height) : 0;
   const sw = crop ? Math.max(1, Math.round((crop.x1 - crop.x0) * bmp.width)) : bmp.width;
@@ -487,7 +488,7 @@ export async function runOCR(file, mode, onProgress = () => {}, { crop } = {}) {
       proc.data[i + 3] = 255;
     }
     octx.putImageData(proc, 0, 0);
-    return { text: await read(out, [{ x0: 0, y0: 0, x1: w, y1: h }], false), regions: 0, preview: preview(src, w, h, []) };
+    return { text: await read(out, [{ x0: 0, y0: 0, x1: w, y1: h }], false), regions: 0, preview: preview(src, w, h, []), size: [bmp.width, bmp.height] };
   }
 
   // Grifos: primeiro marca-texto colorido; se não achar ou não sair texto, o grifo cinza do Kindle
@@ -513,7 +514,7 @@ export async function runOCR(file, mode, onProgress = () => {}, { crop } = {}) {
     }
     octx.putImageData(proc, 0, 0);
     const text = await read(out, passages, found.gray);
-    if (text.replace(/[^\p{L}]/gu, '').length >= 8) return { text, regions: passages.length, preview: preview(src, w, h, passages) };
+    if (text.replace(/[^\p{L}]/gu, '').length >= 8) return { text, regions: passages.length, preview: preview(src, w, h, passages), size: [bmp.width, bmp.height] };
   }
-  return { text: '', regions: last.passages.length, preview: preview(src, w, h, last.passages) };
+  return { text: '', regions: last.passages.length, preview: preview(src, w, h, last.passages), size: [bmp.width, bmp.height] };
 }

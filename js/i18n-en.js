@@ -842,3 +842,8 @@ EN_PATTERNS.unshift(
   [/^📄 “(.+)” adicionado · mudar o nome$/, '📄 “$1” added · rename'],
   [/^📰 “(.+)” salvo · mudar o nome$/, '📰 “$1” saved · rename'],
 );
+Object.assign(EN, {
+  'Fotografe a página ou escolha uma foto: o texto grifado vira nota. Funciona com marca-texto colorido e com o grifo cinza do Kindle. Dica: fotos tiradas pelo app da câmera (e escolhidas na Galeria) costumam ler melhor.': "Take a photo of the page or pick one: the highlighted text becomes a note. Works with colored highlighters and Kindle's gray highlight. Tip: photos taken with the camera app (and picked from the Gallery) usually read better.",
+  'Texto da nota': 'Note text', 'Mais opções…': 'More options…', 'A nota precisa de algum texto.': 'The note needs some text.', '✔ Nota salva': '✔ Note saved',
+});
+EN_PATTERNS.unshift([/^(.*) A foto chegou pequena \((\d+)×(\d+)\): para ler melhor, tire a foto com o app da câmera do celular e escolha em 🖼️ Galeria\.$/, (m, tr) => `${tr(m[1], true)} The photo came in small (${m[2]}×${m[3]}): for a better read, take it with your phone's camera app and pick it in 🖼️ Gallery.`]);
