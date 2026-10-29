@@ -1,7 +1,6 @@
 // Idiomas do Grifo. O app é escrito em português; em inglês, um dicionário (i18n-en.js) traduz
 // o que aparece na tela, nos avisos, nas janelas de confirmação e nas artes desenhadas em canvas.
 // Textos dos usuários (títulos, notas) não estão no dicionário e ficam como foram escritos.
-import { EN, EN_PATTERNS } from './i18n-en.js';
 import { iconize } from './icons.js';
 
 const KEY = 'grifo.lang';
@@ -17,6 +16,8 @@ function detect() {
 
 export const lang = detect();
 export const LOCALE = lang === 'en' ? 'en-US' : 'pt-BR';
+// o dicionário (~95 KB) só é baixado por quem usa o app em inglês
+const { EN, EN_PATTERNS } = lang === 'en' ? await import('./i18n-en.js') : { EN: {}, EN_PATTERNS: [] };
 
 export function setLang(l) {
   try { localStorage.setItem(KEY, l); } catch { /* sem armazenamento */ }

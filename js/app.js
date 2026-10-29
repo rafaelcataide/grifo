@@ -4,11 +4,7 @@ import { LINK_RE, esc, norm, nf, linksOf, plainText, splitTags } from './util.js
 import * as G from './game.js';
 import * as C from './charts.js';
 import * as S from './srs.js';
-import { runOCR } from './ocr.js';
 import { createGraph, applyShow } from './graph.js';
-import * as Share from './share.js';
-import * as Scanner from './scanner.js';
-import * as Importers from './importers.js';
 import * as Cloud from './cloud.js';
 import * as AI from './ai.js';
 import { CONFIG } from '../config.js';
@@ -3288,6 +3284,7 @@ function bookForm(existing, opts = {}) {
     };
     const openScan = async () => {
       scanBox.hidden = false;
+      const Scanner = await import('./scanner.js'); // leitor de código de barras: só quando usado
       if (!Scanner.cameraAvailable()) { scanStatus.textContent = 'Câmera indisponível aqui. Use uma foto do código de barras.'; return; }
       scanStatus.textContent = 'Abrindo a câmera…';
       try {
@@ -3305,6 +3302,7 @@ function bookForm(existing, opts = {}) {
       if (!f) return;
       scanStatus.textContent = 'Lendo a foto…';
       try {
+        const Scanner = await import('./scanner.js');
         const isbn = await Scanner.scanImage(f);
         if (isbn) gotIsbn(isbn);
         else scanStatus.textContent = 'Não achei um ISBN nessa foto. Tente mais perto e com o código reto.';
@@ -3636,7 +3634,7 @@ function noteForm(existing, { bookId, autoOCR, link } = {}) {
           const Cam = await import('./camera.js');
           if (Cam.cameraAvailable()) {
             try {
-              const blob = await Cam.capturePage({ texts: { hint: tr('Enquadre a página e segure firme'), steady: tr('Segure firme…'), auto: tr('Foto automática'), close: tr('Fechar'), torch: tr('Lanterna'), shot: tr('Tirar foto') } });
+              const blob = await Cam.capturePage({ texts: { hint: tr('Enquadre a página e segure firme'), opening: tr('Abrindo a câmera…'), steady: tr('Segure firme…'), auto: tr('Foto automática'), close: tr('Fechar'), torch: tr('Lanterna'), shot: tr('Tirar foto') } });
               if (blob) handlePhoto(blob);
               return;
             } catch (err) {
@@ -3675,6 +3673,7 @@ function noteForm(existing, { bookId, autoOCR, link } = {}) {
       try {
         const area = await chooseArea(f);
         if (area === false) return; // cancelou
+        const { runOCR } = await import('./ocr.js'); // OCR: só quando há foto
         const r = await runOCR(f, mode, (msg, p) => { status.textContent = `${msg}…${p != null ? ` ${Math.round(p * 100)}%` : ''}`; }, { crop: area || undefined });
         img.src = r.preview;
         img.hidden = false;
@@ -4008,6 +4007,11 @@ const shareActions = {
     });
   },
 };
+// As artes (share.js, ~47 KB) só são baixadas ao criar um post: cada ação carrega o módulo antes
+let Share = null;
+for (const [k, fn] of Object.entries(shareActions)) {
+  shareActions[k] = async (...args) => { Share ||= await import('./share.js'); return fn.apply(shareActions, args); };
+}
 
 // ---------------- lembretes ----------------
 function reminderSupport() {
@@ -4101,6 +4105,7 @@ function importForm() {
       if (!f) return;
       const text = await f.text();
       try {
+        const Importers = await import('./importers.js'); // importação: só quando usada
         if (kind === 'kindle' || /^=+\s*$/m.test(text.slice(0, 5000))) showKindle(Importers.parseKindle(text));
         else showCSV(Importers.booksFromCSV(text));
       } catch (e) {

@@ -5,6 +5,7 @@ import { modoPessoal, semear, livro } from './ajuda.mjs';
 test.use({ launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] }, permissions: ['camera'] });
 
 test.beforeEach(async ({ page }) => {
+  page.on('console', (m) => { if (m.type() === 'warning' || m.type() === 'error') console.log('console:', m.text()); });
   await modoPessoal(page);
   page.on('pageerror', (e) => { throw new Error(`Erro na página: ${e.message}`); });
 });
@@ -16,9 +17,9 @@ test('câmera do Grifo: abre por cima da nota, tira a foto e segue para escolher
   await page.evaluate(() => localStorage.setItem('grifo.camAuto', '0')); // foto só pelo botão: o teste não depende do vídeo parecer firme
   await page.getByRole('button', { name: 'Câmera' }).click();
   const cam = page.locator('dialog.cam');
-  await expect(cam).toBeVisible();
+  await expect(cam).toBeVisible(); // abre na hora, com "Abrindo a câmera…"
   await expect(cam.locator('video')).toHaveJSProperty('paused', false);
-  await expect(cam).toHaveAttribute('data-ready', '1');
+  await expect(cam).toHaveAttribute('data-ready', '1', { timeout: 30_000 });
   const shutter = cam.locator('.cam-shutter');
   await shutter.dispatchEvent('click'); // clique direto: o vídeo ao vivo deixa a checagem de "parado" do Playwright instável
   await expect(cam).toHaveCount(0, { timeout: 20_000 });
@@ -33,7 +34,7 @@ test('câmera do Grifo: fechar não muda nada', async ({ page }) => {
   await page.evaluate(() => localStorage.setItem('grifo.camAuto', '0')); // foto só pelo botão: o teste não depende do vídeo parecer firme
   await page.getByRole('button', { name: 'Câmera' }).click();
   const cam = page.locator('dialog.cam');
-  await expect(cam).toHaveAttribute('data-ready', '1');
+  await expect(cam).toHaveAttribute('data-ready', '1', { timeout: 30_000 });
   await cam.getByRole('button', { name: 'Fechar' }).dispatchEvent('click');
   await expect(cam).toHaveCount(0, { timeout: 15_000 });
   await expect(page.locator('#ocr-crop')).toBeHidden();

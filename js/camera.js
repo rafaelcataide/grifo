@@ -27,28 +27,41 @@ function frameStats(ctx, w, h, prev) {
  * Lança erro se a câmera não puder ser usada (sem permissão, sem câmera): quem chama usa a câmera do sistema.
  */
 export async function capturePage({ texts = {} } = {}) {
-  const t = { hint: 'Enquadre a página e segure firme', steady: 'Segure firme…', auto: 'Foto automática', close: 'Fechar', torch: 'Lanterna', shot: 'Tirar foto', ...texts };
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: false,
-    video: { facingMode: { ideal: 'environment' }, width: { ideal: 4096 }, height: { ideal: 3072 } },
-  });
-  const track = stream.getVideoTracks()[0];
-  // <dialog> em tela cheia: fica por cima até da janela da nota (as duas ficam na camada do topo)
+  const t = { hint: 'Enquadre a página e segure firme', opening: 'Abrindo a câmera…', steady: 'Segure firme…', auto: 'Foto automática', close: 'Fechar', torch: 'Lanterna', shot: 'Tirar foto', ...texts };
+  const limit = (p, ms) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error('demorou')), ms))]);
+  // <dialog> em tela cheia: fica por cima até da janela da nota (as duas ficam na camada do topo).
+  // Abre na hora ("Abrindo a câmera…"): algumas câmeras demoram a responder.
   const ui = document.createElement('dialog');
   ui.className = 'cam';
   ui.innerHTML = `<video playsinline muted autoplay></video>
     <div class="cam-frame"><i></i><i></i><i></i><i></i></div>
     <div class="cam-top"><button type="button" class="cam-btn" data-cam="close" aria-label="${t.close}">✕</button>
-      <span class="cam-hint" aria-live="polite">${t.hint}</span>
+      <span class="cam-hint" aria-live="polite">${t.opening}</span>
       <button type="button" class="cam-btn" data-cam="torch" aria-label="${t.torch}" hidden>🔦</button></div>
     <div class="cam-bottom"><label class="cam-auto"><input type="checkbox" checked> ${t.auto}</label>
       <button type="button" class="cam-shutter" data-cam="shot" aria-label="${t.shot}"><span></span></button><span class="cam-res"></span></div>`;
   document.body.append(ui);
   ui.showModal();
+  const hint = ui.querySelector('.cam-hint');
+  let stream;
+  try {
+    // sem resposta em 10 s (ou sem permissão): fecha e quem chamou usa a câmera do sistema
+    var gum = navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 4096 }, height: { ideal: 3072 } },
+    });
+    stream = await limit(gum, 10_000);
+  } catch (err) {
+    gum?.then((st) => st.getTracks().forEach((x) => x.stop())).catch(() => {}); // se a câmera responder depois, desliga
+    ui.close();
+    ui.remove();
+    throw err;
+  }
+  const track = stream.getVideoTracks()[0];
   const video = ui.querySelector('video');
   video.srcObject = stream;
   await video.play().catch(() => {});
-  const hint = ui.querySelector('.cam-hint');
+  hint.textContent = t.hint;
   const auto = ui.querySelector('.cam-auto input');
   // a escolha da foto automática fica guardada no aparelho
   try { auto.checked = localStorage.getItem('grifo.camAuto') !== '0'; } catch { /* sem armazenamento */ }
@@ -62,7 +75,6 @@ export async function capturePage({ texts = {} } = {}) {
 
   // foto na resolução máxima: ImageCapture (Android) ou o quadro do vídeo.
   // Algumas câmeras demoram ou travam no takePhoto: depois de 5 s, vale o quadro do vídeo.
-  const limit = (p, ms) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error('demorou')), ms))]);
   async function take() {
     try {
       if ('ImageCapture' in window) {
