@@ -9,11 +9,16 @@ import * as Cloud from './cloud.js';
 import * as AI from './ai.js';
 import { CONFIG } from '../config.js';
 import { landingView } from './landing.js';
+import { vocabView, wordActions, tagsView, tagActions } from './telas/vocabulario.js';
+import { graphApi, mapShow, fold, mapView } from './telas/mapa.js';
+import { articleStarted, articleItem, articlesView, articleView, pdfView, pdfActions, articleActions, saveSharedArticle } from './telas/artigos.js';
+import { adminView } from './telas/admin.js';
+import { exportActions, downloadFile, shareActions } from './telas/artes.js';
 
 const APP_VERSION = '2026.10.24';
 const DEFAULT_SETTINGS = { name: '', yearGoal: 12, dailyGoal: 20, dailyCards: 20, googleKey: '', handle: '' };
 const STATUS = { reading: 'Lendo', want: 'Quero ler', finished: 'Lido', abandoned: 'Abandonado' };
-const PURPOSE = {
+export const PURPOSE = {
   hobby: { label: 'Hobby', icon: '🎈' },
   professional: { label: 'Profissional', icon: '💼' },
   academic: { label: 'Acadêmico', icon: '🎓' },
@@ -37,34 +42,34 @@ const THEMES = {
 };
 const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
-const state = {
+export const state = {
   books: [], sessions: [], notes: [], cards: [], reviews: [],
   settings: { ...DEFAULT_SETTINGS }, badges: {}, challenges: [], stats: null,
 };
 let review = null; // sessão de revisão em andamento: { queue: [cardId], revealed, done }
 
-const $ = (s, el = document) => el.querySelector(s);
-const view = $('#view');
-const modal = $('#modal');
+export const $ = (s, el = document) => el.querySelector(s);
+export const view = $('#view');
+export const modal = $('#modal');
 const modalBody = $('#modal-body');
 
-const fmtDate = (s) => (s ? G.parseYmd(s).toLocaleDateString(LOCALE) : '');
+export const fmtDate = (s) => (s ? G.parseYmd(s).toLocaleDateString(LOCALE) : '');
 // livros e artigos (o que tem finalidade, tema e notas)
 // endereço de um livro, artigo ou PDF
-const srcHref = (b) => (b.kind === 'pdf' ? `#/pdf/${b.id}` : b.kind === 'article' ? `#/artigo/${b.id}` : `#/livro/${b.id}`);
-const sources = () => [...state.books, ...(state.articles || [])];
-const bookById = (id) => state.books.find((b) => b.id === id) || state.articles?.find((b) => b.id === id);
-const noteById = (id) => state.notes.find((n) => n.id === id);
+export const srcHref = (b) => (b.kind === 'pdf' ? `#/pdf/${b.id}` : b.kind === 'article' ? `#/artigo/${b.id}` : `#/livro/${b.id}`);
+export const sources = () => [...state.books, ...(state.articles || [])];
+export const bookById = (id) => state.books.find((b) => b.id === id) || state.articles?.find((b) => b.id === id);
+export const noteById = (id) => state.notes.find((n) => n.id === id);
 const stars = (n) => (n > 0 ? `<span class="stars">${'★'.repeat(n)}<span class="off">${'★'.repeat(5 - n)}</span></span>` : '');
-const pct = (b) => (b.pages ? Math.min(100, Math.round(((b.status === 'finished' ? b.pages : b.currentPage || 0) / b.pages) * 100)) : 0);
-const empty = (msg, extra = '') => `<div class="empty"><p>${msg}</p>${extra}</div>`;
-const conceptHref = (name) => `#/conceito/${encodeURIComponent(name.trim())}`;
+export const pct = (b) => (b.pages ? Math.min(100, Math.round(((b.status === 'finished' ? b.pages : b.currentPage || 0) / b.pages) * 100)) : 0);
+export const empty = (msg, extra = '') => `<div class="empty"><p>${msg}</p>${extra}</div>`;
+export const conceptHref = (name) => `#/conceito/${encodeURIComponent(name.trim())}`;
 const purposeChip = (b) => { const p = PURPOSE[b.purpose || 'hobby']; return `<span class="chip p-${b.purpose || 'hobby'}">${p.icon} ${p.label}</span>`; };
-const seg = (items, active) => `<nav class="seg">${items.map(([href, label, key]) => `<a href="${href}" class="${key === active ? 'active' : ''}">${label}</a>`).join('')}</nav>`;
+export const seg = (items, active) => `<nav class="seg">${items.map(([href, label, key]) => `<a href="${href}" class="${key === active ? 'active' : ''}">${label}</a>`).join('')}</nav>`;
 
 // ---------------- links [[ ]] ----------------
 
-function resolveLink(name) {
+export function resolveLink(name) {
   const k = norm(name);
   // livros e também artigos/PDFs: [[Título do artigo]] leva ao artigo
   const b = state.books.find((x) => norm(x.title) === k) || state.articles.find((x) => norm(x.title) === k);
@@ -75,7 +80,7 @@ function resolveLink(name) {
 }
 
 // Texto da nota com [[links]] clicáveis (o resto é escapado)
-function renderText(text) {
+export function renderText(text) {
   let out = '', last = 0;
   for (const m of String(text || '').matchAll(LINK_RE)) {
     out += esc(text.slice(last, m.index));
@@ -89,7 +94,7 @@ function renderText(text) {
 
 // título sem [[ ]] (o título nomeia a própria nota; colchetes nele não são ligação)
 const noteTitle = (n) => plainText(n.title || '').trim();
-const noteLabel = (n) => noteTitle(n) || (n.text || '').replace(LINK_RE, '$1').slice(0, 48) + ((n.text || '').length > 48 ? '…' : '');
+export const noteLabel = (n) => noteTitle(n) || (n.text || '').replace(LINK_RE, '$1').slice(0, 48) + ((n.text || '').length > 48 ? '…' : '');
 
 // ---------------- persistência ----------------
 async function load() {
@@ -122,14 +127,14 @@ function refreshStats() {
   return state.stats;
 }
 
-async function persist(store, obj) {
+export async function persist(store, obj) {
   await db.put(store, obj);
   const arr = store === 'books' && (obj.kind === 'article' || obj.kind === 'pdf') ? state.articles : state[store];
   const i = arr.findIndex((x) => x.id === obj.id);
   if (i >= 0) arr[i] = obj; else arr.push(obj);
 }
 
-async function remove(store, id) {
+export async function remove(store, id) {
   await db.del(store, id);
   state[store] = state[store].filter((x) => x.id !== id);
   if (store === 'books') state.articles = state.articles.filter((x) => x.id !== id);
@@ -148,7 +153,7 @@ if (otherTabs) {
 const tellOtherTabs = () => otherTabs?.postMessage('mudou');
 
 // Toda alteração passa por aqui: recalcula XP, desafios, conquistas e comemora.
-async function commit(fn, { quiet = false, rerender = true } = {}) {
+export async function commit(fn, { quiet = false, rerender = true } = {}) {
   const before = refreshStats().xp;
   const levelBefore = G.levelInfo(before).level;
   await fn();
@@ -204,7 +209,7 @@ function applyTheme(mode) {
 }
 
 // ---------------- feedback visual ----------------
-function toast(html, kind = '', onClick = null) {
+export function toast(html, kind = '', onClick = null) {
   const el = document.createElement('div');
   el.className = `toast ${kind}${onClick ? ' clickable' : ''}`;
   el.innerHTML = html;
@@ -230,13 +235,13 @@ function confetti() {
   }
 }
 
-function openModal(html, mount) {
+export function openModal(html, mount) {
   modalBody.innerHTML = html;
   delete modal.dataset.dirty;
   if (!modal.open) modal.showModal();
   mount?.(modalBody);
 }
-const closeModal = () => modal.close();
+export const closeModal = () => modal.close();
 // Formulário com algo digitado não fecha sem querer: tocar fora, Esc e o "voltar" do Android
 // (que fecha a janela junto com o teclado) perguntam antes de descartar
 modal.addEventListener('input', () => { modal.dataset.dirty = '1'; });
@@ -255,9 +260,9 @@ modal.addEventListener('keydown', (e) => {
 });
 
 // ---------------- componentes ----------------
-const READ_SEG = [['#/livros', '📚 Livros', 'books'], ['#/artigos', '📰 Artigos e PDFs', 'articles']];
-const IDEAS_SEG = [['#/notas', '✍️ Notas', 'list'], ['#/mapa', '🕸️ Mapa', 'map'], ['#/vocabulario', '🔤 Palavras', 'words'], ['#/perguntar', '✨ Perguntar', 'ask']];
-function cover(b, cls = '') {
+export const READ_SEG = [['#/livros', '📚 Livros', 'books'], ['#/artigos', '📰 Artigos e PDFs', 'articles']];
+export const IDEAS_SEG = [['#/notas', '✍️ Notas', 'list'], ['#/mapa', '🕸️ Mapa', 'map'], ['#/vocabulario', '🔤 Palavras', 'words'], ['#/perguntar', '✨ Perguntar', 'ask']];
+export function cover(b, cls = '') {
   if (b.cover) return `<img class="cover ${cls}" src="${esc(b.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">`;
   const initials = (b.title || '?').split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
   const hueVal = [...(b.title || '')].reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
@@ -283,7 +288,7 @@ function bookCard(b) {
   </article>`;
 }
 
-function noteCard(n, showBook = true) {
+export function noteCard(n, showBook = true) {
   const b = bookById(n.bookId);
   const cards = state.cards.filter((c) => c.noteId === n.id).length;
   return `<article class="note card ${n.kind === 'quote' ? 'quote' : ''}" data-href="#/nota/${n.id}" data-book="${n.bookId}" data-src="${b?.kind === 'article' ? 'article' : 'book'}" data-search="${esc(`${n.title || ''} ${n.text} ${(n.tags || []).join(' ')} ${b?.title || ''}`.toLowerCase())}">
@@ -608,212 +613,6 @@ function notesView() {
     : empty('Suas citações e reflexões aparecem aqui.', '<button class="btn primary" data-action="scan">📷 Capturar um grifo</button>')}</div>`;
 }
 
-// ---------- vocabulário ----------
-// Palavras procuradas no dicionário (ao selecionar num artigo ou PDF, ou digitando), com a frase onde apareceram
-const wordByText = (w) => state.words.find((x) => norm(x.word) === norm(w));
-// sentidos agrupados pela classe da palavra (substantivo, verbo…), na ordem do dicionário
-function wordGroups(r) {
-  const groups = [];
-  for (const d of r.defs || []) {
-    const g = groups.find((x) => x.pos === d.pos);
-    if (g) g.items.push(d.text); else groups.push({ pos: d.pos, items: [d.text] });
-  }
-  return groups;
-}
-const WORD_LISTS = [['synonyms', 'Sinônimos'], ['antonyms', 'Antônimos'], ['anagrams', 'Anagramas']];
-function wordDefsHtml(r) {
-  return wordGroups(r).map((g) => `${g.pos ? `<div class="word-pos">${esc(g.pos)}</div>` : ''}<ol class="word-defs">${g.items.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>`).join('')
-    + WORD_LISTS.filter(([k]) => r[k]?.length).map(([k, label]) => `<div class="word-pos">${label}</div><div class="chips">${r[k].map((x) => `<span class="chip">${esc(x)}</span>`).join('')}</div>`).join('');
-}
-// verso do card: todos os sentidos por classe, depois sinônimos, antônimos e anagramas
-function wordBackText(w) {
-  const defs = wordGroups(w).map((g) => `${g.pos ? `**${g.pos}**\n` : ''}${g.items.map((t, i) => `${i + 1}. ${t}`).join('\n')}`).join('\n\n');
-  const lists = WORD_LISTS.filter(([k]) => w[k]?.length).map(([k, label]) => `**${label}:** ${w[k].join(', ')}`).join('\n');
-  return [defs, lists].filter(Boolean).join('\n\n');
-}
-const wordRecord = (r) => ({ word: r.word, lang: r.lang, base: r.base || '', defs: r.defs.slice(0, 30), synonyms: r.synonyms || [], antonyms: r.antonyms || [], anagrams: r.anagrams || [], source: r.source || null, v: 2 });
-function wordModal(r, { context = '', sourceId = null } = {}) {
-  const saved = wordByText(r.word);
-  const hasCard = saved && state.cards.some((c) => c.wordId === saved.id);
-  openModal(`<div class="form word-modal">
-    <h3 class="word-title">${esc(r.word)}${r.phonetic ? ` <small class="muted">${esc(r.phonetic)}</small>` : ''}</h3>
-    ${r.base ? `<p class="small muted" style="margin:0">Forma de <b>${esc(r.base)}</b></p>` : ''}
-    ${wordDefsHtml(r)}
-    ${context ? `<blockquote class="word-ctx">${esc(context)}</blockquote>` : ''}
-    <p class="small muted" style="margin:0">Fonte: <a href="${esc(r.source?.url || '#')}" target="_blank" rel="noopener">${esc(r.source?.name || '')}</a></p>
-    <div class="actions">
-      <button type="button" class="btn ghost" data-action="close">Fechar</button>
-      ${saved ? '<span class="chip">✓ No seu vocabulário</span>' : '<button type="button" class="btn" id="word-save">➕ Salvar</button>'}
-      ${hasCard ? '' : '<button type="button" class="btn primary" id="word-card">🧠 Salvar e criar card</button>'}
-    </div>
-  </div>`, (root) => {
-    const save = async () => {
-      const cur = wordByText(r.word);
-      if (cur) return cur;
-      const rec = { id: uid(), createdAt: Date.now(), ...wordRecord(r), context, sourceId };
-      await commit(() => persist('words', rec), { rerender: false });
-      return rec;
-    };
-    const s = $('#word-save', root);
-    if (s) s.onclick = async () => { await save(); closeModal(); toast(`🔤 “${esc(r.word)}” no seu vocabulário · <u>ver</u>`, '', () => { location.hash = '#/vocabulario'; }); if (location.hash.startsWith('#/vocabulario')) render(); };
-    const c = $('#word-card', root);
-    if (c) c.onclick = async () => { const w = await save(); await makeWordCard(w); closeModal(); if (location.hash.startsWith('#/vocabulario')) render(); };
-  });
-}
-async function makeWordCard(w) {
-  if (state.cards.some((c) => c.wordId === w.id)) return;
-  const front = `O que significa “${w.word}”?${w.context ? `\n\n“${w.context}”` : ''}`;
-  await commit(() => persist('cards', S.newCard({ id: uid(), noteId: null, wordId: w.id, bookId: w.sourceId || null, createdAt: Date.now(), type: 'qa', front, back: wordBackText(w), source: 'vocab' }, G.ymd())));
-  toast('🧠 Card criado: a palavra entra na sua revisão');
-}
-// palavras salvas antes de guardar o verbete completo: busca de novo e completa a palavra e o card
-let refreshingWords = false;
-async function refreshOldWords() {
-  const old = state.words.filter((w) => !w.v).slice(0, 10);
-  if (!old.length || refreshingWords) return;
-  refreshingWords = true;
-  try {
-    const D = await import('./dict.js');
-    for (const w of old) {
-      const r = await D.lookup(w.base && !w.defs.length ? w.base : w.word);
-      const upd = r ? { ...w, ...wordRecord(r), word: w.word } : { ...w, v: 2 };
-      await persist('words', upd);
-      for (const c of state.cards.filter((x) => x.wordId === w.id)) await persist('cards', { ...c, back: wordBackText(upd) });
-    }
-  } finally { refreshingWords = false; }
-  if (location.hash.startsWith('#/vocabulario')) render();
-}
-// procura e mostra o resultado (com aviso enquanto busca)
-async function wordLookup(raw, opts = {}) {
-  const D = await import('./dict.js');
-  const word = D.cleanWord(raw);
-  if (!word) return;
-  const saved = wordByText(word);
-  if (saved) { wordModal(saved, { context: opts.context || saved.context, sourceId: saved.sourceId }); return; }
-  openModal(`<div class="form"><h3 class="word-title">${esc(word)}</h3><p class="muted">📖 Procurando no dicionário…</p></div>`);
-  const r = await D.lookup(word);
-  if (!modal.open) return;
-  if (!r) {
-    openModal(`<div class="form"><h3 class="word-title">${esc(word)}</h3>
-      <p>Não encontrei “${esc(word)}” nos dicionários gratuitos. Confira a grafia ou tente a forma básica (ex.: “correr” em vez de “correram”).</p>
-      <p class="small"><a href="https://www.dicio.com.br/pesquisa.php?q=${encodeURIComponent(word)}" target="_blank" rel="noopener">Procurar no Dicio ↗</a></p>
-      <div class="actions"><button type="button" class="btn" data-action="close">Fechar</button></div></div>`);
-    return;
-  }
-  wordModal(r, opts);
-}
-function wordItem(w) {
-  const src = bookById(w.sourceId);
-  const hasCard = state.cards.some((c) => c.wordId === w.id);
-  return `<article class="card word-item" data-search="${esc(`${norm(w.word)} ${norm(w.defs[0]?.text || '')} ${norm(src?.title || '')}`)}">
-    <div class="row between gap-s">
-      <button class="word-open" data-action="showWord" data-id="${w.id}"><b class="word-title">${esc(w.word)}</b></button>
-      <span class="row gap-s">${hasCard ? '<span class="chip">🧠 card</span>' : `<button class="icon-btn" data-action="wordCard" data-id="${w.id}" title="Criar card de revisão" aria-label="Criar card de ${esc(w.word)}">🧠</button>`}
-        <button class="icon-btn" data-action="delWord" data-id="${w.id}" title="Tirar do vocabulário" aria-label="Tirar ${esc(w.word)} do vocabulário">🗑️</button></span>
-    </div>
-    <div class="small">${w.defs[0]?.pos ? `<i class="muted">${esc(w.defs[0].pos)}</i> · ` : ''}${esc(w.defs[0]?.text || '')}</div>
-    ${w.context ? `<div class="word-ctx small">“${esc(w.context)}”</div>` : ''}
-    ${src ? `<a class="small muted" href="${srcHref(src)}">${esc(src.title)}</a>` : ''}
-  </article>`;
-}
-function vocabView() {
-  const words = [...state.words].sort((a, b) => b.createdAt - a.createdAt);
-  return `${seg(IDEAS_SEG, 'words')}
-  <h2 style="margin-top:0">Vocabulário</h2>
-  <p class="small muted">Num artigo ou PDF, selecione uma palavra e toque em <b>📖 Significado</b>. Lendo no papel? Procure aqui.</p>
-  <form class="row gap-s" id="word-form"><input name="q" class="search grow" required placeholder="Procurar uma palavra…" autocomplete="off" autocapitalize="off" style="margin:0"><button class="btn primary">Buscar</button></form>
-  ${words.length ? `<h3>Suas palavras (${words.length})</h3><input class="search" type="search" placeholder="Filtrar suas palavras…" data-filter-list="#word-list"><div id="word-list">${words.map(wordItem).join('')}</div>`
-    : empty('As palavras que você procurar e salvar aparecem aqui, com a frase onde estavam. Vire card e elas entram na revisão.')}`;
-}
-vocabView.mount = () => {
-  const form = $('#word-form');
-  form.onsubmit = (e) => { e.preventDefault(); wordLookup(form.q.value); form.q.value = ''; };
-  refreshOldWords();
-};
-const wordActions = {
-  showWord: ({ id }) => { const w = state.words.find((x) => x.id === id); if (w) wordModal(w, { context: w.context, sourceId: w.sourceId }); },
-  wordCard: async ({ id }) => { const w = state.words.find((x) => x.id === id); if (w) await makeWordCard(w); },
-  delWord: async ({ id }) => {
-    const w = state.words.find((x) => x.id === id);
-    if (!w || !confirm(`Tirar “${w.word}” do vocabulário? O card de revisão dela também sai.`)) return;
-    await commit(async () => {
-      for (const c of state.cards.filter((x) => x.wordId === id)) await remove('cards', c.id);
-      await remove('words', id);
-    });
-    toast(`🗑️ “${esc(w.word)}” saiu do vocabulário`);
-  },
-};
-
-// Tags de todas as notas, sem diferenciar maiúsculas: a grafia mais usada dá o nome
-function tagIndex() {
-  const groups = new Map();
-  for (const n of state.notes) {
-    for (const t of n.tags || []) {
-      const g = groups.get(norm(t)) || { spell: new Map(), notes: new Set() };
-      g.spell.set(t, (g.spell.get(t) || 0) + 1);
-      g.notes.add(n.id);
-      groups.set(norm(t), g);
-    }
-  }
-  return [...groups].map(([key, g]) => ({ key, name: [...g.spell].sort((a, b) => b[1] - a[1])[0][0], count: g.notes.size }))
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
-}
-
-function tagsView() {
-  const tags = tagIndex();
-  return `<a href="#/notas" class="back">← Notas</a>
-  <h2 style="margin-top:0">Tags</h2>
-  <p class="small muted">Renomeie para corrigir a grafia, use o nome de outra tag para juntar as duas, ou remova uma tag das notas (as notas continuam).</p>
-  ${tags.length ? `<input class="search" type="search" placeholder="Buscar tag…" data-filter-list="#tag-list">
-  <div id="tag-list" class="card list">${tags.map((t) => `<div class="row between li tag-row" data-search="${esc(t.key)}">
-    <a class="chip tag" href="${conceptHref(t.name)}">#${esc(t.name)}</a>
-    <span class="row gap-s"><span class="small muted">${t.count} ${t.count === 1 ? 'nota' : 'notas'}</span>
-      <button class="icon-btn" data-action="renameTag" data-tag="${esc(t.name)}" title="Renomear ou juntar" aria-label="Renomear ou juntar #${esc(t.name)}">✏️</button>
-      <button class="icon-btn" data-action="deleteTag" data-tag="${esc(t.name)}" title="Remover das notas" aria-label="Remover #${esc(t.name)}">🗑️</button></span>
-  </div>`).join('')}</div>` : empty('Você ainda não usou tags. Ao editar uma nota, escreva as tags separadas por ponto e vírgula.', '<a class="btn" href="#/notas">Ver notas</a>')}`;
-}
-
-// troca a tag em todas as notas; com nome de outra tag, as duas viram uma só
-async function retag(from, to) {
-  const key = norm(from);
-  await commit(async () => {
-    for (const n of state.notes.filter((x) => (x.tags || []).some((t) => norm(t) === key))) {
-      await persist('notes', { ...n, tags: splitTags(n.tags.flatMap((t) => (norm(t) === key ? to : [t]))), updatedAt: Date.now() });
-    }
-  }, { quiet: true });
-}
-
-const tagActions = {
-  renameTag: ({ tag }) => {
-    const others = tagIndex().filter((t) => t.key !== norm(tag));
-    openModal(`<form class="form" id="tag-form">
-      <h3>Renomear #${esc(tag)}</h3>
-      <label>Novo nome <input name="to" value="${esc(tag)}" list="tag-names" required autocomplete="off">
-        <span class="hint">Para juntar com outra tag, escolha o nome dela. Com ponto e vírgula, vira mais de uma tag.</span></label>
-      <datalist id="tag-names">${others.map((t) => `<option value="${esc(t.name)}">`).join('')}</datalist>
-      <div class="actions"><button type="button" class="btn ghost" data-action="close">Cancelar</button><button class="btn primary">Salvar</button></div>
-    </form>`, (root) => {
-      const form = $('#tag-form', root);
-      form.to.select();
-      form.onsubmit = async (e) => {
-        e.preventDefault();
-        const to = splitTags([form.to.value]);
-        if (!to.length) return;
-        const merged = to.length === 1 && others.find((t) => t.key === norm(to[0]));
-        closeModal();
-        await retag(tag, to);
-        toast(merged ? `🏷️ #${esc(tag)} juntada com #${esc(merged.name)}` : `🏷️ Tag renomeada para ${to.map((t) => `#${esc(t)}`).join(' ')}`);
-      };
-    });
-  },
-  deleteTag: async ({ tag }) => {
-    const count = tagIndex().find((t) => t.key === norm(tag))?.count || 0;
-    if (!confirm(`Remover #${tag} de ${count} nota(s)? As notas continuam.`)) return;
-    await retag(tag, []);
-    toast(`🗑️ #${esc(tag)} removida`);
-  },
-};
-
 function noteDetail(id) {
   const n = noteById(id);
   if (!n) return empty('Nota não encontrada.', '<a class="btn" href="#/notas">Voltar</a>');
@@ -875,13 +674,13 @@ function conceptView(raw) {
 // Cada tela guarda os seus na sessão; as opções de um filtro se ajustam aos outros já escolhidos.
 // Cada filtro é um campo de texto: ao digitar, a lista mostra só as opções que combinam.
 const SCOPE_FIELDS = ['purpose', 'theme', 'author', 'book'];
-function getScope(key) {
+export function getScope(key) {
   try { return JSON.parse(sessionStorage.getItem(key)) || {}; } catch { return {}; }
 }
-const scopeActive = (f) => SCOPE_FIELDS.some((k) => f[k]);
+export const scopeActive = (f) => SCOPE_FIELDS.some((k) => f[k]);
 // "Fulano; Beltrano" ou "Fulano & Beltrano": cada autor conta separado no filtro
 const authorsOf = (b) => String(b.author || '').split(/\s*[;&]\s*/).map((a) => a.trim()).filter(Boolean);
-function bookInScope(b, f, skip = '') {
+export function bookInScope(b, f, skip = '') {
   return (!f.purpose || skip === 'purpose' || (b.purpose || 'hobby') === f.purpose)
     && (!f.theme || skip === 'theme' || norm(b.genre || '') === f.theme)
     && (!f.author || skip === 'author' || authorsOf(b).some((a) => norm(a) === f.author))
@@ -908,7 +707,7 @@ function scopeOptions(key, field) {
   return [...special, ...uniq(pool.map((b) => [b.id, isArticle(b) ? `${b.title} (${tr('artigo')})` : b.title]))];
 }
 const SCOPE_ALL = { purpose: 'Todas as finalidades', theme: 'Todos os temas', author: 'Todos os autores', book: 'Todos os livros e artigos' };
-function scopeFilters(key) {
+export function scopeFilters(key) {
   const f = getScope(key);
   const combo = (field) => {
     const cur = f[field] ? scopeOptions(key, field).find(([v]) => v === f[field])?.[1] || '' : '';
@@ -1020,355 +819,6 @@ document.addEventListener('keydown', (e) => {
     e.target.blur();
   }
 });
-
-// ---------- mapa mental ----------
-let graphApi = null;
-
-// Dados do mapa: cada tema é uma ilha (grupo) com seus livros e subtemas; as ligações das notas
-// vão do livro para a ideia citada; as próprias notas ficam guardadas para aparecer ao tocar no livro.
-// cor de cada tema: posição na lista de todos os temas da biblioteca, para não mudar com os filtros
-const themeIndex = (key) => [...new Set(state.books.map((b) => norm(b.genre || '')).filter(Boolean))].sort().indexOf(key);
-
-// Pontos que uma nota liga: o livro dela, as tags e os [[ ]] (livro, nota com título ou ideia)
-function noteEnds(n) {
-  const ends = [];
-  if (bookById(n.bookId)) ends.push(`b:${n.bookId}`);
-  for (const t of n.tags || []) ends.push(`c:${norm(t)}`);
-  for (const l of linksOf(n.text)) {
-    const r = resolveLink(l);
-    if (r.type === 'note') { const bk = noteById(r.node.slice(2))?.bookId; if (bk) ends.push(`b:${bk}`); } else ends.push(r.node);
-  }
-  return [...new Set(ends)];
-}
-// notas de um ponto do mapa: as do livro, ou as que citam a ideia / usam a tag
-const notesForNode = (id) => state.notes.filter((n) => (id.startsWith('b:') && n.bookId === id.slice(2)) || noteEnds(n).includes(id))
-  .sort((a, b) => b.createdAt - a.createdAt);
-
-function graphData(scope = {}) {
-  const nodes = new Map();
-  const links = new Map();
-  const groups = new Map();
-  // tag e ideia com o mesmo nome ("umbanda" e [[Umbanda]]) viram um ponto só, que fica como ideia
-  // (senão a ideia virava tag e sumia ao esconder as tags)
-  const node = (id, label, type, extra = {}) => {
-    const cur = nodes.get(id);
-    if (!cur) nodes.set(id, { id, label, type, ...extra });
-    else if (cur.type === 'tag' && type === 'concept') nodes.set(id, { ...cur, label, type, ...extra });
-    return id;
-  };
-  const link = (a, b) => { if (a && b && a !== b) links.set(a < b ? `${a}|${b}` : `${b}|${a}`, { source: a, target: b }); };
-  const weight = new Map();
-  const bump = (id) => weight.set(id, (weight.get(id) || 0) + 1);
-  const books = sources().filter((b) => bookInScope(b, scope));
-  const ids = new Set(books.map((b) => b.id));
-
-  for (const b of books) {
-    const group = b.genre ? norm(b.genre) : '';
-    if (group && !groups.has(group)) groups.set(group, { key: group, label: b.genre, href: conceptHref(b.genre), color: themeIndex(group) });
-    const art = b.kind === 'article';
-    const bid = node(`b:${b.id}`, b.title, 'book', { purpose: b.purpose || 'hobby', href: srcHref(b), group, article: art || b.kind === 'pdf' });
-    if (b.subtheme && norm(b.subtheme) !== group) link(bid, node(`c:${norm(b.subtheme)}`, b.subtheme, 'subtheme', { href: conceptHref(b.subtheme), group }));
-  }
-  // as notas ficam no painel (não viram pontos); cada uma liga o livro dela ao que ela cita.
-  // Nota solta (sem livro, ex.: criada no "Ligar com…") liga entre si as ideias que cita.
-  const loose = !scopeActive(scope);
-  for (const n of state.notes) {
-    const bid = ids.has(n.bookId) ? `b:${n.bookId}` : null;
-    if (!bid && (bookById(n.bookId) || !loose)) continue; // livro fora do filtro
-    const ends = [];
-    for (const t of n.tags || []) ends.push(node(`c:${norm(t)}`, `#${t}`, 'tag', { href: conceptHref(t) }));
-    for (const l of linksOf(n.text)) {
-      const r = resolveLink(l);
-      if (r.type === 'book') { if (nodes.has(r.node)) ends.push(r.node); continue; } // livro filtrado fica de fora
-      if (r.type === 'note') { const o = `b:${noteById(r.node.slice(2))?.bookId}`; if (nodes.has(o)) ends.push(o); continue; }
-      if (groups.has(norm(l))) continue; // [[Tema]]: o livro já está na ilha do tema
-      ends.push(node(r.node, l, 'concept', { href: r.href }));
-    }
-    const uniq = [...new Set(ends)].filter((e) => e !== bid);
-    if (bid) bump(bid);
-    uniq.forEach(bump);
-    if (bid) for (const e of uniq) link(bid, e);
-    else for (let i = 0; i < Math.min(6, uniq.length); i++) for (let j = i + 1; j < Math.min(6, uniq.length); j++) link(uniq[i], uniq[j]);
-  }
-  for (const [id, w] of weight) if (nodes.has(id)) nodes.get(id).weight = w;
-  return { nodes: [...nodes.values()], groups: [...groups.values()], links: [...links.values()].filter((l) => nodes.has(l.source) && nodes.has(l.target)) };
-}
-
-// O que aparece no mapa (escolha de cada pessoa, guardada no aparelho)
-const MAP_SHOW = [['books', 'Livros'], ['areas', 'Áreas'], ['subthemes', 'Subtemas'], ['ideas', 'Ideias'], ['tags', 'Tags']];
-function mapShow() {
-  let saved = {};
-  try { saved = JSON.parse(localStorage.getItem('grifo.mapShow')) || {}; } catch { /* sem armazenamento */ }
-  return Object.fromEntries(MAP_SHOW.map(([k]) => [k, saved[k] !== false]));
-}
-const TYPE_LABEL = { book: 'Livro', theme: 'Tema', subtheme: 'Subtema', tag: 'Tag', note: 'Nota', concept: 'Ideia' };
-
-// notas que ainda não ligam nada: sem [[ ]] e sem tags
-const looseNotes = () => state.notes.filter((n) => !linksOf(n.text).length && !(n.tags || []).length).sort((a, b) => b.createdAt - a.createdAt);
-// sugestões ignoradas ("✕"), guardadas no aparelho
-const MAP_IGNORE = 'grifo.mapIgnore';
-const ignoredPairs = () => { try { return new Set(JSON.parse(localStorage.getItem(MAP_IGNORE)) || []); } catch { return new Set(); } };
-const pairKey = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
-function ignorePair(a, b) {
-  const s = ignoredPairs();
-  s.add(pairKey(a, b));
-  try { localStorage.setItem(MAP_IGNORE, JSON.stringify([...s].slice(-500))); } catch { /* sem armazenamento */ }
-}
-
-// Sugestões grátis: pontos cujas notas usam as mesmas palavras (e ainda não estão ligados)
-const MAP_STOP = new Set('para pela pelo pelos pelas como mais quando sobre entre porque também ainda muito muita sendo essa esse isso esta este isto cada pode podem seus suas dele dela deles delas eles elas tudo todo toda todos todas fazer estar estão temos depois antes sempre nunca outra outro outras outros mesmo mesma qual quais onde assim apenas coisa coisas grande forma parte vida tempo'.split(' '));
-const fold = (t) => norm(t).normalize('NFD').replace(/\p{M}/gu, '');
-function wordBag(id, label) {
-  const text = `${label} ${notesForNode(id).slice(0, 40).map((n) => `${n.title || ''} ${plainText(n.text)}`).join(' ')}`;
-  return new Set((fold(text).match(/\p{L}{5,}/gu) || []).filter((w) => !MAP_STOP.has(w)));
-}
-function freeSuggestions(center, nodes, linked) {
-  const bags = new Map();
-  const bag = (n) => { if (!bags.has(n.id)) bags.set(n.id, wordBag(n.id, n.label.replace(/^#/, ''))); return bags.get(n.id); };
-  const a = bag(center);
-  if (a.size < 3) return [];
-  const ignored = ignoredPairs();
-  return nodes.filter((n) => n.id !== center.id && !linked.has(n.id) && !ignored.has(pairKey(center.id, n.id)))
-    .map((n) => {
-      const b = bag(n);
-      let common = 0;
-      for (const w of b) if (a.has(w)) common++;
-      return { n, common, score: common / Math.sqrt(a.size * b.size || 1) };
-    })
-    .filter((x) => x.common >= 3)
-    .sort((x, y) => y.score - x.score)
-    .slice(0, 3)
-    .map((x) => ({ id: x.n.id, label: x.n.label, type: x.n.type, reason: `${x.common} palavras em comum nas notas` }));
-}
-
-let mapCtx = null; // dados do mapa na tela: pontos, ponto em foco, sugestões
-
-function mapView() {
-  const scope = getScope('mapScope');
-  const show = mapShow();
-  const d = applyShow(graphData(scope), show);
-  const orphans = looseNotes();
-  return `${seg(IDEAS_SEG, 'map')}
-  <input type="search" class="search" id="graph-search" placeholder="Encontrar no mapa…" style="margin-bottom:8px">
-  ${scopeFilters('mapScope')}
-  <div class="map-show"><span class="small muted">Mostrar:</span>${MAP_SHOW.map(([k, label]) => `<label class="chip-toggle"><input type="checkbox" data-map-show="${k}" ${show[k] ? 'checked' : ''}> ${label}</label>`).join('')}</div>
-  ${d.nodes.length ? `<div class="map-trail" id="map-trail" hidden></div>
-  <section class="card graph-wrap">
-    <canvas id="graph" aria-label="Mapa de ideias: cada tema é uma ilha com seus livros"></canvas>
-    <div class="graph-tools">
-      <button type="button" data-graph="in" aria-label="Aproximar">＋</button>
-      <button type="button" data-graph="out" aria-label="Afastar">－</button>
-      <button type="button" data-graph="fit" aria-label="Enquadrar tudo">⤢</button>
-      <button type="button" data-graph="photo" aria-label="Compartilhar mapa como imagem" title="Compartilhar como imagem">📸</button>
-    </div>
-    <div class="legend-row" id="graph-legend"></div>
-    <div class="legend-row legend-shapes">
-      <span><i class="dot"></i>Livro</span>
-      <span><i class="dot ring"></i>Subtema</span>
-      <span><i class="dot diamond"></i>Ideia ou tag</span>
-      <span>Tamanho = nº de notas</span>
-    </div>
-  </section>
-  <section class="card" id="graph-panel"><p class="small muted" style="margin:0">Toque num ponto para focar nele: ficam só ele e as ligações. No computador, arraste um ponto até outro para ligar os dois.</p></section>`
-    : scopeActive(scope) ? empty('Nenhum livro com esses filtros.') : empty('O mapa aparece quando você cadastrar livros com tema e criar notas com [[ligações]].', '<button class="btn primary" data-action="newBook">Adicionar livro</button>')}
-  ${orphans.length ? `<details class="card orphans"${d.nodes.length ? '' : ' open'}><summary><b>🧩 Notas sem ligação (${orphans.length})</b> <span class="small muted">ligue cada uma a uma ideia ou livro</span></summary>
-    ${orphans.slice(0, 8).map((n) => `<div class="row between gap-s li orphan-row"><a class="grow small" href="#/nota/${n.id}">${esc(noteLabel(n))}<br><span class="muted">${esc(bookById(n.bookId)?.title || 'Nota solta')}</span></a>
-      <button class="btn small" data-orphan="${n.id}">🔗 Ligar</button></div>`).join('')}
-    ${orphans.length > 8 ? `<p class="small muted" style="margin:6px 0 0">+ ${orphans.length - 8} outras em <a href="#/notas">Notas</a></p>` : ''}</details>` : ''}`;
-}
-
-function mapPanelHtml(n, near) {
-  if (n.type === 'theme') {
-    return `<div class="row between gap"><div><span class="chip">Tema</span><h3 style="margin:4px 0 0">${esc(n.label)}</h3></div><a class="btn small" href="${n.href}">Abrir</a></div>
-      <div class="small muted" style="margin:10px 0 4px">${near.length} na ilha · toque para focar</div>
-      <div class="chips">${near.map((x) => `<button class="chip chip-btn" data-focus="${esc(x.id)}">${esc(trunc(x.label, 40))}</button>`).join('')}</div>`;
-  }
-  const notes = notesForNode(n.id);
-  const order = ['book', 'subtheme', 'concept', 'tag'];
-  const others = [...near].sort((a, b) => order.indexOf(a.type) - order.indexOf(b.type) || a.label.localeCompare(b.label));
-  const kind = n.article ? 'Artigo' : TYPE_LABEL[n.type];
-  return `<div class="row between gap"><div class="grow"><span class="chip">${kind}</span><h3 style="margin:4px 0 0">${esc(n.label)}</h3>
-      <div class="small muted">${notes.length} ${notes.length === 1 ? 'nota' : 'notas'} · ${others.length} ${others.length === 1 ? 'ligação' : 'ligações'}</div></div>
-    <a class="btn small" href="${n.href}">Abrir</a></div>
-  <div class="row gap-s wrap" style="margin-top:10px"><button class="btn small primary" data-map="connect">🔗 Ligar com…</button><button class="btn small" data-map="ai">✨ Sugerir com IA</button></div>
-  <div id="map-sugg"></div>
-  ${others.length ? `<div class="small muted" style="margin:12px 0 4px">Ligado a</div><div class="chips">${others.map((x) => `<button class="chip chip-btn" data-focus="${esc(x.id)}">${esc(x.article ? 'Artigo' : TYPE_LABEL[x.type])}: ${esc(trunc(x.label, 36))}</button>`).join('')}</div>` : ''}
-  ${notes.length ? `<div class="small muted" style="margin:12px 0 4px">Notas</div>
-    <div class="map-notes">${notes.slice(0, 6).map((x) => `<a class="map-note" href="#/nota/${x.id}"><span>${renderText(trunc(plainText(x.text), 180))}</span><small class="muted">${esc(bookById(x.bookId)?.title || 'Nota solta')}${x.page ? ` · p. ${x.page}` : ''}</small></a>`).join('')}</div>
-    ${notes.length > 6 ? `<a class="small" href="${n.href}">Ver todas as ${notes.length} notas</a>` : ''}` : ''}`;
-}
-const trunc = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
-
-function mapSuggHtml(list, ai = false) {
-  if (!list.length) return '';
-  return `<div class="map-sugg"><div class="small muted" style="margin:12px 0 4px">${ai ? '✨ Sugestões da IA' : 'Talvez se ligue a'} <span class="muted">(tracejado no mapa)</span></div>
-    ${list.map((s, i) => `<div class="row between gap-s li"><span class="grow small"><b>${esc(s.label)}</b>${s.isNew ? ' <span class="chip">ideia nova</span>' : ''}<br><span class="muted">${esc(s.reason || '')}</span></span>
-      <span class="row gap-s"><button class="btn small" data-sugg-link="${i}">Ligar</button><button class="icon-btn" data-sugg-ignore="${i}" aria-label="Ignorar ${esc(s.label)}">✕</button></span></div>`).join('')}</div>`;
-}
-
-function renderTrail(st) {
-  const bar = $('#map-trail');
-  if (!bar) return;
-  bar.hidden = !st;
-  if (!st) return;
-  bar.innerHTML = `<nav class="trail" aria-label="Caminho no mapa"><button class="link-btn" data-trail="home">← Mapa geral</button>${st.trail.map((t, i) => ` <span class="muted">›</span> ${i === st.trail.length - 1 ? `<b>${esc(trunc(t.label, 28))}</b>` : `<button class="link-btn" data-trail="${esc(t.id)}">${esc(trunc(t.label, 22))}</button>`}`).join('')}</nav>
-    <div class="seg-mini" role="group" aria-label="Quantos passos mostrar">${[1, 2].map((dp) => `<button class="${st.depth === dp ? 'active' : ''}" data-depth="${dp}">${dp} ${dp === 1 ? 'passo' : 'passos'}</button>`).join('')}</div>`;
-}
-
-// Liga dois pontos (ou uma nota a um ponto), com o "por quê" escrito pela pessoa
-function connectModal(from, preset = '') {
-  const own = from.note ? '' : from.label;
-  const cands = new Map();
-  for (const c of linkCandidates()) cands.set(norm(c.label), c.label);
-  for (const n of mapCtx?.nodes || []) if (n.type !== 'theme') cands.set(norm(n.label), n.label);
-  for (const a of state.articles) cands.set(norm(a.title), a.title);
-  cands.delete(norm(own));
-  const title = from.note ? noteLabel(from.note) : from.label;
-  openModal(`<form class="form" id="connect-form">
-    <h3>🔗 Ligar “${esc(trunc(title, 60))}”</h3>
-    <label>Com <input name="to" list="connect-list" required autocomplete="off" value="${esc(preset)}" placeholder="Livro, ideia, #tag ou um conceito novo"></label>
-    <datalist id="connect-list">${[...cands.values()].sort((a, b) => a.localeCompare(b, LOCALE)).map((l) => `<option value="${esc(l)}">`).join('')}</datalist>
-    <label>Por que se ligam? <textarea name="why" rows="3" placeholder="ex: os dois falam de decisões rápidas que parecem certas"></textarea>
-      <span class="hint">Escrever o porquê é o que fixa a ligação na memória. Vira uma nota com as duas ideias.</span></label>
-    <div class="actions"><button type="button" class="btn ghost" data-action="close">Cancelar</button><button class="btn primary">Ligar</button></div>
-  </form>`, (root) => {
-    const form = $('#connect-form', root);
-    (preset ? form.why : form.to).focus();
-    form.onsubmit = async (e) => {
-      e.preventDefault();
-      const to = form.to.value.trim();
-      if (!to || norm(to) === norm(own)) return;
-      closeModal();
-      await connectItems(from, to, form.why.value.trim());
-    };
-  });
-}
-
-async function connectItems(from, toRaw, why) {
-  const isTag = (l) => l.startsWith('#');
-  const ref = (l) => (isTag(l) ? '' : `[[${l}]]`);
-  const tagsOf = (...ls) => ls.filter(isTag).map((l) => l.slice(1));
-  const srcOf = (l) => sources().find((b) => norm(b.title) === norm(l));
-  const to = toRaw.trim();
-  if (from.note) {
-    const n = from.note;
-    const text = isTag(to) ? n.text : `${n.text.trim()}\n\n→ ${ref(to)}${why ? ` — ${why}` : ''}`;
-    await commit(() => persist('notes', { ...n, text, tags: splitTags([...(n.tags || []), ...tagsOf(to)]) }));
-    toast(`🔗 Nota ligada a ${esc(to)}`);
-    return;
-  }
-  const a = from.label;
-  // um dos lados é livro ou artigo: a nota fica nele e cita o outro; senão, nota solta citando os dois
-  const bookA = from.id?.startsWith('b:') ? bookById(from.id.slice(2)) : null;
-  const bookB = srcOf(to);
-  const book = bookA || bookB;
-  // quem é o livro da nota não precisa ser citado nela
-  const refs = [bookA ? '' : ref(a), bookB && !bookA ? '' : ref(to)].filter(Boolean);
-  const text = `${refs.join(' ↔ ') || `[[${to}]]`}${why ? ` — ${why}` : ''}`;
-  const note = { id: uid(), createdAt: Date.now(), bookId: book?.id || null, title: '', text, kind: 'thought', source: 'map', tags: tagsOf(a, to), page: null };
-  await commit(() => persist('notes', note));
-  toast(`🔗 ${esc(a)} ↔ ${esc(to)} · <u>ver nota</u>`, '', () => { location.hash = `#/nota/${note.id}`; });
-}
-
-mapView.mount = (arg) => {
-  const canvas = $('#graph');
-  const orphansBox = view.querySelector('.orphans');
-  if (orphansBox) orphansBox.onclick = (e) => { const b = e.target.closest('[data-orphan]'); if (b) connectModal({ note: noteById(b.dataset.orphan) }); };
-  if (!canvas) return;
-  const panel = $('#graph-panel');
-  const data = applyShow(graphData(getScope('mapScope')), mapShow());
-  mapCtx = { nodes: data.nodes, focus: null, sugg: [] };
-  const byId = new Map(data.nodes.map((n) => [n.id, n]));
-  const linkedTo = (id) => new Set(data.links.flatMap((l) => (l.source === id ? [l.target] : l.target === id ? [l.source] : [])));
-  const showSugg = (list, ai) => {
-    mapCtx.sugg = list;
-    const box = $('#map-sugg');
-    if (box) box.innerHTML = mapSuggHtml(list, ai);
-    graphApi.setSuggestions(list.filter((s) => !s.isNew).map((s) => s.id));
-  };
-  graphApi = createGraph(canvas, data, {
-    onSelect(n, near) {
-      mapCtx.focus = n;
-      if (!n) { panel.innerHTML = '<p class="small muted" style="margin:0">Toque num ponto para focar nele: ficam só ele e as ligações. No computador, arraste um ponto até outro para ligar os dois.</p>'; return; }
-      panel.innerHTML = mapPanelHtml(n, near);
-    },
-    onFocus(st) {
-      renderTrail(st);
-      try { if (st) sessionStorage.setItem('grifo.mapFocus', JSON.stringify(st)); else sessionStorage.removeItem('grifo.mapFocus'); } catch { /* sem armazenamento */ }
-      const n = st && byId.get(st.id);
-      if (n) showSugg(freeSuggestions(n, data.nodes, linkedTo(n.id)), false);
-    },
-    onConnect(a, b) { connectModal({ id: a.id, label: a.label, type: a.type }, b.label); },
-  });
-  panel.onclick = async (e) => {
-    const t = e.target.closest('button');
-    if (!t) return;
-    const n = mapCtx.focus;
-    if (t.dataset.focus) graphApi.focusOn(t.dataset.focus);
-    else if (t.dataset.map === 'connect' && n) connectModal({ id: n.id, label: n.label, type: n.type });
-    else if (t.dataset.map === 'ai' && n) {
-      t.disabled = true;
-      t.textContent = '✨ Pensando…';
-      try {
-        const candidates = data.nodes.filter((x) => x.id !== n.id).map((x) => x.label.replace(/^#/, ''));
-        const context = notesForNode(n.id).slice(0, 20).map((x) => plainText(x.text)).join('\n---\n');
-        const res = await aiRun('links', { note: { book: n.label, text: context || n.label }, candidates });
-        const byLabel = new Map(data.nodes.map((x) => [norm(x.label.replace(/^#/, '')), x]));
-        const linked = linkedTo(n.id);
-        const list = [
-          ...(res.existing || []).map((x) => ({ node: byLabel.get(norm(x.target)), reason: x.reason })).filter((x) => x.node && x.node.id !== n.id && !linked.has(x.node.id))
-            .map((x) => ({ id: x.node.id, label: x.node.label, type: x.node.type, reason: x.reason })),
-          ...(res.concepts || []).filter((x) => !byLabel.has(norm(x.name))).map((x) => ({ id: `c:${norm(x.name)}`, label: x.name.trim(), reason: x.reason, isNew: true })),
-        ];
-        if (!list.length) toast('Nenhuma ligação nova encontrada.');
-        showSugg(list, true);
-      } catch (err) {
-        if (err.message) toast(esc(err.message), 'err');
-      }
-      t.disabled = false;
-      t.textContent = '✨ Sugerir com IA';
-    } else if (t.dataset.suggLink && n) {
-      const s = mapCtx.sugg[Number(t.dataset.suggLink)];
-      if (s) connectModal({ id: n.id, label: n.label, type: n.type }, s.label);
-    } else if (t.dataset.suggIgnore && n) {
-      const s = mapCtx.sugg[Number(t.dataset.suggIgnore)];
-      if (!s) return;
-      ignorePair(n.id, s.id);
-      showSugg(mapCtx.sugg.filter((x) => x !== s), false);
-    }
-  };
-  $('#map-trail').onclick = (e) => {
-    const b = e.target.closest('button');
-    if (!b) return;
-    if (b.dataset.trail === 'home') graphApi.exitFocus();
-    else if (b.dataset.trail) graphApi.focusOn(b.dataset.trail);
-    else if (b.dataset.depth) graphApi.setDepth(Number(b.dataset.depth));
-  };
-  $('#graph-legend').innerHTML = graphApi.groups().map((g) => `<a href="#" data-island="${esc(g.key)}"><i class="dot" style="background:${g.color}"></i>${esc(g.label)}</a>`).join('')
-    || (mapShow().areas ? '<span class="muted">Dê um tema aos livros para formar as ilhas.</span>' : '<span class="muted">Áreas escondidas: só as ligações entre os pontos.</span>');
-  $('#graph-legend').onclick = (e) => {
-    const a = e.target.closest('[data-island]');
-    if (!a) return;
-    e.preventDefault();
-    graphApi.exitFocus();
-    graphApi.selectById(`g:${a.dataset.island}`);
-  };
-  view.querySelectorAll('[data-graph]').forEach((b) => {
-    b.onclick = () => ({ in: () => graphApi.zoom(1.3), out: () => graphApi.zoom(1 / 1.3), fit: () => { graphApi.exitFocus(); graphApi.fit(); }, photo: () => actions.shareMap() })[b.dataset.graph]();
-  });
-  const search = $('#graph-search');
-  search.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); if (!graphApi.find(search.value)) toast('Nada encontrado no mapa.'); } };
-  // volta ao foco de antes (ao voltar para o mapa ou depois de ligar dois pontos)
-  let saved = null;
-  try { saved = JSON.parse(sessionStorage.getItem('grifo.mapFocus')); } catch { /* sem armazenamento */ }
-  if (arg) setTimeout(() => graphApi.selectById(decodeURIComponent(arg)), 50);
-  else if (saved && graphApi.has(saved.id)) {
-    setTimeout(() => {
-      graphApi.focusOn(saved.id, { trailIds: saved.trail.map((t) => t.id).filter((id) => graphApi.has(id)) });
-      if (saved.depth === 2) graphApi.setDepth(2);
-    }, 30);
-  }
-};
 
 // ---------- cards de memorização ----------
 // [[ligação]] já escapada → negrito, sem os colchetes (em cards e textos que não levam a lugar nenhum)
@@ -1512,530 +962,6 @@ document.addEventListener('keydown', (e) => {
   e.preventDefault();
   location.hash = '#/busca';
 });
-
-// ---------- artigos salvos por link ----------
-const FREE_ARTICLES = 10;
-const SHARED_KEY = 'grifo.shared';
-
-// tempo de leitura (~200 palavras por minuto) e quanto já foi lido (guardado neste aparelho)
-const readMinutes = (a) => Math.max(1, Math.round((a.blocks || []).reduce((n, b) => n + b.x.split(/\s+/).length, 0) / 200));
-const POS_KEY = (id) => `grifo.artpos.${id}`;
-function readPos(id) {
-  try { return JSON.parse(localStorage.getItem(POS_KEY(id))) || { p: 0, y: 0 }; } catch { return { p: 0, y: 0 }; }
-}
-const ART_QUEUE = { want: 'Ler depois', reading: 'Lendo', finished: 'Lidos' };
-
-// artigo ou PDF começado: marcado como lendo ou com parte do texto já lida
-const articleStarted = (a) => a.status !== 'finished' && (a.status === 'reading' || readPos(a.id).p > 0.05);
-function articleItem(a) {
-  const notes = state.notes.filter((n) => n.bookId === a.id).length;
-  const pos = readPos(a.id).p;
-  const status = a.status === 'finished' ? '<span class="chip">✓ Lido</span>'
-    : articleStarted(a) ? `<span class="chip p-academic">Lendo${pos > 0.05 ? ` · ${Math.round(pos * 100)}%` : ''}</span>` : '<span class="chip">Ler depois</span>';
-  return `<a class="card book art-item" href="${srcHref(a)}">
-      ${a.cover ? `<img class="art-thumb" src="${esc(a.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="art-thumb ph">${a.kind === 'pdf' ? '📄' : '📰'}</span>`}
-      <div class="grow"><div class="book-title">${esc(a.title)}</div>
-        <div class="small muted">${a.kind === 'pdf' ? `PDF · ${a.pages || '?'} páginas` : `${esc(a.site || '')} · ${readMinutes(a)} min`}${notes ? ` · ${notes} ${notes === 1 ? 'grifo' : 'grifos'}` : ''}</div>
-        <div class="chips" style="margin-top:4px">${status}${a.genre ? `<span class="chip tag">${esc(a.genre)}</span>` : ''}</div></div></a>`;
-}
-
-function articlesView() {
-  const filter = sessionStorage.getItem('artFilter') || 'all';
-  const all = [...state.articles].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-  const list = filter === 'all' ? all : all.filter((a) => (a.status || 'want') === filter);
-  const count = (k) => all.filter((a) => (a.status || 'want') === k).length;
-  return `${seg(READ_SEG, 'articles')}
-  <h2>Artigos e PDFs</h2>
-  <form class="row gap-s" id="art-form"><input name="url" type="url" class="search grow" required placeholder="Cole o link de um artigo…" autocomplete="off" style="margin:0"><button class="btn primary" id="art-save">Salvar</button></form>
-  <div class="row gap-s wrap" style="margin-top:8px"><button class="btn" data-action="addPdf">📄 Adicionar PDF</button><input type="file" id="pdf-file" accept="application/pdf,.pdf" hidden></div>
-  <p class="hint">No celular, em qualquer site ou app de notícias: <b>Compartilhar → Grifo</b>. Depois é só selecionar um trecho e tocar em <b>Grifar</b>.</p>
-  ${!isPlus() ? `<p class="small muted">${state.articles.length} de ${FREE_ARTICLES} artigos do plano grátis · <a href="#/plus">ilimitados no Plus</a></p>` : ''}
-  ${all.length ? `<div class="tabs">${[['all', `Todos (${all.length})`], ...Object.entries(ART_QUEUE).map(([k, v]) => [k, `${v} (${count(k)})`])]
-    .map(([k, v]) => `<button class="tab ${filter === k ? 'active' : ''}" data-action="artFilter" data-v="${k}">${v}</button>`).join('')}</div>` : ''}
-  ${list.length ? list.map(articleItem).join('')
-    : all.length ? '<p class="nudge">Nenhum artigo aqui.</p>' : empty('Salve artigos, posts e notícias para ler, grifar e conectar com seus livros.')}`;
-}
-articlesView.mount = () => {
-  const form = $('#art-form');
-  form.onsubmit = (e) => { e.preventDefault(); actions.saveArticle({ url: form.url.value.trim() }); };
-};
-
-// Finalidade, tema e subtema do artigo (como nos livros), com o botão para mudar
-function articleTags(a) {
-  const pp = PURPOSE[a.purpose || 'hobby'];
-  const parts = [a.genre, a.subtheme].filter(Boolean);
-  return parts.length
-    ? `<div class="chips art-tags"><span class="chip p-${a.purpose || 'hobby'}">${pp.icon} ${pp.label}</span>${parts.map((x) => `<a class="chip tag" href="${conceptHref(x)}">${esc(x)}</a>`).join('')}<button class="chip chip-btn" data-action="classifyArticle" data-id="${a.id}">✏️ Editar</button></div>`
-    : `<button class="card art-classify" data-action="classifyArticle" data-id="${a.id}">🏷️ <span><b>Classifique este artigo</b><br><span class="small muted">Finalidade, tema e subtema: ele passa a aparecer no mapa, nos filtros e junto dos livros do mesmo tema.</span></span></button>`;
-}
-
-// O Grifo não conseguiu ler a página (site com proteção contra robôs, login, link de PDF…):
-// oferece baixar o PDF no próprio site e adicionar, ou guardar só o link com o nome escolhido
-function articleFallback(url, why) {
-  const guess = decodeURIComponent(url.replace(/[?#].*$/, '').replace(/\/+$/, '').split('/').pop() || '').replace(/\.(html?|pdf|php|aspx?)$/i, '').replace(/[-_]+/g, ' ').trim();
-  const host = (() => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; } })();
-  openModal(`<form class="form" id="artfb-form"><h3>📰 Não consegui ler essa página</h3>
-    <p class="small muted" style="margin:0">${esc(why || '')} Alguns sites (como o SciELO) bloqueiam leitores automáticos.</p>
-    <div class="card" style="margin:0"><b>📄 Melhor opção: o PDF</b>
-      <p class="small" style="margin:4px 0 8px">Abra o site, baixe o PDF do artigo e adicione aqui. Você grifa no próprio PDF.</p>
-      <div class="row gap-s wrap"><a class="btn small" href="${esc(url)}" target="_blank" rel="noopener noreferrer">↗ Abrir o site</a><button type="button" class="btn small primary" id="artfb-pdf">📄 Adicionar PDF</button></div></div>
-    <div class="card" style="margin:0"><b>🔗 Ou guarde só o link</b>
-      <label style="margin-top:6px">Nome <input name="title" required value="${esc(guess)}" placeholder="Título do artigo"></label>
-      <span class="hint">Fica na fila “Ler depois”, com o link para o original. Dá para criar notas nele.</span></div>
-    <div class="actions"><button type="button" class="btn ghost" data-action="close">Cancelar</button><button class="btn">Salvar só o link</button></div>
-  </form>`, (root) => {
-    const form = $('#artfb-form', root);
-    $('#artfb-pdf', root).onclick = () => { closeModal(); actions.addPdf(); };
-    form.onsubmit = async (e) => {
-      e.preventDefault();
-      const art = {
-        id: uid(), createdAt: Date.now(), kind: 'article', status: 'want', purpose: 'hobby', genre: '', subtheme: '', pages: 0, currentPage: 0, rating: 0, isbn: '',
-        title: form.title.value.trim(), author: '', site: host, url, sourceUrl: url, blocks: [], linkOnly: true,
-      };
-      closeModal();
-      await commit(() => persist('books', art));
-      location.hash = `#/artigo/${art.id}`;
-    };
-  });
-}
-
-// Marca no texto os trechos já grifados (as notas de citação deste artigo)
-function markHighlights(html, quotes) {
-  let out = html;
-  for (const q of quotes) {
-    const h = esc(q);
-    if (h.length >= 3 && out.includes(h)) out = out.replace(h, `<mark>${h}</mark>`);
-  }
-  return out;
-}
-
-function articleView(id) {
-  const a = state.articles.find((x) => x.id === id);
-  if (!a) return `<a href="#/artigos" class="back">← Artigos</a>${empty('Artigo não encontrado.')}`;
-  const notes = state.notes.filter((n) => n.bookId === id).sort((x, y) => x.createdAt - y.createdAt);
-  const quotes = notes.filter((n) => n.kind === 'quote').map((n) => plainText(n.text));
-  const tag = { h: 'h3', q: 'blockquote', li: 'li', p: 'p' };
-  const body = (a.blocks || []).map((b) => `<${tag[b.t] || 'p'}>${markHighlights(esc(b.x), quotes)}</${tag[b.t] || 'p'}>`).join('');
-  return `<a href="#/artigos" class="back">← Artigos</a>
-  <article class="reader">
-    <div class="small muted">${esc([a.site, a.author, `${readMinutes(a)} min de leitura`].filter(Boolean).join(' · '))}</div>
-    <h1 class="reader-title">${esc(a.title)}</h1>
-    <div class="quick">
-      <a class="btn small" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">↗ Original</a>
-      <button class="btn small" data-action="articleRead" data-id="${a.id}">${a.status === 'finished' ? '✓ Lido' : '✔ Marcar como lido'}</button>
-      <button class="btn small" data-action="newNote" data-id="${a.id}">✍️ Nota</button>
-      <button class="btn small ghost" data-action="deleteArticle" data-id="${a.id}">🗑️ Excluir</button>
-    </div>
-    ${articleTags(a)}
-    <div class="reader-body" id="reader-body">${body || `<p class="nudge">Este artigo foi guardado só como link. Leia no <a href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">site original ↗</a> e registre aqui seus grifos com <b>✍️ Nota</b>, ou baixe o PDF de lá e use <a href="#" data-action="addPdf">📄 Adicionar PDF</a>.</p>`}</div>
-  </article>
-  <h3>Seus grifos (${notes.length})</h3>
-  ${notes.length ? notes.map((n) => noteCard(n, false)).join('') : '<p class="small muted">Selecione um trecho do texto e toque em <b>Grifar</b>.</p>'}
-  <div class="sel-bar" id="sel-bar" hidden><button class="btn primary" id="grifar-btn">🖍️ Grifar trecho</button><button class="btn" id="define-btn" hidden>📖 Significado</button></div>`;
-}
-// Seleção de texto + botão "Grifar" (artigos e PDFs). onSave recebe o texto e a página (no PDF).
-function attachGrifar(bodyEl, btn, onSave, { sourceId = null, refine = null } = {}) {
-  // a barra tem o Grifar e, com uma palavra (ou expressão curta) selecionada, o Significado
-  const bar = btn.closest('.sel-bar') || btn;
-  const defineBtn = bar.querySelector('#define-btn');
-  const shortSel = (t) => t && t.text.length <= 40 && t.text.split(' ').length <= 3;
-  const isW = (ch) => /[\p{L}\p{N}]/u.test(ch || '');
-  // trecho selecionado, completado até o fim das palavras cortadas pela seleção ("faz a m" → "faz a memória")
-  const sel = () => {
-    const s = getSelection();
-    if (!s || s.isCollapsed || !bodyEl.contains(s.anchorNode) || !bodyEl.contains(s.focusNode)) return null;
-    const r = s.getRangeAt(0).cloneRange();
-    if (r.startContainer.nodeType === 3) {
-      const t = r.startContainer.data;
-      let i = r.startOffset;
-      while (i > 0 && isW(t[i - 1]) && isW(t[i])) i--;
-      r.setStart(r.startContainer, i);
-    }
-    if (r.endContainer.nodeType === 3) {
-      const t = r.endContainer.data;
-      let i = r.endOffset;
-      while (i < t.length && isW(t[i - 1]) && isW(t[i])) i++;
-      r.setEnd(r.endContainer, i);
-    }
-    const el = r.startContainer.nodeType === 3 ? r.startContainer.parentElement : r.startContainer;
-    const block = el?.closest('p, li, blockquote, h1, h2, h3, h4, .pdf-page, figcaption, td') || el;
-    // refine: no PDF em duas colunas, refaz o texto seguindo a coluna onde a seleção começou
-    const text = (refine && refine(r)) || r.toString();
-    return { text: text.replace(/\s+/g, ' ').trim(), page: Number(el?.closest('[data-page]')?.dataset.page) || null, around: block?.textContent || '' };
-  };
-  // guarda o último trecho selecionado: no toque, a seleção pode sumir antes do clique chegar ao botão
-  let last = null;
-  const onSel = () => {
-    if (!btn.isConnected) { document.removeEventListener('selectionchange', onSel); return; }
-    const t = sel();
-    if (t && t.text.length >= 2) {
-      last = t;
-      bar.hidden = false;
-      btn.hidden = t.text.length < 3;
-      if (defineBtn) defineBtn.hidden = !shortSel(t);
-    } else if (!bar.matches(':hover') && !bar.contains(document.activeElement)) bar.hidden = true;
-  };
-  document.addEventListener('selectionchange', onSel);
-  // o mousedown nos botões não desfaz a seleção (cancelar o pointerdown impediria o clique no Chrome)
-  bar.addEventListener('mousedown', (e) => e.preventDefault());
-  btn.onclick = async () => {
-    const t = sel() || last;
-    if (!t || t.text.length < 3) return;
-    last = null;
-    bar.hidden = true;
-    getSelection().removeAllRanges();
-    await onSave(t.text, t.page);
-  };
-  if (defineBtn) defineBtn.onclick = async () => {
-    const t = sel() || last;
-    if (!shortSel(t)) return;
-    last = null;
-    bar.hidden = true;
-    getSelection().removeAllRanges();
-    const D = await import('./dict.js');
-    wordLookup(t.text, { sourceId, context: D.sentenceAround(t.around, D.cleanWord(t.text)) });
-  };
-}
-
-// continua de onde parou e marca "Lendo" ao passar do começo
-function trackReading(id, bodyEl) {
-  const saved = readPos(id);
-  if (saved.y > 0 && view.dataset.route !== location.hash) setTimeout(() => scrollTo(0, saved.y), 50);
-  let t = 0;
-  const onScroll = () => {
-    if (!bodyEl.isConnected) { removeEventListener('scroll', onScroll); return; }
-    clearTimeout(t);
-    t = setTimeout(async () => {
-      const r = bodyEl.getBoundingClientRect();
-      const p = Math.min(1, Math.max(0, (innerHeight - r.top) / r.height));
-      try { localStorage.setItem(POS_KEY(id), JSON.stringify({ p, y: scrollY })); } catch { /* sem armazenamento */ }
-      const a = state.articles.find((x) => x.id === id);
-      if (a && (a.status || 'want') === 'want' && p > 0.15) await persist('books', { ...a, status: 'reading', startDate: G.ymd() });
-    }, 400);
-  };
-  addEventListener('scroll', onScroll, { passive: true });
-}
-
-articleView.mount = (id) => {
-  const btn = $('#grifar-btn');
-  const bodyEl = $('#reader-body');
-  if (!btn || !bodyEl) return;
-  trackReading(id, bodyEl);
-  attachGrifar(bodyEl, btn, async (text) => {
-    const note = { id: uid(), createdAt: Date.now(), bookId: id, text, kind: 'quote', source: 'article', tags: [], page: null };
-    await commit(() => persist('notes', note));
-    toast('🖍️ Trecho grifado · <u>adicionar reflexão</u>', '', () => noteForm(noteById(note.id)));
-  }, { sourceId: id });
-};
-// ---------- PDFs ----------
-// O arquivo fica no aparelho (IndexedDB); no Plus também vai para o armazenamento da conta e é baixado em outro aparelho.
-const canSyncPdf = () => Cloud.enabled() && Cloud.user() && Cloud.plan() === 'plus';
-async function pdfBlob(a) {
-  const local = await db.getFile(a.id);
-  if (local) return local;
-  if (!canSyncPdf() || !a.synced) return null;
-  const blob = await Cloud.downloadPdf(a.id);
-  await db.setFile(a.id, blob);
-  return blob;
-}
-const pdfNotesHtml = (id) => {
-  const notes = state.notes.filter((n) => n.bookId === id).sort((x, y) => (x.page || 0) - (y.page || 0) || x.createdAt - y.createdAt);
-  return `<h3>Seus grifos (${notes.length})</h3>${notes.length ? notes.map((n) => noteCard(n, false)).join('') : '<p class="small muted">Selecione um trecho do PDF e toque em <b>Grifar</b>.</p>'}`;
-};
-
-function pdfView(id) {
-  const a = state.articles.find((x) => x.id === id && x.kind === 'pdf');
-  if (!a) return `<a href="#/artigos" class="back">← Artigos</a>${empty('PDF não encontrado.')}`;
-  return `<a href="#/artigos" class="back">← Artigos</a>
-  <article class="reader pdf-reader">
-    <div class="small muted">${esc(['PDF', a.pages ? `${a.pages} páginas` : '', a.author].filter(Boolean).join(' · '))}</div>
-    <h1 class="reader-title">${esc(a.title)}</h1>
-    <div class="quick">
-      <button class="btn small" data-action="articleRead" data-id="${a.id}">${a.status === 'finished' ? '✓ Lido' : '✔ Marcar como lido'}</button>
-      <button class="btn small" data-action="newNote" data-id="${a.id}">✍️ Nota</button>
-      <button class="btn small" data-action="pdfImport" data-id="${a.id}">📥 Importar grifos do arquivo</button>
-      <button class="btn small ghost" data-action="deleteArticle" data-id="${a.id}">🗑️ Excluir</button>
-    </div>
-    ${articleTags(a)}
-    <p class="small muted" id="pdf-status">Abrindo o PDF…</p>
-    <div class="pdf-pages" id="reader-body"></div>
-  </article>
-  <div id="pdf-notes">${pdfNotesHtml(id)}</div>
-  <div class="sel-bar" id="sel-bar" hidden><button class="btn primary" id="grifar-btn">🖍️ Grifar trecho</button><button class="btn" id="define-btn" hidden>📖 Significado</button></div>`;
-}
-pdfView.mount = async (id) => {
-  const a = state.articles.find((x) => x.id === id && x.kind === 'pdf');
-  const bodyEl = $('#reader-body');
-  const status = $('#pdf-status');
-  if (!a || !bodyEl) return;
-  let blob;
-  try { blob = await pdfBlob(a); } catch { blob = null; }
-  if (!bodyEl.isConnected) return;
-  if (!blob) {
-    status.innerHTML = `O arquivo deste PDF está em outro aparelho${canSyncPdf() ? '' : ' (no Plus, seus PDFs sincronizam entre aparelhos)'}. <button class="btn small" id="pdf-reattach">📄 Escolher o arquivo</button>`;
-    $('#pdf-reattach').onclick = () => actions.addPdf({ id });
-    return;
-  }
-  const P = await import('./pdf.js');
-  let doc;
-  try { doc = await P.openPdf(blob); } catch (e) { status.textContent = `Não consegui abrir o PDF: ${e.message}`; return; }
-  status.remove();
-  // páginas: espaço reservado do tamanho certo e desenho só quando chega perto da tela
-  const width = Math.min(bodyEl.clientWidth || 600, 900);
-  const first = await doc.getPage(1);
-  const v = first.getViewport({ scale: 1 });
-  const h = Math.round((width / v.width) * v.height);
-  bodyEl.innerHTML = Array.from({ length: doc.numPages }, (_, i) => `<div class="pdf-page" data-page="${i + 1}" style="width:${width}px;height:${h}px"><span class="pdf-pn">${i + 1}</span></div>`).join('');
-  const io = new IntersectionObserver((entries) => {
-    for (const e of entries) {
-      if (!e.isIntersecting || e.target.dataset.done) continue;
-      e.target.dataset.done = '1';
-      P.renderPage(doc, Number(e.target.dataset.page), e.target, width).catch(() => { e.target.dataset.done = ''; });
-    }
-  }, { rootMargin: '900px 0px' });
-  bodyEl.querySelectorAll('.pdf-page').forEach((el) => io.observe(el));
-  trackReading(id, bodyEl);
-  attachGrifar(bodyEl, $('#grifar-btn'), async (text, page) => {
-    const note = { id: uid(), createdAt: Date.now(), bookId: id, text, kind: 'quote', source: 'pdf', tags: [], page };
-    await commit(() => persist('notes', note), { rerender: false });
-    $('#pdf-notes').innerHTML = pdfNotesHtml(id);
-    toast(`🖍️ Grifado${page ? ` (p. ${page})` : ''} · <u>adicionar reflexão</u>`, '', () => noteForm(noteById(note.id)));
-  }, { sourceId: id, refine: P.columnText });
-  // na primeira vez, traz os grifos que já estavam no arquivo
-  if (!a.imported) importPdfHighlights(a, doc, P, true);
-};
-
-// Grifos feitos em outros apps viram notas (sem repetir os que já existem)
-async function importPdfHighlights(a, doc, P, auto = false) {
-  try {
-    const found = await P.existingHighlights(doc);
-    const have = new Set(state.notes.filter((n) => n.bookId === a.id).map((n) => `${n.page}|${norm(plainText(n.text))}`));
-    const add = found.filter((x) => !have.has(`${x.page}|${norm(x.text)}`));
-    await commit(async () => {
-      for (const [i, x] of add.entries()) {
-        await persist('notes', { id: uid(), createdAt: Date.now() + i, bookId: a.id, text: x.comment ? `${x.text}\n\n${x.comment}` : x.text, kind: 'quote', source: 'pdf', tags: [], page: x.page });
-      }
-      await persist('books', { ...state.articles.find((y) => y.id === a.id), imported: true });
-    }, { rerender: false });
-    if ($('#pdf-notes')) $('#pdf-notes').innerHTML = pdfNotesHtml(a.id);
-    if (add.length) toast(`📥 ${add.length} ${add.length === 1 ? 'grifo importado' : 'grifos importados'} do arquivo`);
-    else if (!auto) toast(found.length ? 'Os grifos do arquivo já estavam aqui.' : 'Este PDF não tem grifos feitos em outros apps.');
-  } catch (e) {
-    if (!auto) toast(`Não consegui ler os grifos do arquivo: ${esc(e.message)}`, 'err');
-  }
-}
-
-const pdfActions = {
-  // escolhe um PDF no aparelho (id: trocar o arquivo de um PDF já salvo)
-  addPdf({ id } = {}) {
-    const input = $('#pdf-file') || Object.assign(document.createElement('input'), { type: 'file', accept: 'application/pdf,.pdf' });
-    input.value = '';
-    input.onchange = () => { if (input.files[0]) importPdfFile(input.files[0], id); };
-    input.click();
-  },
-  // PDF recebido pelo "Compartilhar" do celular: o service worker guardou num cache até o app abrir
-  async sharedPdf() {
-    let c, res;
-    try { c = await caches.open(SHARE_CACHE); res = await c.match('pdf'); } catch { /* sem cache */ }
-    if (!res) return;
-    await c.delete('pdf');
-    const name = decodeURIComponent(res.headers.get('x-name') || 'documento.pdf');
-    importPdfFile(new File([await res.blob()], name, { type: 'application/pdf' }));
-  },
-  async pdfImport({ id }) {
-    const a = state.articles.find((x) => x.id === id);
-    const blob = await pdfBlob(a);
-    if (!blob) { toast('O arquivo deste PDF não está neste aparelho.', 'err'); return; }
-    const P = await import('./pdf.js');
-    importPdfHighlights(a, await P.openPdf(blob), P, false);
-  },
-};
-
-// Abre um PDF escolhido (ou recebido pelo "Compartilhar") e guarda no aparelho (e na conta, no Plus).
-// id: trocar o arquivo de um PDF já salvo
-const SHARE_CACHE = 'grifo-compartilhado';
-async function importPdfFile(f, id) {
-  if (f.size > 50 * 1024 * 1024) { toast('PDF grande demais (máximo 50 MB).', 'err'); return; }
-  toast('📄 Abrindo o PDF…');
-  try {
-    const P = await import('./pdf.js');
-    const doc = await P.openPdf(f);
-    const meta = await P.info(doc, f.name);
-    const old = id && state.articles.find((x) => x.id === id);
-    const rec = old ? { ...old, pages: meta.pages } : {
-      id: uid(), createdAt: Date.now(), kind: 'pdf', status: 'reading', startDate: G.ymd(), purpose: 'hobby', genre: '', subtheme: '', pages: meta.pages, currentPage: 0, rating: 0, isbn: '',
-      title: meta.title || 'PDF sem título', author: meta.author, fileName: f.name, size: f.size,
-    };
-    await db.setFile(rec.id, f);
-    if (canSyncPdf()) {
-      // sem esperar mais que 30 s: a conexão lenta não pode impedir de abrir o PDF
-      const slow = new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado')), 30_000));
-      try { await Promise.race([Cloud.uploadPdf(rec.id, f), slow]); rec.synced = true; } catch { toast('O PDF ficou só neste aparelho (não foi possível enviar para a conta agora).', 'err'); }
-    }
-    await commit(() => persist('books', rec));
-    Cloud.track('pdf_add');
-    location.hash = `#/pdf/${rec.id}`;
-    if (!old) toast(`📄 “${esc(rec.title)}” adicionado · <u>mudar o nome</u>`, '', () => actions.classifyArticle({ id: rec.id }));
-    if (old) render();
-  } catch (e) {
-    console.error(e);
-    const why = e?.name === 'PasswordException' ? 'o arquivo tem senha' : e?.name === 'InvalidPDFException' ? 'o arquivo não é um PDF válido' : e?.message || String(e);
-    toast(`Não consegui abrir esse PDF: ${esc(why)}`, 'err');
-  }
-}
-
-// Sugestão de finalidade, tema e subtema pela IA (Plus), usando os temas que a pessoa já tem
-async function suggestCategory(a) {
-  const map = new Map();
-  for (const b of sources()) {
-    if (!b.genre) continue;
-    if (!map.has(b.genre)) map.set(b.genre, new Set());
-    if (b.subtheme) map.get(b.genre).add(b.subtheme);
-  }
-  const themes = [...map].map(([theme, subs]) => ({ theme, subthemes: [...subs] }));
-  const text = (a.blocks || []).map((b) => b.x).join('\n').slice(0, 5000);
-  return aiRun('classify', { title: a.title, site: a.site, text, themes });
-}
-// Logo depois de salvar: classifica sozinho, se a IA estiver liberada para a pessoa
-async function autoClassify(id) {
-  if (AI.available(state.settings) !== 'ok') return;
-  try {
-    const a = state.articles.find((x) => x.id === id);
-    const r = await suggestCategory(a);
-    const now = state.articles.find((x) => x.id === id);
-    if (!now || now.genre) return; // a pessoa já classificou nesse meio tempo
-    await commit(() => persist('books', { ...now, purpose: r.purpose, genre: r.theme, subtheme: r.subtheme }), { quiet: true });
-    toast(`🏷️ Classificado como ${esc(r.theme)} › ${esc(r.subtheme)} · <u>alterar</u>`, '', () => actions.classifyArticle({ id }));
-  } catch { /* sem classificação automática: a pessoa classifica à mão */ }
-}
-
-const articleActions = {
-  async saveArticle({ url }) {
-    if (!/^https?:\/\//i.test(url || '')) { toast('Cole o endereço completo do artigo, começando com https://', 'err'); return; }
-    const same = state.articles.find((a) => a.url === url || a.sourceUrl === url);
-    if (same) { location.hash = `#/artigo/${same.id}`; return; }
-    if (!Cloud.enabled() || !Cloud.user()) { toast('Entre na sua conta para salvar artigos.', 'err'); return; }
-    if (!isPlus() && state.articles.length >= FREE_ARTICLES) {
-      toast(`⭐ O plano grátis guarda até ${FREE_ARTICLES} artigos · <u>conhecer o Plus</u>`, 'gold', () => { location.hash = '#/plus'; });
-      return;
-    }
-    const btn = $('#art-save');
-    if (btn) { btn.disabled = true; btn.textContent = 'Buscando…'; }
-    toast('📰 Buscando o artigo…');
-    try {
-      const r = await Cloud.fetchArticle(url);
-      const art = {
-        id: uid(), createdAt: Date.now(), kind: 'article', status: 'want', purpose: 'hobby', genre: '', subtheme: '', pages: 0, currentPage: 0, rating: 0, isbn: '',
-        title: r.title, author: r.byline, site: r.site, url: r.url, sourceUrl: url, cover: r.image, excerpt: r.excerpt, published: r.published, lang: r.lang, blocks: r.blocks,
-      };
-      await commit(() => persist('books', art));
-      Cloud.track('article_save');
-      location.hash = `#/artigo/${art.id}`;
-      toast(`📰 “${esc(art.title)}” salvo · <u>mudar o nome</u>`, '', () => actions.classifyArticle({ id: art.id }));
-      autoClassify(art.id);
-    } catch (e) {
-      articleFallback(url, e.message);
-    } finally {
-      if (btn?.isConnected) { btn.disabled = false; btn.textContent = 'Salvar'; }
-    }
-  },
-  classifyArticle({ id }) {
-    const a = state.articles.find((x) => x.id === id);
-    openModal(`<form class="form" id="artcat-form"><h3>✏️ ${a.kind === 'pdf' ? 'Editar PDF' : 'Editar artigo'}</h3>
-      <label>Nome <input name="title" required value="${esc(a.title)}" autocomplete="off"></label>
-      <label>Autor <input name="author" value="${esc(a.author || '')}" placeholder="ex: Silva, M.; Souza, A." autocomplete="off"></label>
-      <label>Finalidade
-        <div class="radio-pills">${Object.entries(PURPOSE).map(([k, p]) => `<input type="radio" name="purpose" id="ap-${k}" value="${k}" ${(a.purpose || 'hobby') === k ? 'checked' : ''}><label for="ap-${k}">${p.icon} ${p.label}</label>`).join('')}</div>
-      </label>
-      <div class="grid2">
-        <label>Tema <input name="genre" list="themes" value="${esc(a.genre || '')}" placeholder="ex: Psicologia" autocomplete="off">${datalist('themes', themeOptions())}</label>
-        <label>Subtema <input name="subtheme" list="subthemes" value="${esc(a.subtheme || '')}" placeholder="ex: Memória" autocomplete="off"><span id="art-subthemes">${datalist('subthemes', subthemeOptions(a.genre))}</span></label>
-      </div>
-      <button type="button" class="btn small" id="artcat-ai">✨ Sugerir com IA${isPlus() ? '' : ' 🔒'}</button>
-      <div class="actions"><button type="button" class="btn ghost" data-action="close">Cancelar</button><button class="btn primary">Salvar</button></div>
-    </form>`, (root) => {
-      const form = $('#artcat-form', root);
-      $('#artcat-ai', root).onclick = async (e) => {
-        if (!isPlus()) { closeModal(); toast('⭐ A classificação com IA faz parte do Grifo Plus · <u>conhecer</u>', 'gold', () => { location.hash = '#/plus'; }); return; }
-        const b = e.currentTarget;
-        b.disabled = true;
-        b.textContent = '✨ Pensando…';
-        try {
-          const r = await suggestCategory(a);
-          root.querySelector(`#ap-${r.purpose}`).checked = true;
-          form.genre.value = r.theme;
-          form.subtheme.value = r.subtheme;
-        } catch (err) { if (err.message) toast(esc(err.message), 'err'); }
-        b.disabled = false;
-        b.textContent = '✨ Sugerir com IA';
-      };
-      form.genre.oninput = () => { $('#art-subthemes', root).innerHTML = datalist('subthemes', subthemeOptions(form.genre.value)); };
-      form.onsubmit = async (e) => {
-        e.preventDefault();
-        const fd = Object.fromEntries(new FormData(form));
-        closeModal();
-        const title = fd.title.trim() || a.title;
-        await commit(async () => {
-          await persist('books', { ...a, title, author: fd.author.trim(), purpose: fd.purpose || 'hobby', genre: fd.genre.trim(), subtheme: fd.subtheme.trim() });
-          // as notas que citavam o nome antigo com [[ ]] passam a citar o novo
-          if (title !== a.title) {
-            const old = norm(a.title);
-            for (const n of state.notes) {
-              const text = n.text.replace(LINK_RE, (m, x) => {
-                const [t, alias] = x.split('|');
-                return norm(t) === old ? `[[${title}${alias !== undefined ? `|${alias}` : ''}]]` : m;
-              });
-              if (text !== n.text) await persist('notes', { ...n, text });
-            }
-          }
-        });
-      };
-    });
-  },
-  async hideFirstSteps() {
-    state.settings = { ...state.settings, firstStepsHidden: true };
-    await db.setKV('settings', state.settings);
-    render();
-  },
-  artFilter: ({ v }) => { sessionStorage.setItem('artFilter', v); render(); },
-  async articleRead({ id }) {
-    const a = state.articles.find((x) => x.id === id);
-    await commit(() => persist('books', { ...a, status: a.status === 'finished' ? 'want' : 'finished', endDate: a.status === 'finished' ? '' : G.ymd() }));
-  },
-  async deleteArticle({ id }) {
-    const a = state.articles.find((x) => x.id === id);
-    const notes = state.notes.filter((n) => n.bookId === id);
-    if (!confirm(`Excluir “${a.title}”${notes.length ? ` e ${notes.length} grifo(s)` : ''}?`)) return;
-    await commit(async () => {
-      for (const c of state.cards.filter((x) => notes.some((n) => n.id === x.noteId))) await remove('cards', c.id);
-      for (const n of notes) await remove('notes', n.id);
-      await remove('books', id);
-    });
-    toast(`🗑️ “${esc(a.title)}” excluído`);
-    if (a.kind === 'pdf') {
-      await db.delFile(id);
-      if (a.synced && canSyncPdf()) Cloud.deletePdf(id).catch(() => {});
-    }
-    location.hash = '#/artigos';
-  },
-};
-
-// Link recebido pelo menu "Compartilhar" do celular (manifest share_target): guarda e salva quando der
-(function captureShared() {
-  const q = new URLSearchParams(location.search);
-  const found = [q.get('url'), q.get('text'), q.get('title')].join(' ').match(/https?:\/\/[^\s"<>]+/);
-  if (!found) return;
-  try { localStorage.setItem(SHARED_KEY, found[0]); } catch { /* sem armazenamento */ }
-  for (const k of ['url', 'text', 'title']) q.delete(k);
-  history.replaceState(null, '', location.pathname + (q.toString() ? `?${q}` : '') + '#/artigos');
-})();
-function saveSharedArticle() {
-  let url = null;
-  try { url = localStorage.getItem(SHARED_KEY); } catch { /* sem armazenamento */ }
-  if (!url || !Cloud.user()) return;
-  try { localStorage.removeItem(SHARED_KEY); } catch { /* sem armazenamento */ }
-  setTimeout(() => actions.saveArticle({ url }), 0);
-}
 
 // ---------- plano de prova (Plus) ----------
 // Descrição curta de um filtro ("Psicologia · Daniel Kahneman")
@@ -2337,7 +1263,7 @@ function publicStats() {
   };
 }
 
-const isPlus = () => Cloud.plan() !== 'free'; // modo pessoal libera tudo
+export const isPlus = () => Cloud.plan() !== 'free'; // modo pessoal libera tudo
 const profileLink = (handle) => `${location.origin}${location.pathname}#/u/${handle}`;
 function ago(ts) {
   if (!ts) return 'nunca';
@@ -2576,7 +1502,7 @@ clubsView.mount = async () => {
 
 // ---------- pergunte à sua biblioteca (IA) ----------
 const STOP = new Set('a o e de da do das dos em no na nos nas um uma uns umas que para por com sem como mais menos sobre entre ao aos à às é são ser foi qual quais quem onde quando porque se eu meu minha meus minhas livros livro diz dizem'.split(' '));
-const words = (t) => norm(t).normalize('NFD').replace(/[̀-ͯ]/g, '').split(/[^a-z0-9]+/).filter((w) => w.length > 2 && !STOP.has(w));
+export const words = (t) => norm(t).normalize('NFD').replace(/[̀-ͯ]/g, '').split(/[^a-z0-9]+/).filter((w) => w.length > 2 && !STOP.has(w));
 
 function relevantNotes(question, limit = 60) {
   const q = words(question);
@@ -2630,7 +1556,7 @@ askView.mount = () => {
 };
 
 // Chama a IA tratando login, plano e chave pessoal
-async function aiRun(task, input) {
+export async function aiRun(task, input) {
   if (globalThis.__aiMock) return globalThis.__aiMock(task, input); // testes da interface sem gastar com a IA
   const st = AI.available(state.settings);
   if (st === 'login') { location.hash = '#/conta'; throw new Error('Entre na sua conta para usar a IA.'); }
@@ -2787,40 +1713,6 @@ async function mountInvite() {
 
 // ---------- apresentação (quem ainda não entrou) ----------
 const landing = () => landingView({ invite: !!Cloud.pendingInvite(), price: CONFIG.plusPriceLabel });
-
-// ---------- painel de métricas (admin) ----------
-function adminView() {
-  return `<a href="#/conta" class="back">← Conta</a><h2>Painel de métricas</h2>
-  <div id="admin-body"><p class="small muted">Carregando…</p></div>`;
-}
-adminView.mount = async () => {
-  const body = $('#admin-body');
-  if (!(await Cloud.isAdmin())) { body.innerHTML = empty('Este painel é só para administradores.'); return; }
-  let m;
-  try { m = await Cloud.adminMetrics(); } catch (e) { body.innerHTML = `<p class="nudge">Não foi possível carregar: ${esc(e.message)}</p>`; return; }
-  const pct = (ok, base) => (base ? `${Math.round((ok / base) * 100)}%` : '—');
-  const goal = (ok, base, target) => (base ? (ok / base >= target ? 'ok' : 'low') : '');
-  const stat = (v, label, cls = '') => `<div class="card stat ${cls}"><b>${v}</b><span>${label}</span></div>`;
-  const weeks = m.signups_by_week || [];
-  const max = Math.max(1, ...weeks.map((w) => w.n));
-  const events = Object.entries(m.events30 || {}).sort((a, b) => b[1] - a[1]);
-  body.innerHTML = `
-  <section class="grid3">${stat(nf(m.users), 'usuários')}${stat(nf(m.new_7d), 'novos em 7 dias')}${stat(nf(m.mau), 'ativos em 30 dias')}</section>
-  <section class="grid3">${stat(nf(m.dau), 'ativos hoje')}${stat(nf(m.wau), 'ativos na semana')}${stat(nf(m.referrals), 'entraram por convite')}</section>
-  <h3>Funil</h3>
-  <section class="card list">
-    <div class="row between li"><span><b>Ativação</b><br><span class="small muted">salvou a 1ª nota em até 24 h (contas dos últimos 30 dias) · meta 40%</span></span><b class="metric ${goal(m.activation.ok, m.activation.base, 0.4)}">${pct(m.activation.ok, m.activation.base)}</b></div>
-    <div class="row between li"><span><b>Retenção</b><br><span class="small muted">voltou a usar 7 dias depois de criar a conta · meta 25%</span></span><b class="metric ${goal(m.retention7.ok, m.retention7.base, 0.25)}">${pct(m.retention7.ok, m.retention7.base)}</b></div>
-    <div class="row between li"><span><b>Compartilhamento</b><br><span class="small muted">ativos que geraram arte em 30 dias · meta 15%</span></span><b class="metric ${goal(m.sharers30, m.mau, 0.15)}">${pct(m.sharers30, m.mau)}</b></div>
-    <div class="row between li"><span><b>Plus</b><br><span class="small muted">${nf(m.plus_paid)} pagantes · ${nf(m.plus_invite)} por convite · meta 2–5% dos ativos</span></span><b class="metric ${goal(m.plus_paid, m.mau, 0.02)}">${pct(m.plus_paid, m.mau)}</b></div>
-  </section>
-  <h3>Cadastros por semana</h3>
-  <section class="card">${weeks.length ? `<div class="weekbars">${weeks.map((w) => `<div class="wb"><span class="wb-n">${w.n}</span><i style="height:${Math.max(4, (w.n / max) * 100)}%"></i><span class="wb-l">${w.week.slice(8, 10)}/${w.week.slice(5, 7)}</span></div>`).join('')}</div>` : '<p class="small muted" style="margin:0">Sem cadastros nas últimas 8 semanas.</p>'}</section>
-  <h3>Eventos (30 dias)</h3>
-  <section class="card list">${events.length ? events.map(([k, n]) => `<div class="row between li"><span>${esc(EVENT_LABEL[k] || k)}</span><b>${nf(n)}</b></div>`).join('') : '<p class="small muted" style="margin:0">Nenhum evento ainda.</p>'}</section>
-  <p class="hint">Ativo = algum livro, nota, card ou leitura mudou no período. As porcentagens ficam mais confiáveis a partir de algumas dezenas de contas.</p>`;
-};
-const EVENT_LABEL = { share: 'Artes compartilhadas ou baixadas', invite_share: 'Convites enviados', invite_copy: 'Links de convite copiados', plus_view: 'Visitas à página do Plus' };
 
 const cloudActions = {
   loginGoogle: async () => {
@@ -3150,11 +2042,11 @@ function termsView() {
 }
 
 // ---------------- modais ----------------
-function datalist(id, values) {
+export function datalist(id, values) {
   return `<datalist id="${id}">${[...new Set(values)].filter(Boolean).sort((a, b) => a.localeCompare(b)).map((v) => `<option value="${esc(v)}">`).join('')}</datalist>`;
 }
-const themeOptions = () => [...Object.keys(THEMES), ...sources().map((b) => b.genre)];
-function subthemeOptions(theme) {
+export const themeOptions = () => [...Object.keys(THEMES), ...sources().map((b) => b.genre)];
+export function subthemeOptions(theme) {
   const k = norm(theme);
   const preset = Object.entries(THEMES).find(([t]) => norm(t) === k)?.[1] || [];
   return [...preset, ...sources().filter((b) => norm(b.genre) === k).map((b) => b.subtheme)];
@@ -3465,7 +2357,7 @@ function finishForm(b, date = G.ymd()) {
 }
 
 // Autocompletar [[ ]] no campo de texto da nota
-function linkCandidates() {
+export function linkCandidates() {
   const list = new Map();
   const put = (label, icon, hint) => { if (label && !list.has(norm(label))) list.set(norm(label), { label: label.trim(), icon, hint }); };
   state.books.forEach((b) => put(b.title, '📘', 'livro'));
@@ -3558,7 +2450,7 @@ function attachCropper(root) {
   });
 }
 
-function noteForm(existing, { bookId, autoOCR, link } = {}) {
+export function noteForm(existing, { bookId, autoOCR, link } = {}) {
   if (!state.books.length) {
     toast('Cadastre um livro antes de criar notas.');
     return bookForm();
@@ -3787,230 +2679,6 @@ function cardForm({ note, card }) {
       if (!card) toast('Card criado. Ele aparece hoje em “Revisar”.');
     };
   });
-}
-
-// ---------------- estúdio de artes para Instagram ----------------
-const FORMATS = [{ id: 'story', label: '📱 Stories 9:16' }, { id: 'feed', label: '🖼️ Feed 4:5' }];
-
-function canvasFile(c, name) {
-  return new Promise((resolve) => c.toBlob((b) => resolve(new File([b], name, { type: 'image/png' })), 'image/png'));
-}
-
-const exportPlus = () => {
-  if (isPlus()) return true;
-  toast('⭐ Exportar para outros apps faz parte do Grifo Plus · <u>conhecer</u>', 'gold', () => { location.hash = '#/plus'; });
-  return false;
-};
-const exportActions = {
-  async exportMarkdown() {
-    if (!exportPlus()) return;
-    toast('📦 Preparando os arquivos…');
-    try {
-      const E = await import('./export.js');
-      const data = { books: state.books, articles: state.articles, notes: state.notes };
-      const files = [...E.markdownFiles(data), { path: 'Grifo - livros e artigos.csv', content: E.booksCsv(data) }];
-      downloadFile(new File([await E.zip(files)], `grifo-${G.ymd()}.zip`, { type: 'application/zip' }));
-      Cloud.track('export', { to: 'markdown' });
-    } catch (e) { toast(`Não foi possível exportar: ${esc(e.message)}`, 'err'); }
-  },
-  async exportAnki() {
-    if (!exportPlus()) return;
-    if (!state.cards.length) { toast('Você ainda não tem cards para levar ao Anki.'); return; }
-    const E = await import('./export.js');
-    downloadFile(new File([E.ankiText({ books: state.books, articles: state.articles, cards: state.cards })], `grifo-anki-${G.ymd()}.txt`, { type: 'text/plain' }));
-    Cloud.track('export', { to: 'anki' });
-  },
-};
-
-function downloadFile(file) {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(file);
-  a.download = file.name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-}
-
-// Pré-visualiza a(s) arte(s), troca estilo/formato e compartilha (Instagram, WhatsApp…) ou baixa
-// Texto que acompanha a arte: com conta, leva o link de convite; sem conta, o endereço do app
-async function shareText(text) {
-  let link = Cloud.siteUrl();
-  try { const inv = await Cloud.myInvite(); if (inv?.code) link = Cloud.inviteLink(inv.code); } catch { /* sem convite: endereço simples */ }
-  return `${text ? `${tr(text)}\n` : ''}${tr('Feito com Grifo:')} ${link}`;
-}
-
-function shareStudio({ title, groups = [], render, filename = 'grifo', text = '', photo = false }) {
-  if (isPlus()) groups = [...groups, { key: 'brand', options: [{ id: 'on', label: '🏷️ Com marca Grifo' }, { id: 'off', label: 'Só minha assinatura' }] }];
-  const renderArt = render;
-  render = (v, p) => { Share.prefs.brand = v.brand !== 'off'; return renderArt(v, p); };
-  const values = Object.fromEntries(groups.map((g) => [g.key, g.value ?? g.options[0].id]));
-  let photoImg = null, canvases = [], token = 0;
-  openModal(`<div class="form studio">
-    <div class="row between"><h3>${title}</h3><button type="button" class="icon-btn" data-action="close" aria-label="Fechar">✕</button></div>
-    ${groups.map((g) => `<div class="radio-pills" data-group="${g.key}">${g.options.map((o) => `<input type="radio" name="sg-${g.key}" id="sg-${g.key}-${o.id}" value="${o.id}" ${values[g.key] === o.id ? 'checked' : ''}><label for="sg-${g.key}-${o.id}">${o.label}</label>`).join('')}</div>`).join('')}
-    ${photo ? '<input type="file" accept="image/*" hidden id="studio-photo">' : ''}
-    <div class="studio-preview busy" id="studio-preview"><span class="small muted">Desenhando…</span></div>
-    <div class="actions"><button type="button" class="btn" id="studio-dl">⬇️ Baixar</button><button type="button" class="btn primary" id="studio-share">📤 Compartilhar</button></div>
-    <p class="hint center" style="margin:0">No celular, “Compartilhar” abre Instagram, WhatsApp e outros apps.</p>
-  </div>`, (root) => {
-    const preview = $('#studio-preview', root);
-    const name = (i) => `${filename}${canvases.length > 1 ? `-${i + 1}` : ''}.png`;
-    const draw = async () => {
-      const my = ++token;
-      preview.classList.add('busy');
-      try {
-        const out = await render(values, photoImg);
-        if (my !== token) return;
-        canvases = Array.isArray(out) ? out : [out];
-        preview.innerHTML = canvases.map((c, i) => `<img src="${c.toDataURL('image/jpeg', 0.85)}" alt="Arte ${i + 1} de ${canvases.length}">`).join('');
-        preview.classList.toggle('multi', canvases.length > 1);
-      } catch (e) {
-        preview.innerHTML = `<p class="small muted">Não consegui gerar a imagem: ${esc(e.message)}</p>`;
-      }
-      if (my === token) preview.classList.remove('busy');
-    };
-    root.querySelectorAll('[data-group] input').forEach((inp) => {
-      inp.onchange = () => {
-        const key = inp.closest('[data-group]').dataset.group;
-        const opt = groups.find((g) => g.key === key)?.options.find((o) => o.id === inp.value);
-        if (opt?.locked) {
-          $(`#sg-${key}-${values[key]}`, root).checked = true;
-          toast('⭐ Esse estilo faz parte do Grifo Plus · <u>conhecer</u>', 'gold', () => { location.hash = '#/plus'; });
-          return;
-        }
-        values[key] = inp.value;
-        if (photo && inp.value === 'foto' && !photoImg) $('#studio-photo', root).click();
-        draw();
-      };
-    });
-    if (photo) {
-      $('#studio-photo', root).onchange = async (e) => {
-        const f = e.target.files[0];
-        if (!f) return;
-        photoImg = await createImageBitmap(f, { imageOrientation: 'from-image' });
-        draw();
-      };
-    }
-    $('#studio-dl', root).onclick = async () => {
-      Cloud.track('share', { kind: filename, via: 'download' });
-      for (let i = 0; i < canvases.length; i++) downloadFile(await canvasFile(canvases[i], name(i)));
-    };
-    $('#studio-share', root).onclick = async () => {
-      if (!canvases.length) return;
-      const files = await Promise.all(canvases.map((c, i) => canvasFile(c, name(i))));
-      Cloud.track('share', { kind: filename, via: 'share' });
-      if (navigator.canShare?.({ files })) {
-        try {
-          await navigator.share({ files, text: await shareText(text) });
-        } catch (e) {
-          if (e.name !== 'AbortError') toast('Não foi possível compartilhar. Use “Baixar”.', 'err');
-        }
-      } else {
-        files.forEach(downloadFile);
-        toast('Imagem salva. Agora é só postar 📲');
-      }
-    };
-    draw();
-  });
-}
-
-
-const shareActions = {
-  postNote({ id }) {
-    const n = noteById(id), b = bookById(n.bookId);
-    shareStudio({
-      title: '📸 Post da citação', filename: 'citacao', photo: true, text: b ? `${b.title}${b.author ? ` — ${b.author}` : ''}` : '',
-      groups: [
-        { key: 'style', options: Share.QUOTE_STYLES.map((o) => (Share.PLUS_STYLES.includes(o.id) && !isPlus() ? { ...o, label: `${o.label} 🔒`, locked: true } : o)) },
-        { key: 'tone', options: Share.QUOTE_TONES.map((o) => (Share.PLUS_TONES.includes(o.id) && !isPlus() ? { ...o, label: `${o.label} 🔒`, locked: true } : o)) },
-        { key: 'format', options: FORMATS },
-      ],
-      render: (v, photo) => Share.quoteCard({ text: plainText(n.text), title: b?.title || '', author: b?.author, page: n.page, style: v.style, tone: v.tone, format: v.format, handle: state.settings.handle, photo }),
-    });
-  },
-  shareBook({ id }) {
-    const b = bookById(id);
-    shareStudio({
-      title: b.status === 'finished' ? '📸 Terminei!' : '📸 Lendo agora', filename: 'lendo-agora',
-      groups: [{ key: 'format', options: FORMATS }],
-      render: (v) => Share.readingCard({ book: b, streak: state.stats.streak, format: v.format, handle: state.settings.handle }),
-    });
-  },
-  shareShelf() {
-    const year = state.stats.year;
-    shareStudio({
-      title: '📸 Minha estante', filename: 'minha-estante',
-      groups: [
-        { key: 'style', options: Share.SHELF_STYLES },
-        { key: 'period', options: [{ id: 'year', label: `Lidos em ${year}` }, { id: 'all', label: 'Todos os lidos' }] },
-        { key: 'purpose', options: [{ id: 'all', label: 'Tudo' }, ...Object.entries(PURPOSE).map(([k, p]) => ({ id: k, label: `${p.icon} ${p.label}` }))] },
-        { key: 'format', options: FORMATS },
-      ],
-      render: (v) => {
-        const books = state.books
-          .filter((b) => b.status === 'finished' && (v.period === 'all' || (b.endDate || '').startsWith(year)) && (v.purpose === 'all' || (b.purpose || 'hobby') === v.purpose))
-          .sort((a, b) => (a.endDate || '').localeCompare(b.endDate || ''));
-        const pages = books.reduce((a, b) => a + (b.pages || 0), 0);
-        const pLabel = v.purpose === 'all' ? '' : ` · ${PURPOSE[v.purpose].label}`;
-        return Share.shelfCard({
-          books, style: v.style, format: v.format, handle: state.settings.handle,
-          heading: v.period === 'year' ? `Minha estante ${year}` : 'Minha estante',
-          subheading: `${books.length} ${books.length === 1 ? 'livro' : 'livros'} · ${pages.toLocaleString(LOCALE)} páginas${pLabel}`,
-        });
-      },
-    });
-  },
-  shareWrapped() {
-    const monthStart = `${G.ymd().slice(0, 8)}01`;
-    const hasMonth = state.sessions.some((s) => s.date >= monthStart) || state.books.some((b) => (b.endDate || '') >= monthStart);
-    shareStudio({
-      title: '✨ Sua retrospectiva', filename: 'retrospectiva', text: 'Minha retrospectiva de leituras',
-      groups: [{ key: 'period', options: Share.PERIODS, value: hasMonth ? 'month' : 'year' }],
-      render: (v) => Share.wrappedSlides(state, { period: v.period, name: state.settings.name, handle: state.settings.handle, xp: state.stats.xp, full: isPlus() }),
-    });
-  },
-  shareMap() {
-    const api = graphApi;
-    if (!api) return;
-    shareStudio({
-      title: '📸 Minha rede de ideias', filename: 'mapa-mental',
-      groups: [{ key: 'format', options: FORMATS, value: 'feed' }],
-      render: async (v) => {
-        await Share.ensureFonts();
-        const [width, height] = Share.SIZES[v.format];
-        const st = api.stats();
-        return api.snapshot({ width, height, title: 'Minha rede de ideias', subtitle: `${st.books} livros · ${st.themes} temas · ${st.links} conexões`, handle: state.settings.handle, site: Share.siteLabel() });
-      },
-    });
-  },
-  shareBadge({ id }) {
-    const b = G.BADGES.find((x) => x.id === id);
-    shareStudio({
-      title: `📸 ${b.name}`, filename: `conquista-${b.id}`,
-      groups: [{ key: 'format', options: FORMATS }],
-      render: (v) => Share.achievementCard({ icon: b.icon, kicker: 'Conquista desbloqueada', title: b.name, subtitle: b.desc, foot: state.badges[id] ? `em ${fmtDate(state.badges[id])}` : '', format: v.format, handle: state.settings.handle }),
-    });
-  },
-  shareLevel() {
-    const s = state.stats, lv = G.levelInfo(s.xp);
-    shareStudio({
-      title: '📸 Meu nível', filename: `nivel-${lv.level}`,
-      groups: [{ key: 'format', options: FORMATS }],
-      render: (v) => Share.achievementCard({ icon: '⭐', kicker: `Nível ${lv.level}`, title: lv.title, subtitle: `${nf(s.xp)} XP em leituras, notas e revisões`, foot: `${s.finished} livros · ${nf(s.totalPages)} páginas`, format: v.format, handle: state.settings.handle }),
-    });
-  },
-  shareStreak() {
-    const s = state.stats;
-    shareStudio({
-      title: '📸 Minha sequência', filename: 'sequencia',
-      groups: [{ key: 'format', options: FORMATS }],
-      render: (v) => Share.achievementCard({ icon: '🔥', kicker: 'Sequência de leitura', title: `${s.streak} dias seguidos`, subtitle: 'lendo todos os dias, sem pular nenhum', foot: `recorde: ${s.longest} dias`, format: v.format, handle: state.settings.handle }),
-    });
-  },
-};
-// As artes (share.js, ~47 KB) só são baixadas ao criar um post: cada ação carrega o módulo antes
-let Share = null;
-for (const [k, fn] of Object.entries(shareActions)) {
-  shareActions[k] = async (...args) => { Share ||= await import('./share.js'); return fn.apply(shareActions, args); };
 }
 
 // ---------------- lembretes ----------------
@@ -4266,7 +2934,7 @@ const timerActions = {
 };
 
 // ---------------- ações ----------------
-const actions = {
+export const actions = {
   ...shareActions,
   ...examActions,
   ...aiStudyActions,
@@ -4492,7 +3160,7 @@ const routes = {
 const OPEN_ROUTES = ['u', 'privacidade', 'termos'];
 const TAB_OF = { vocabulario: 'notas', tags: 'notas', pdf: 'livros', busca: 'nenhuma', artigos: 'livros', artigo: 'livros', livro: 'livros', nota: 'notas', conceito: 'notas', mapa: 'notas', perguntar: 'notas', stats: 'progresso', conquistas: 'progresso', clubes: 'progresso' };
 
-function render() {
+export function render() {
   if (!state.stats) return; // ainda carregando (ex.: o endereço mudou durante a abertura): o início desenha depois
   const [hashPath, query = ''] = location.hash.slice(1).split('?');
   const [, name = '', arg] = hashPath.split('/');
@@ -4508,7 +3176,6 @@ function render() {
   if (fn === home && (needsOnboarding() || (onbStep >= 2 && !state.settings.onboarded))) fn = onboarding;
   const keepScroll = view.dataset.route === location.hash;
   const y = scrollY;
-  graphApi = null;
   view.innerHTML = fn(arg);
   fn.mount?.(arg);
   if (!gated) saveSharedArticle();

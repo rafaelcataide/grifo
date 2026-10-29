@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const modules = [
   ...readdirSync(join(root, 'js')).filter((f) => f.endsWith('.js')).map((f) => join(root, 'js', f)),
+  ...readdirSync(join(root, 'js', 'telas')).filter((f) => f.endsWith('.js')).map((f) => join(root, 'js', 'telas', f)),
   join(root, 'config.js'),
   join(root, 'supabase', 'functions', '_shared', 'ai-tasks.js'),
 ];

@@ -511,3 +511,11 @@ test('grifo: "📷 Grifo" não abre a câmera sozinho, deixa escolher', async ({
   await expect(page.getByRole('button', { name: 'Câmera' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Galeria' })).toBeVisible();
 });
+
+test('mapa: compartilhar o mapa como imagem (estúdio de artes lendo o mapa)', async ({ page }) => {
+  await semear(page, mapaSemente());
+  await page.goto('/#/mapa');
+  await expect(page.locator('#graph-legend a')).toHaveCount(2);
+  await page.getByRole('button', { name: 'Compartilhar mapa como imagem' }).click();
+  await expect(page.locator('#studio-preview img')).toBeVisible({ timeout: 20_000 });
+});
