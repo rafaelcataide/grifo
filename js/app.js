@@ -9,6 +9,7 @@ import * as Cloud from './cloud.js';
 import * as AI from './ai.js';
 import { CONFIG } from '../config.js';
 import { landingView } from './landing.js';
+import { PLANOS, planoDe } from '../supabase/functions/_shared/planos.js';
 import { vocabView, wordActions, tagsView, tagActions } from './telas/vocabulario.js';
 import { graphApi, mapShow, fold, mapView } from './telas/mapa.js';
 import { articleStarted, articleItem, articlesView, articleView, pdfView, pdfActions, articleActions, saveSharedArticle } from './telas/artigos.js';
@@ -1311,8 +1312,9 @@ function accountView() {
   <section class="card account-head">
     ${p.avatar_url ? `<img src="${esc(p.avatar_url)}" alt="" class="avatar" referrerpolicy="no-referrer">` : '<span class="avatar ph">👤</span>'}
     <div class="grow"><b>${esc(p.display_name || u.email)}</b><div class="small muted">${esc(u.email || '')}</div>
-      <span class="chip ${plan === 'plus' ? 'p-academic' : ''}">${plan === 'plus' ? '⭐ Grifo Plus' : 'Plano grátis'}</span></div>
+      <span class="chip ${plan !== 'free' ? 'p-academic' : ''}">${PLAN_CHIP[plan] || PLAN_CHIP.free}</span></div>
   </section>
+  <section class="card" id="usage-card"><h3>📊 Seu uso este mês</h3><p class="small muted" style="margin:0">Carregando…</p></section>
   <section class="card"><h3>☁️ Sincronização</h3>
     <p class="small">${st.syncing ? 'Sincronizando…' : `Última sincronização: ${ago(st.lastSyncAt)}`}${st.lastError ? `<br><span style="color:var(--danger)">Erro: ${esc(st.lastError)}</span>` : ''}</p>
     <p class="hint">Sincroniza sozinho ao abrir o app e a cada alteração.</p>
@@ -1327,7 +1329,8 @@ function accountView() {
   </form>
   <section class="card" id="invite-card"><h3>🎁 Convide amigos</h3><p class="small muted" style="margin:0">Carregando seu convite…</p></section>
   <div id="admin-link"></div>
-  ${plan !== 'plus' ? '<a class="card wrapped-cta" href="#/plus"><span class="big-emoji">⭐</span><span class="grow"><b>Conheça o Grifo Plus</b><span class="small muted">IA na sua biblioteca, estilos extras e artes sem marca</span></span></a>' : ''}
+  ${plan === 'free' ? '<a class="card wrapped-cta" href="#/plus"><span class="big-emoji">⭐</span><span class="grow"><b>Conheça os planos</b><span class="small muted">IA na sua biblioteca, PDFs na conta, estilos extras e artes sem marca</span></span></a>'
+    : plan === 'plus' ? '<a class="card wrapped-cta" href="#/plus"><span class="big-emoji">💎</span><span class="grow"><b>Precisa de mais IA?</b><span class="small muted">O Pro tem mais que o dobro de IA avançada e lê mais das suas notas</span></span></a>' : ''}
   <section class="card form"><h3>✉️ Resumo semanal</h3>
     <label class="check"><input type="checkbox" data-weekly ${p.weekly_email ? 'checked' : ''}> Receber todo domingo um e-mail com minhas páginas, sequência e um grifo da semana</label>
   </section>
@@ -1340,6 +1343,7 @@ function accountView() {
   <button class="btn danger ghost block" data-action="deleteAccount" style="margin-top:8px">Excluir minha conta</button>`;
 }
 accountView.mount = () => {
+  mountUsage($('#usage-card'));
   if (Cloud.user()) mountInvite();
   const ef = $('#email-form');
   if (ef) {
@@ -1545,7 +1549,8 @@ askView.mount = () => {
     askState = { q, answer: null, busy: true };
     render();
     try {
-      const res = await aiRun('ask', { question: q, notes: relevantNotes(q) });
+      // o Pro (e o modo pessoal) manda mais notas: o servidor lê até 160 no Pro
+      const res = await aiRun('ask', { question: q, notes: relevantNotes(q, ['pro', 'personal'].includes(Cloud.plan()) ? 160 : 80) });
       askState = { q, answer: res, busy: false };
     } catch (err) {
       askState = { q, answer: null, busy: false };
@@ -1566,6 +1571,8 @@ export async function aiRun(task, input) {
     return await AI.run(task, { ...input, lang }, state.settings);
   } catch (e) {
     if (e.code === 'plus') { location.hash = '#/plus'; throw new Error(''); }
+    // cota do mês acabou: convite para os planos (não é um erro)
+    if (e.code === 'cota') { toast(`${esc(e.message)} · <u>ver planos</u>`, 'gold', () => { location.hash = '#/plus'; }); throw new Error(''); }
     throw e;
   }
 }
@@ -1658,38 +1665,93 @@ const aiStudyActions = {
 };
 
 // ---------- plano Plus ----------
+const PLAN_CHIP = { free: 'Plano grátis', plus: '⭐ Grifo Plus', pro: '💎 Grifo Pro', personal: 'Modo pessoal' };
+
+// Uso do plano: IA do mês (avançada e rápida) e espaço de PDFs na conta, com barras
+async function mountUsage(box) {
+  if (!box) return;
+  const u = await Cloud.aiUsage().catch(() => null);
+  if (!box.isConnected) return;
+  if (!u) { box.remove(); return; }
+  const p = planoDe(Cloud.plan());
+  const bar = (label, used, cap, hint = '') => {
+    const pct = cap ? Math.min(100, (used / cap) * 100) : 0;
+    return `<div class="usage-row"><div class="row between small gap-s"><span>${label}</span><b>${nf(Math.min(used, cap))} de ${nf(cap)}</b></div>
+      <div class="bar${pct >= 90 ? ' warn' : ''}"><div style="width:${pct}%"></div></div>${hint ? `<div class="hint">${hint}</div>` : ''}</div>`;
+  };
+  box.innerHTML = `<h3>📊 Seu uso este mês</h3>
+    ${bar(tr('IA avançada (perguntar, fichamento, recomendações)'), p.heavyTotal ? u.heavy_total : u.heavy, p.heavy, p.heavyTotal ? tr('No plano grátis, são 3 usos para experimentar.') : '')}
+    ${bar(tr('IA rápida (cards, conexões, correção do OCR, Feynman)'), u.light, p.light)}
+    ${p.pdfGB ? bar(tr('PDFs na conta (MB)'), Math.round((u.pdf_bytes || 0) / 1048576), p.pdfGB * 1024) : ''}
+    ${Cloud.plan() !== 'pro' ? `<a class="small" href="#/plus">Ver planos →</a>` : ''}`;
+}
+
+// Planos: grátis, Plus e Pro, com preço mensal ou anual
 function plusView() {
   const plan = Cloud.plan();
   const u = Cloud.user();
-  const checkout = CONFIG.plusCheckoutUrl && u
-    ? `${CONFIG.plusCheckoutUrl}${CONFIG.plusCheckoutUrl.includes('?') ? '&' : '?'}client_reference_id=${encodeURIComponent(u.id)}${u.email ? `&prefilled_email=${encodeURIComponent(u.email)}` : ''}`
-    : '';
-  const feats = [
-    ['✨', 'Pergunte à sua biblioteca', 'Respostas tiradas das suas notas, com as fontes'],
-    ['🧠', 'Cards automáticos', 'A IA transforma grifos em cards de memorização'],
-    ['🔗', 'Conexões sugeridas', 'Descobre ligações entre ideias de livros diferentes'],
-    ['📝', 'Fichamento com IA', 'Resumo do livro feito a partir dos seus grifos, em PDF'],
-    ['🎓', 'Explique com suas palavras', 'A IA avalia sua explicação (técnica de Feynman)'],
-    ['🎯', 'Plano para prova', 'Revisão distribuída até a data da prova, com revisão final na véspera'],
-    ['📰', 'Artigos ilimitados', 'Salve links, leia sem anúncios e grife trechos'],
-    ['🎨', 'Temas e cores extras', 'Minimal, Aquarela, E-reader, Caderno, Pôr do sol e marca-texto colorido'],
-    ['📊', 'Retrospectiva completa', 'Mês a mês, seus autores, ideias mais conectadas e grifos favoritos'],
-    ['🏷️', 'Artes sem marca', 'Posts só com a sua assinatura'],
+  let year = false;
+  try { year = sessionStorage.getItem('plansYear') === '1'; } catch { /* sem armazenamento */ }
+  const per = year ? 'year' : 'month';
+  const checkoutOf = (k) => {
+    const base = CONFIG.checkout?.[k]?.[per] || '';
+    if (!base || !u) return '';
+    return `${base}${base.includes('?') ? '&' : '?'}client_reference_id=${encodeURIComponent(u.id)}${u.email ? `&prefilled_email=${encodeURIComponent(u.email)}` : ''}`;
+  };
+  const P = PLANOS;
+  const cards = [
+    { k: 'free', title: 'Grátis', price: 'R$ 0', note: 'para sempre', feats: [
+      'Livros, notas, grifos por foto e mapa de ideias', 'Cards de revisão, vocabulário, metas e clubes',
+      `Até ${P.free.articles} artigos e PDFs`, `IA rápida: ${P.free.light} por mês`, `IA avançada: ${P.free.heavy} usos para experimentar`] },
+    { k: 'plus', title: '⭐ Plus', badge: 'Mais escolhido', feats: [
+      'Tudo do grátis', 'Artigos e PDFs ilimitados', `PDFs sincronizados entre aparelhos (${P.plus.pdfGB} GB)`,
+      `IA avançada: ${P.plus.heavy} por mês`, `IA rápida: até ${nf(P.plus.light)} por mês`,
+      'Plano para prova e exportar para Obsidian, Notion e Anki', 'Temas extras, retrospectiva completa e artes sem marca'] },
+    { k: 'pro', title: '💎 Pro', note: 'para estudo e pesquisa', feats: [
+      'Tudo do Plus', `IA avançada: ${P.pro.heavy} por mês`, `IA rápida: até ${nf(P.pro.light)} por mês`,
+      '“Perguntar” lê o dobro das suas notas', 'Fichamento de livros inteiros (até 300 grifos)', `${P.pro.pdfGB} GB para PDFs`] },
   ];
+  const button = (c) => {
+    if (plan === 'personal' || c.k === 'free') return '';
+    if (c.k === plan) return '<span class="btn block plan-current">✓ Seu plano</span>';
+    if (!u) return '<a class="btn block" href="#/conta">Entrar para assinar</a>';
+    // quem já paga troca de plano pelo portal do Stripe (assim não fica com duas assinaturas)
+    if (plan !== 'free') {
+      return CONFIG.billingPortalUrl
+        ? `<a class="btn block primary" href="${esc(CONFIG.billingPortalUrl)}" target="_blank" rel="noopener">Trocar para ${c.k === 'pro' ? 'Pro' : 'Plus'}</a>`
+        : '<p class="hint center">Para trocar de plano, use o link do e-mail da sua assinatura.</p>';
+    }
+    const link = checkoutOf(c.k);
+    return link
+      ? `<a class="btn block ${c.k === 'plus' ? 'primary' : ''}" href="${esc(link)}" target="_blank" rel="noopener">Assinar o ${c.k === 'pro' ? 'Pro' : 'Plus'}</a>`
+      : '<p class="hint center">As assinaturas abrem em breve.</p>';
+  };
   if (u && plan === 'free') Cloud.track('plus_view');
   return `<a href="#/conta" class="back">← Conta</a>
-  <section class="card hero center plus-hero"><span class="onb-emoji">⭐</span><h2 style="margin:0">Grifo Plus</h2>
-    <p class="muted" style="margin:4px 0 0">Seu segundo cérebro de leituras, com IA.</p>
-    <div class="price">${esc(CONFIG.plusPriceLabel)}</div></section>
-  <section class="card list">${feats.map(([i, t, d]) => `<div class="row gap li"><span class="big-emoji">${i}</span><span><b>${t}</b><br><span class="small muted">${d}</span></span></div>`).join('')}</section>
-  <section class="card"><h3>Grátis para sempre</h3><p class="small muted" style="margin:0">Livros, notas, OCR de grifos, mapa mental, cards e revisão, metas, conquistas, clubes, sincronização e todas as artes básicas.</p></section>
-  ${plan === 'personal' ? '<p class="nudge">Você está no modo pessoal: todos os recursos já estão liberados neste aparelho.</p>'
-    : plan === 'plus' ? '<p class="nudge">✅ Você já é Plus. Obrigado por apoiar o Grifo!</p>'
-    : !u ? '<a class="btn primary block" href="#/conta">Entrar para assinar</a>'
-    : checkout ? `<a class="btn primary block" href="${esc(checkout)}" target="_blank" rel="noopener">Assinar o Plus</a><p class="hint center">Depois do pagamento, volte ao app: o plano é liberado em instantes.</p>`
-    : '<p class="nudge">As assinaturas abrem em breve.</p>'}
+  <h2 style="margin-top:0">Planos do Grifo</h2>
+  <p class="small muted">O básico é grátis para sempre. Os planos pagos trazem mais IA, PDFs na conta e recursos de estudo.</p>
+  <div class="row between wrap gap-s" style="margin:6px 0 14px"><div class="seg-mini" role="group" aria-label="Período">
+    <button class="${year ? '' : 'active'}" data-period="month">Mensal</button><button class="${year ? 'active' : ''}" data-period="year">Anual · 2 meses grátis</button></div>
+    ${plan !== 'personal' && u ? `<span class="chip p-academic">${PLAN_CHIP[plan]}</span>` : ''}</div>
+  <div class="plans-grid">${cards.map((c) => `<section class="card plan-card${c.k === 'plus' ? ' featured' : ''}${c.k === plan ? ' current' : ''}">
+    ${c.badge ? `<span class="plan-badge">${c.badge}</span>` : ''}
+    <h3>${c.title}</h3>
+    <div class="plan-price"><span data-no-tr>${c.price || esc(CONFIG.prices?.[c.k]?.[per] || '')}</span>${c.price ? '' : `<small>${year ? '/ano' : '/mês'}</small>`}</div>
+    <div class="small muted">${c.note || '&nbsp;'}</div>
+    <ul class="plan-feats">${c.feats.map((f) => `<li>${f}</li>`).join('')}</ul>
+    ${button(c)}
+  </section>`).join('')}</div>
+  ${plan === 'personal' ? '<p class="nudge">Você está no modo pessoal: todos os recursos já estão liberados neste aparelho.</p>' : ''}
+  ${u ? '<section class="card" id="usage-card"><h3>📊 Seu uso este mês</h3><p class="small muted" style="margin:0">Carregando…</p></section>' : ''}
+  <p class="hint">IA avançada: perguntar à biblioteca, fichamento e recomendações. IA rápida: cards, conexões sugeridas, correção do OCR, classificação de artigos e Feynman. As cotas renovam todo mês. Depois do pagamento, volte ao app: o plano é liberado em instantes.</p>
   ${u && plan === 'free' ? '<a class="card wrapped-cta" href="#/conta"><span class="big-emoji">🎁</span><span class="grow"><b>Ganhe Plus de graça</b><span class="small muted">Cada amigo que entrar pelo seu convite dá 1 mês de Plus para os dois</span></span></a>' : ''}`;
 }
+plusView.mount = () => {
+  mountUsage($('#usage-card'));
+  view.querySelectorAll('[data-period]').forEach((b) => {
+    b.onclick = () => { try { sessionStorage.setItem('plansYear', b.dataset.period === 'year' ? '1' : '0'); } catch { /* sem armazenamento */ } render(); };
+  });
+};
 
 // ---------- convites ----------
 const inviteMsg = (link) => tr('Estou usando o Grifo para guardar o que grifo nos livros e revisar depois. Entre pelo meu convite e ganhe 1 mês de Plus:') + ` ${link}`;
@@ -1712,7 +1774,7 @@ async function mountInvite() {
 }
 
 // ---------- apresentação (quem ainda não entrou) ----------
-const landing = () => landingView({ invite: !!Cloud.pendingInvite(), price: CONFIG.plusPriceLabel });
+const landing = () => landingView({ invite: !!Cloud.pendingInvite(), prices: CONFIG.prices });
 
 const cloudActions = {
   loginGoogle: async () => {

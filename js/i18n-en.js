@@ -848,3 +848,38 @@ Object.assign(EN, {
 });
 EN_PATTERNS.unshift([/^(.*) A foto chegou pequena \((\d+)×(\d+)\): para ler melhor, tire a foto com o app da câmera do celular e escolha em 🖼️ Galeria\.$/, (m, tr) => `${tr(m[1], true)} The photo came in small (${m[2]}×${m[3]}): for a better read, take it with your phone's camera app and pick it in 🖼️ Gallery.`]);
 Object.assign(EN, { 'Enquadre a página e segure firme': 'Frame the page and hold steady', 'Segure firme…': 'Hold steady…', 'Foto automática': 'Auto photo', 'Lanterna': 'Flashlight', 'Tirar foto': 'Take photo', 'Fechar': 'Close' });
+// planos (grátis, Plus, Pro) e uso de IA
+Object.assign(EN, {
+  'Planos do Grifo': 'Grifo plans', 'O básico é grátis para sempre. Os planos pagos trazem mais IA, PDFs na conta e recursos de estudo.': 'The basics are free forever. Paid plans bring more AI, PDFs in your account and study features.',
+  'Mensal': 'Monthly', 'Anual · 2 meses grátis': 'Yearly · 2 months free', 'Período': 'Billing period', 'para sempre': 'forever', 'para estudo e pesquisa': 'for study and research', 'Mais escolhido': 'Most popular',
+  'Livros, notas, grifos por foto e mapa de ideias': 'Books, notes, photo highlights and idea map', 'Cards de revisão, vocabulário, metas e clubes': 'Review cards, vocabulary, goals and clubs',
+  'Tudo do grátis': 'Everything in Free', 'Artigos e PDFs ilimitados': 'Unlimited articles and PDFs', 'Plano para prova e exportar para Obsidian, Notion e Anki': 'Exam plan and export to Obsidian, Notion and Anki',
+  'Temas extras, retrospectiva completa e artes sem marca': 'Extra themes, full recap and unbranded art', 'Tudo do Plus': 'Everything in Plus', '“Perguntar” lê o dobro das suas notas': '“Ask” reads twice as many of your notes',
+  'Fichamento de livros inteiros (até 300 grifos)': 'Summaries of whole books (up to 300 highlights)', '✓ Seu plano': '✓ Your plan', 'Seu plano': 'Your plan',
+  'Para trocar de plano, use o link do e-mail da sua assinatura.': 'To switch plans, use the link in your subscription email.', 'As assinaturas abrem em breve.': 'Subscriptions open soon.',
+  'IA avançada: perguntar à biblioteca, fichamento e recomendações. IA rápida: cards, conexões sugeridas, correção do OCR, classificação de artigos e Feynman. As cotas renovam todo mês. Depois do pagamento, volte ao app: o plano é liberado em instantes.': 'Advanced AI: ask your library, summaries and recommendations. Quick AI: cards, suggested links, OCR correction, article categorization and Feynman. Allowances renew every month. After paying, come back to the app: your plan unlocks within moments.',
+  '📊 Seu uso este mês': '📊 Your usage this month', 'Seu uso este mês': 'Your usage this month', 'Carregando…': 'Loading…', '⭐ Grifo Plus': '⭐ Grifo Plus', '💎 Grifo Pro': '💎 Grifo Pro', 'Modo pessoal': 'Personal mode',
+  'Conheça os planos': 'See the plans', 'IA na sua biblioteca, PDFs na conta, estilos extras e artes sem marca': 'AI on your library, PDFs in your account, extra styles and unbranded art',
+  'Precisa de mais IA?': 'Need more AI?', 'O Pro tem mais que o dobro de IA avançada e lê mais das suas notas': 'Pro has more than twice the advanced AI and reads more of your notes',
+  '/mês': '/month', '/ano': '/year', 'Ver planos →': 'See plans →', 'Grátis': 'Free',
+  'IA avançada (perguntar, fichamento, recomendações)': 'Advanced AI (ask, summaries, recommendations)', 'No plano grátis, são 3 usos para experimentar.': 'On the free plan you get 3 uses to try it.',
+  'IA rápida (cards, conexões, correção do OCR, Feynman)': 'Quick AI (cards, links, OCR correction, Feynman)', 'PDFs na conta (MB)': 'PDFs in your account (MB)',
+  'IA para experimentar': 'AI to try out', 'Mais que o dobro de IA avançada': 'More than twice the advanced AI', 'Fichamento de livros inteiros': 'Summaries of whole books',
+  'Artigos e PDFs ilimitados ': 'Unlimited articles and PDFs', 'Para estudo e pesquisa': 'For study and research', 'Entrar para assinar': 'Sign in to subscribe',
+});
+EN_PATTERNS.unshift(
+  [/^([\d.,]+) de ([\d.,]+)$/, '$1 of $2'],
+  [/^Até (\d+) artigos e PDFs$/, 'Up to $1 articles and PDFs'],
+  [/^IA rápida: (\d+) por mês$/, 'Quick AI: $1 a month'],
+  [/^IA rápida: até ([\d.,]+) por mês$/, 'Quick AI: up to $1 a month'],
+  [/^IA avançada: (\d+) por mês$/, 'Advanced AI: $1 a month'],
+  [/^IA avançada: (\d+) usos para experimentar$/, 'Advanced AI: $1 uses to try it'],
+  [/^PDFs sincronizados entre aparelhos \((\d+) GB\)$/, 'PDFs synced across devices ($1 GB)'],
+  [/^(\d+) GB para PDFs$/, '$1 GB for PDFs'],
+  [/^Trocar para (Pro|Plus)$/, 'Switch to $1'],
+  [/^Assinar o (Pro|Plus)$/, 'Subscribe to $1'],
+  [/^Você usou os (\d+) usos de IA (avançada )?deste mês\.$/, (m) => `You've used your ${m[1]} ${m[2] ? 'advanced ' : ''}AI uses this month.`],
+  [/^Você já usou os 3 testes de IA avançada.*$/, "You've used your 3 advanced AI trials (ask, summary, recommendations)."],
+  [/^(.+) · ver planos$/, (m, tr) => `${tr(m[1], true)} · see plans`],
+);
+Object.assign(EN, { '💎 Pro': '💎 Pro', '⭐ Plus': '⭐ Plus', 'Pro': 'Pro', 'Plus': 'Plus' });

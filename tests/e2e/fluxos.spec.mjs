@@ -519,3 +519,16 @@ test('mapa: compartilhar o mapa como imagem (estúdio de artes lendo o mapa)', a
   await page.getByRole('button', { name: 'Compartilhar mapa como imagem' }).click();
   await expect(page.locator('#studio-preview img')).toBeVisible({ timeout: 20_000 });
 });
+
+test('planos: grátis, Plus e Pro, com preço mensal e anual', async ({ page }) => {
+  await semear(page);
+  await page.goto('/#/plus');
+  await expect(page.locator('.plan-card')).toHaveCount(3);
+  await expect(page.locator('.plan-card h3')).toHaveText(['Grátis', /Plus/, /Pro/]); // os emojis viram ícones
+  await expect(page.locator('.plan-card.featured')).toContainText('Mais escolhido');
+  await expect(page.locator('.plan-card').nth(1)).toContainText('IA avançada: 12 por mês');
+  await expect(page.locator('.plan-card').nth(2)).toContainText('IA avançada: 30 por mês');
+  await expect(page.locator('.plan-card').nth(1).locator('.plan-price')).toHaveText('R$ 12,90/mês');
+  await page.getByRole('button', { name: /Anual/ }).click();
+  await expect(page.locator('.plan-card').nth(2).locator('.plan-price')).toHaveText('R$ 279/ano');
+});

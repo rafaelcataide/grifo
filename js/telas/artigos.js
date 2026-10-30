@@ -225,7 +225,7 @@ articleView.mount = (id) => {
 };
 // ---------- PDFs ----------
 // O arquivo fica no aparelho (IndexedDB); no Plus também vai para o armazenamento da conta e é baixado em outro aparelho.
-export const canSyncPdf = () => Cloud.enabled() && Cloud.user() && Cloud.plan() === 'plus';
+export const canSyncPdf = () => Cloud.enabled() && Cloud.user() && ['plus', 'pro'].includes(Cloud.plan());
 export async function pdfBlob(a) {
   const local = await db.getFile(a.id);
   if (local) return local;
@@ -394,7 +394,7 @@ export async function suggestCategory(a) {
 }
 // Logo depois de salvar: classifica sozinho, se a IA estiver liberada para a pessoa
 export async function autoClassify(id) {
-  if (AI.available(state.settings) !== 'ok') return;
+  if (!isPlus() || AI.available(state.settings) !== 'ok') return; // classificar sozinho só nos planos pagos (não gasta a cota do grátis)
   try {
     const a = state.articles.find((x) => x.id === id);
     const r = await suggestCategory(a);

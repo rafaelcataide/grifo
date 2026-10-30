@@ -6,7 +6,8 @@ const SDK_URL = 'https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.131.0/+esm';
 let sdkPromise = null;
 
 export function available(settings) {
-  if (Cloud.enabled()) return Cloud.user() ? (Cloud.plan() === 'plus' ? 'ok' : 'plus') : 'login';
+  // com conta, todo plano tem IA; quanto cada um pode usar no mês o servidor controla (planos.js)
+  if (Cloud.enabled()) return Cloud.user() ? 'ok' : 'login';
   return settings.aiKey ? 'ok' : 'key';
 }
 

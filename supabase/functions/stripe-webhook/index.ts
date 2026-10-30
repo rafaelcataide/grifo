@@ -8,7 +8,11 @@ const cryptoProvider = Stripe.createSubtleCryptoProvider();
 // service role: única forma de alterar a coluna "plan"
 const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-async function setPlan(match: { user_id?: string; stripe_customer?: string }, plan: "free" | "plus", customer?: string) {
+// Preços do Pro (mensal e anual): ids do Stripe em STRIPE_PRO_PRICES, separados por vírgula. Qualquer outro preço é Plus.
+const PRO_PRICES = (Deno.env.get("STRIPE_PRO_PRICES") ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+const planOfPrices = (ids: (string | undefined)[]) => (ids.some((id) => id && PRO_PRICES.includes(id)) ? "pro" : "plus");
+
+async function setPlan(match: { user_id?: string; stripe_customer?: string }, plan: "free" | "plus" | "pro", customer?: string) {
   const patch: Record<string, unknown> = { plan, updated_at: new Date().toISOString() };
   if (customer) patch.stripe_customer = customer;
   if (match.user_id) {
@@ -33,7 +37,11 @@ Deno.serve(async (req) => {
   switch (event.type) {
     case "checkout.session.completed": {
       const s = event.data.object as Stripe.Checkout.Session;
-      if (s.client_reference_id) await setPlan({ user_id: s.client_reference_id }, "plus", typeof s.customer === "string" ? s.customer : undefined);
+      if (!s.client_reference_id) break;
+      // qual plano foi comprado: pelo preço dos itens do checkout
+      const items = await stripe.checkout.sessions.listLineItems(s.id, { limit: 10 });
+      const plan = planOfPrices(items.data.map((i) => i.price?.id));
+      await setPlan({ user_id: s.client_reference_id }, plan, typeof s.customer === "string" ? s.customer : undefined);
       break;
     }
     case "customer.subscription.deleted": {
@@ -44,7 +52,8 @@ Deno.serve(async (req) => {
     case "customer.subscription.updated": {
       const sub = event.data.object as Stripe.Subscription;
       const active = ["active", "trialing", "past_due"].includes(sub.status);
-      await setPlan({ stripe_customer: String(sub.customer) }, active ? "plus" : "free");
+      // troca de plano (Plus ⇄ Pro) também chega aqui
+      await setPlan({ stripe_customer: String(sub.customer) }, active ? planOfPrices(sub.items.data.map((i) => i.price?.id)) : "free");
       break;
     }
   }

@@ -11,6 +11,7 @@ const dist = path.join(root, 'dist');
 const FILES = [
   'index.html', 'manifest.webmanifest', 'sw.js', 'config.js',
   'supabase/functions/_shared/ai-tasks.js', // usado pelo app no modo pessoal (IA com a chave do usuário)
+  'supabase/functions/_shared/planos.js', // limites dos planos (o app mostra; a função "ai" faz valer)
 ];
 const DIRS = ['css', 'js', 'icons', '.well-known'];
 

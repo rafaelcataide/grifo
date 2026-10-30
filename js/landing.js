@@ -1,6 +1,7 @@
 // Página de apresentação: o que quem ainda não entrou vê ao abrir o link do Grifo.
 // As ilustrações são HTML/CSS (sem imagens), então ficam leves, nítidas e seguem o tema claro/escuro.
 import { esc } from './util.js';
+import { PLANOS } from '../supabase/functions/_shared/planos.js';
 import { ic } from './icons.js';
 
 const MAP_SVG = `<svg viewBox="0 0 240 150" class="lp-map" aria-hidden="true">
@@ -14,7 +15,7 @@ const MAP_SVG = `<svg viewBox="0 0 240 150" class="lp-map" aria-hidden="true">
   <text x="124" y="100" class="lbl sm">Hábitos</text>
 </svg>`;
 
-export function landingView({ invite = false, price = '' } = {}) {
+export function landingView({ invite = false, prices = {} } = {}) {
   return `<div class="lp">
   ${invite ? '<a class="lp-invite" href="#/conta">🎈 Você foi convidado: crie sua conta e ganhe <b>1 mês de Grifo Plus</b>.</a>' : ''}
   <header class="lp-hero">
@@ -80,9 +81,11 @@ export function landingView({ invite = false, price = '' } = {}) {
     <h2>Planos</h2>
     <div class="lp-plans-grid">
       <div class="lp-plan"><h3>Grátis</h3><div class="lp-price">R$ 0</div>
-        <ul><li>Livros, notas e grifos por foto</li><li>Até 10 artigos salvos por link</li><li>Mapa de ideias e cards de revisão</li><li>Metas, conquistas e clubes</li><li>Sincronização entre aparelhos</li><li>Artes para o Instagram</li></ul></div>
-      <div class="lp-plan plus"><h3>⭐ Plus</h3><div class="lp-price">${esc(price)}</div>
-        <ul><li>Tudo do grátis</li><li>Pergunte à sua biblioteca com IA</li><li>Fichamento e cards feitos pela IA</li><li>Plano de revisão para provas</li><li>Artigos ilimitados</li><li>Temas extras e artes sem marca</li></ul></div>
+        <ul><li>Livros, notas e grifos por foto</li><li>Até ${PLANOS.free.articles} artigos e PDFs</li><li>Mapa de ideias e cards de revisão</li><li>Metas, conquistas e clubes</li><li>Sincronização entre aparelhos</li><li>IA para experimentar</li></ul></div>
+      <div class="lp-plan plus"><h3>⭐ Plus</h3><div class="lp-price">${esc(prices.plus?.month || '')}<small>/mês</small></div>
+        <ul><li>Tudo do grátis</li><li>Pergunte à sua biblioteca com IA</li><li>Fichamento e cards feitos pela IA</li><li>Plano de revisão para provas</li><li>Artigos e PDFs ilimitados</li><li>Temas extras e artes sem marca</li></ul></div>
+      <div class="lp-plan"><h3>💎 Pro</h3><div class="lp-price">${esc(prices.pro?.month || '')}<small>/mês</small></div>
+        <ul><li>Tudo do Plus</li><li>Mais que o dobro de IA avançada</li><li>“Perguntar” lê o dobro das suas notas</li><li>Fichamento de livros inteiros</li><li>${PLANOS.pro.pdfGB} GB para PDFs</li><li>Para estudo e pesquisa</li></ul></div>
     </div>
   </section>
 

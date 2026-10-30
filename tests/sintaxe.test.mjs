@@ -12,6 +12,7 @@ const modules = [
   ...readdirSync(join(root, 'js', 'telas')).filter((f) => f.endsWith('.js')).map((f) => join(root, 'js', 'telas', f)),
   join(root, 'config.js'),
   join(root, 'supabase', 'functions', '_shared', 'ai-tasks.js'),
+  join(root, 'supabase', 'functions', '_shared', 'planos.js'),
 ];
 
 for (const file of modules) {

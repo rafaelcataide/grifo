@@ -765,3 +765,19 @@ dialog.cam::backdrop { background: #000; }
 .cam-res { text-align: right; opacity: .75; }
 .cam.flash::after { content: ''; position: absolute; inset: 0; background: #fff; animation: camflash .25s ease-out forwards; }
 @keyframes camflash { to { opacity: 0; } }
+
+/* planos */
+.plans-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; align-items: stretch; }
+.plan-card { position: relative; display: flex; flex-direction: column; gap: 6px; margin: 0; }
+.plan-card h3 { margin: 0; }
+.plan-card.featured { border: 2px solid var(--accent); }
+.plan-card.current { background: var(--accent-soft); }
+.plan-badge { position: absolute; top: -11px; left: 16px; background: var(--accent); color: #fff; font-size: .72rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+.plan-price { font-family: "Fraunces", Georgia, serif; font-size: 1.7rem; font-weight: 700; }
+.plan-price small { font-family: inherit; font-size: .85rem; font-weight: 500; color: var(--muted); margin-left: 2px; }
+.plan-feats { margin: 6px 0 10px; padding-left: 0; list-style: none; display: grid; align-content: start; gap: 6px; font-size: .88rem; flex: 1; }
+.plan-feats li::before { content: '✓'; color: var(--accent); font-weight: 700; margin-right: 6px; }
+.plan-current { pointer-events: none; opacity: .8; }
+.usage-row { display: grid; gap: 4px; margin: 10px 0; }
+.bar.warn > div { background: var(--danger); }
+.lp-price small { font-size: .5em; font-weight: 500; margin-left: 2px; }

@@ -86,7 +86,8 @@ Recebe uma nota e a lista de pontos já existentes (livros, notas com título, t
       required: ['answer', 'sources'],
       additionalProperties: false,
     },
-    build: ({ question, notes }) => `<notas>\n${notes.slice(0, 80).map((n) => `<nota id="${n.id}" livro="${clip(n.book, 120)}" autor="${clip(n.author, 80)}"${n.page ? ` pagina="${n.page}"` : ''}>\n${clip(n.text, 900)}\n</nota>`).join('\n')}\n</notas>\n\nPergunta: ${clip(question, 500)}`,
+    // depth 'pro': o plano Pro lê o dobro de notas (definido no servidor, pelo plano)
+    build: ({ question, notes, depth }) => `<notas>\n${notes.slice(0, depth === 'pro' ? 160 : 80).map((n) => `<nota id="${n.id}" livro="${clip(n.book, 120)}" autor="${clip(n.author, 80)}"${n.page ? ` pagina="${n.page}"` : ''}>\n${clip(n.text, 900)}\n</nota>`).join('\n')}\n</notas>\n\nPergunta: ${clip(question, 500)}`,
   },
 
   // Corrige erros de OCR de um trecho fotografado, sem mudar o que o autor escreveu
@@ -164,7 +165,7 @@ TASKS.summary = {
     required: ['overview', 'ideas', 'quotes', 'questions'],
     additionalProperties: false,
   },
-  build: ({ book = {}, notes = [] }) => `<livro titulo="${clip(book.title, 150)}" autor="${clip(book.author, 100)}"/>\n<notas>\n${notes.slice(0, 120).map((n) => `<nota id="${n.id}" tipo="${n.kind === 'quote' ? 'citação' : 'reflexão'}"${n.page ? ` pagina="${n.page}"` : ''}>\n${clip(n.text, 900)}\n</nota>`).join('\n')}\n</notas>`,
+  build: ({ book = {}, notes = [], depth }) => `<livro titulo="${clip(book.title, 150)}" autor="${clip(book.author, 100)}"/>\n<notas>\n${notes.slice(0, depth === 'pro' ? 300 : 120).map((n) => `<nota id="${n.id}" tipo="${n.kind === 'quote' ? 'citação' : 'reflexão'}"${n.page ? ` pagina="${n.page}"` : ''}>\n${clip(n.text, 900)}\n</nota>`).join('\n')}\n</notas>`,
 };
 
 // Técnica de Feynman: a pessoa explica uma ideia com as próprias palavras e recebe um retorno
@@ -246,3 +247,6 @@ export function parseResult(message) {
   const text = message.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
   return JSON.parse(text);
 }
+
+// IA leve (Haiku) ou pesada (Sonnet): cada plano tem uma cota mensal de cada uma
+export const taskKind = (task) => (TASKS[task]?.model === SONNET ? 'heavy' : 'light');

@@ -250,3 +250,24 @@ test('tags: separa por ; e vírgula, tira # e repetidas', async () => {
   assert.deepEqual(splitTags(['religião;espiritismo', '#Religião', 'umbanda, #fé ;']), ['religião', 'espiritismo', 'umbanda', 'fé']);
   assert.deepEqual(splitTags(''), []);
 });
+
+test('planos: cotas por plano e período (mês ou o total do teste grátis)', async () => {
+  const { PLANOS, planoDe, periodoDe } = await import('../supabase/functions/_shared/planos.js');
+  assert.equal(planoDe('nada'), PLANOS.free);
+  assert.ok(PLANOS.pro.heavy > PLANOS.plus.heavy && PLANOS.plus.heavy > PLANOS.free.heavy);
+  const outubro = new Date('2026-10-15T12:00:00Z');
+  assert.equal(periodoDe('free', 'heavy', outubro), 'total'); // grátis: 3 testes para sempre
+  assert.equal(periodoDe('free', 'light', outubro), '2026-10');
+  assert.equal(periodoDe('plus', 'heavy', outubro), '2026-10');
+});
+
+test('IA: tarefas leves e pesadas, e o Pro lê mais notas', async () => {
+  const { taskKind, buildParams } = await import('../supabase/functions/_shared/ai-tasks.js');
+  assert.equal(taskKind('ask'), 'heavy');
+  assert.equal(taskKind('summary'), 'heavy');
+  assert.equal(taskKind('fixocr'), 'light');
+  const notes = Array.from({ length: 200 }, (_, i) => ({ id: `n${i}`, text: 'x', book: 'L' }));
+  const contar = (p) => (p.messages[0].content.match(/<nota /g) || []).length;
+  assert.equal(contar(buildParams('ask', { question: 'q', notes, depth: 'std' })), 80);
+  assert.equal(contar(buildParams('ask', { question: 'q', notes, depth: 'pro' })), 160);
+});

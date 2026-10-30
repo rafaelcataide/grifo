@@ -65,38 +65,49 @@ supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
 supabase functions deploy ai
 ```
 
+As cotas de IA de cada plano (por mês, separadas em **IA rápida** e **IA avançada**, mais um teto diário) ficam em `supabase/functions/_shared/planos.js`: o app mostra, a função `ai` faz valer. Para mudar os números, edite esse arquivo, publique o app e rode `supabase functions deploy ai`.
+
+| Plano | IA rápida / mês | IA avançada / mês | Teto por dia | Artigos e PDFs | PDFs na conta |
+|---|---|---|---|---|---|
+| Grátis | 20 | 3 no total (para experimentar) | 20 | 10 | — |
+| Plus | 1.000 | 12 | 100 | ilimitados | 2 GB |
+| Pro | 2.000 | 30 | 200 | ilimitados | 10 GB |
+
 Opções (também com `supabase secrets set`):
-- `AI_DAILY_LIMIT=60`: pedidos de IA por pessoa por dia (padrão 60)
-- `AI_FOR_ALL=true`: libera a IA para todos os usuários logados, não só para o Plus
+- `AI_GLOBAL_DAILY_LIMIT=500`: teto de pedidos de IA por dia somando todas as pessoas
+- `AI_FOR_ALL=true`: trata todos como Pro (para testes)
 
 A IA usa o modelo Claude Opus 5.5. Os pedidos são cobrados na sua conta da Anthropic.
 
-## 5. Plano Plus e pagamentos (opcional)
+## 5. Planos Plus e Pro e pagamentos (opcional)
 
-**Para liberar o Plus para você mesmo** (sem pagamento), rode no SQL Editor:
+**Para liberar um plano para você mesmo** (sem pagamento), rode no SQL Editor (`'plus'` ou `'pro'`):
 
 ```sql
-update public.profiles set plan = 'plus'
+update public.profiles set plan = 'pro'
 where user_id = (select id from auth.users where email = 'seu-email@gmail.com');
 ```
 
 **Para vender assinaturas com o Stripe:**
 
-1. No Stripe, crie um **produto** com preço recorrente e um **Payment Link** para ele.
-2. Cole o link em `config.js` → `plusCheckoutUrl` (e ajuste `plusPriceLabel`). O app envia o id do usuário no link automaticamente.
-3. Publique a função que recebe os avisos do Stripe:
+1. No Stripe, crie dois **produtos** (Plus e Pro), cada um com dois preços recorrentes (mensal e anual), e um **Payment Link** para cada preço (4 links).
+2. Cole os links em `config.js` → `checkout` (`plus.month`, `plus.year`, `pro.month`, `pro.year`) e ajuste `prices` se mudar os valores. O app envia o id do usuário no link automaticamente.
+3. Em **Settings → Billing → Customer portal**, ative o portal do cliente (trocar de plano, cartão e cancelar) e cole o link de login em `config.js` → `billingPortalUrl`. Quem já assina troca de plano por ali, sem ficar com duas assinaturas.
+4. Cadastre os segredos. `STRIPE_PRO_PRICES` são os ids dos **dois preços do Pro** (`price_...`), separados por vírgula: é assim que o servidor sabe se a pessoa comprou Plus ou Pro.
 
 ```bash
-supabase secrets set STRIPE_SECRET_KEY=sk_live_... STRIPE_WEBHOOK_SECRET=whsec_...
+supabase secrets set STRIPE_SECRET_KEY=sk_live_... STRIPE_WEBHOOK_SECRET=whsec_... STRIPE_PRO_PRICES=price_proMensal,price_proAnual
 ```
+
+5. Publique a função que recebe os avisos do Stripe:
 
 ```bash
 supabase functions deploy stripe-webhook --no-verify-jwt
 ```
 
-4. No Stripe, em **Developers → Webhooks**, adicione o endpoint `https://SEU-PROJETO.supabase.co/functions/v1/stripe-webhook` com os eventos `checkout.session.completed`, `customer.subscription.updated` e `customer.subscription.deleted`. O segredo `whsec_...` aparece ali.
+6. No Stripe, em **Developers → Webhooks**, adicione o endpoint `https://SEU-PROJETO.supabase.co/functions/v1/stripe-webhook` com os eventos `checkout.session.completed`, `customer.subscription.updated` e `customer.subscription.deleted`. O segredo `whsec_...` aparece ali.
 
-Quando alguém paga, o plano vira `plus` em instantes; se a assinatura for cancelada, volta para `free`.
+Quando alguém paga, o plano vira `plus` ou `pro` (pelo preço) em instantes; trocas de plano pelo portal também chegam; se a assinatura for cancelada, volta para `free`.
 
 ## 6. Notificações, e-mail semanal e exclusão de conta
 

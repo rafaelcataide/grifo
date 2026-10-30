@@ -171,10 +171,18 @@ export async function publicProfile(handle) {
   return data;
 }
 
-// "personal": sem servidor (tudo liberado) · "plus" · "free"
+// "personal": sem servidor (tudo liberado) · "pro" · "plus" · "free"
 export function plan() {
   if (!enabled()) return 'personal';
-  return profile?.plan === 'plus' ? 'plus' : 'free';
+  return ['plus', 'pro'].includes(profile?.plan) ? profile.plan : 'free';
+}
+
+// Uso de IA no mês (leve e pesada), o teste de IA pesada do grátis e o espaço de PDFs na conta
+export async function aiUsage() {
+  const sb = await client();
+  if (!sb || !user()) return null;
+  const { data } = await sb.rpc('my_ai_usage');
+  return data;
 }
 
 // ---------------- sincronização ----------------
