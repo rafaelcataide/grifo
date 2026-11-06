@@ -781,3 +781,15 @@ dialog.cam::backdrop { background: #000; }
 .usage-row { display: grid; gap: 4px; margin: 10px 0; }
 .bar.warn > div { background: var(--danger); }
 .lp-price small { font-size: .5em; font-weight: 500; margin-left: 2px; }
+
+/* referências ABNT/APA */
+.ref-box { padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); line-height: 1.55; font-size: .92rem; user-select: text; }
+.ref-box.locked { filter: blur(3.5px); user-select: none; pointer-events: none; }
+.ref-list p { margin: 0 0 10px; }
+.ref-list { max-height: 50vh; overflow: auto; }
+.ref-missing { color: var(--gold, #b8860b); margin: 0; }
+.ref-lock { margin: 0; }
+/* resgate do dia e menções sem ligação */
+.resurface .resurface-text { font-family: "Fraunces", Georgia, serif; font-size: 1.02rem; line-height: 1.55; border-left: 3px solid var(--peach, var(--accent)); padding-left: 10px; margin: 10px 0 6px; }
+.resurface-done { margin-top: 0; }
+.mentions .chip.mention { border-style: dashed; color: var(--accent); font-size: .8rem; }

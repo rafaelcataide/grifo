@@ -883,3 +883,26 @@ EN_PATTERNS.unshift(
   [/^(.+) · ver planos$/, (m, tr) => `${tr(m[1], true)} · see plans`],
 );
 Object.assign(EN, { '💎 Pro': '💎 Pro', '⭐ Plus': '⭐ Plus', 'Pro': 'Pro', 'Plus': 'Plus' });
+// resgate do dia, menções sem ligação e referências ABNT/APA
+Object.assign(EN, {
+  '🔁 Resgate do dia': '🔁 Daily resurface', 'Resgate do dia': 'Daily resurface', '✓ Manter': '✓ Keep', 'Manter': 'Keep', '🧠 Virar card': '🧠 Make a card', 'Virar card': 'Make a card',
+  'Não mostrar mais': "Don't show again", 'Abrir': 'Open', 'Nota solta': 'Loose note',
+  '🔗 Menções sem ligação': '🔗 Unlinked mentions', 'Menções sem ligação': 'Unlinked mentions', 'Ligar todas': 'Link all',
+  'Esta nota fala de ideias que você já tem, mas sem [[ ]]. Toque para ligar:': 'This note mentions ideas you already have, but without [[ ]]. Tap to link:',
+  '📚 Referência': '📚 Reference', 'Referência': 'Reference', '📚 Citar este grifo': '📚 Cite this highlight', 'Citar este grifo': 'Cite this highlight', '📎 Citar (ABNT/APA)': '📎 Cite (ABNT/APA)', 'Citar (ABNT/APA)': 'Cite (ABNT/APA)',
+  'Citação no texto': 'In-text citation', '📋 Copiar citação': '📋 Copy citation', '📋 Copiar referência': '📋 Copy reference', '📋 Copiar a lista': '📋 Copy the list', '📋 Copiado': '📋 Copied',
+  'Faltam dados para a referência ficar completa:': 'Some details are missing for a complete reference:', 'Dados da obra': 'Work details', 'Salvar dados': 'Save details', '✔ Dados salvos': '✔ Details saved',
+  'Autor': 'Author', 'Editora': 'Publisher', 'Cidade': 'City', 'Ano': 'Year', 'Edição': 'Edition', 'Norma': 'Style', 'Copie:': 'Copy:',
+  '📚 Lista de referências': '📚 Reference list', 'Lista de referências': 'Reference list', 'Nada ainda.': 'Nothing yet.',
+  'obras (livros que você leu ou está lendo, artigos e PDFs), em ordem alfabética.': "works (books you've read or are reading, articles and PDFs), in alphabetical order.",
+  'com dados faltando: abra a obra e toque em 📚 Referência para completar.': 'with missing details: open the work and tap 📚 Reference to complete them.',
+  'ex: Daniel Kahneman': 'e.g. Daniel Kahneman', 'ex: Objetiva': 'e.g. Penguin', 'ex: Rio de Janeiro': 'e.g. New York', 'ex: 2012': 'e.g. 2012', 'ex: 2': 'e.g. 2',
+});
+EN_PATTERNS.unshift(
+  [/^há (\d+) dias$/, '$1 days ago'], [/^há (\d+) (mês|meses)$/, (m) => `${m[1]} month${m[1] === '1' ? '' : 's'} ago`], [/^há (\d+) (ano|anos)$/, (m) => `${m[1]} year${m[1] === '1' ? '' : 's'} ago`],
+  [/^🔁 Resgate de hoje feito: (\d+) (grifo revisitado|grifos revisitados)\. Amanhã tem mais\.$/, (m) => `🔁 Today's resurface done: ${m[1]} highlight${m[1] === '1' ? '' : 's'} revisited. More tomorrow.`],
+  [/^＋ (.+)$/, '＋ $1'],
+  [/^🔗 Ligado a (.+)$/, '🔗 Linked to $1'], [/^🔗 (\d+) (ligação criada|ligações criadas)$/, (m) => `🔗 ${m[1]} link${m[1] === '1' ? '' : 's'} created`],
+  [/^Referência \((ABNT NBR 6023|APA 7)\)$/, 'Reference ($1)'],
+  [/^⭐ Referências e citações prontas fazem parte do Grifo Pro · ver planos$/, '⭐ Ready-made references and citations are part of Grifo Pro · see plans'],
+);

@@ -118,6 +118,7 @@ export function articleView(id) {
     <h1 class="reader-title">${esc(a.title)}</h1>
     <div class="quick">
       <a class="btn small" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">↗ Original</a>
+      <button class="btn small" data-action="reference" data-id="${a.id}">📚 Referência</button>
       <button class="btn small" data-action="articleRead" data-id="${a.id}">${a.status === 'finished' ? '✓ Lido' : '✔ Marcar como lido'}</button>
       <button class="btn small" data-action="newNote" data-id="${a.id}">✍️ Nota</button>
       <button class="btn small ghost" data-action="deleteArticle" data-id="${a.id}">🗑️ Excluir</button>
@@ -247,6 +248,7 @@ export function pdfView(id) {
     <div class="small muted">${esc(['PDF', a.pages ? `${a.pages} páginas` : '', a.author].filter(Boolean).join(' · '))}</div>
     <h1 class="reader-title">${esc(a.title)}</h1>
     <div class="quick">
+      <button class="btn small" data-action="reference" data-id="${a.id}">📚 Referência</button>
       <button class="btn small" data-action="articleRead" data-id="${a.id}">${a.status === 'finished' ? '✓ Lido' : '✔ Marcar como lido'}</button>
       <button class="btn small" data-action="newNote" data-id="${a.id}">✍️ Nota</button>
       <button class="btn small" data-action="pdfImport" data-id="${a.id}">📥 Importar grifos do arquivo</button>

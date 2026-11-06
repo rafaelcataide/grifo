@@ -10,6 +10,7 @@ import * as AI from './ai.js';
 import { CONFIG } from '../config.js';
 import { landingView } from './landing.js';
 import { PLANOS, planoDe } from '../supabase/functions/_shared/planos.js';
+import { refActions } from './telas/referencias.js';
 import { vocabView, wordActions, tagsView, tagActions } from './telas/vocabulario.js';
 import { graphApi, mapShow, fold, mapView } from './telas/mapa.js';
 import { articleStarted, articleItem, articlesView, articleView, pdfView, pdfActions, articleActions, saveSharedArticle } from './telas/artigos.js';
@@ -461,6 +462,58 @@ function firstSteps() {
   </section>`;
 }
 
+// ---------- resgate diário (como o Readwise) ----------
+// 3 grifos com mais de 3 dias, escolhidos uma vez por dia (ficam os mesmos até amanhã, em todos os
+// aparelhos: a escolha vai nos ajustes, que sincronizam). Os que nunca apareceram vêm antes;
+// "não mostrar mais" tira o grifo do resgate para sempre.
+const RESURFACE_N = 3;
+function resurfaceToday() {
+  const today = G.ymd();
+  const saved = state.settings.resurface;
+  if (saved?.day === today) return saved;
+  const off = new Set(state.settings.resurfaceOff || []);
+  const seen = state.settings.resurfaceSeen || {};
+  const oldEnough = Date.now() - 3 * 864e5;
+  // ordem do dia: muda a cada dia, mas é a mesma em qualquer aparelho
+  const hash = (s) => [...s].reduce((h, c) => (Math.imul(h, 31) + c.charCodeAt(0)) >>> 0, 7);
+  const pool = state.notes
+    .filter((n) => !off.has(n.id) && (n.createdAt || 0) < oldEnough && plainText(n.text).trim().length >= 20)
+    .sort((a, b) => (seen[a.id] || '').localeCompare(seen[b.id] || '') || hash(a.id + today) - hash(b.id + today));
+  return { day: today, ids: pool.slice(0, RESURFACE_N).map((n) => n.id), done: [] };
+}
+// com resgate pendente, os "Grifos do dia" (só leitura) ficam escondidos para não repetir; voltam depois
+const resurfacePending = () => {
+  const r = state.settings.resurface;
+  return !!r && r.day === G.ymd() && r.ids.some((id) => noteById(id) && !r.done.includes(id));
+};
+const sinceLabel = (ts) => {
+  const d = Math.max(1, Math.round((Date.now() - ts) / 864e5));
+  return d < 30 ? `há ${d} dias` : d < 365 ? `há ${Math.round(d / 30)} ${Math.round(d / 30) === 1 ? 'mês' : 'meses'}` : `há ${Math.round(d / 365)} ${Math.round(d / 365) === 1 ? 'ano' : 'anos'}`;
+};
+function resurfaceCard() {
+  const r = resurfaceToday();
+  if (state.settings.resurface?.day !== r.day) { // primeira vez hoje: guarda a escolha do dia
+    state.settings = { ...state.settings, resurface: r };
+    db.setKV('settings', state.settings);
+  }
+  const ids = r.ids.filter((id) => noteById(id));
+  if (!ids.length) return '';
+  const left = ids.filter((id) => !r.done.includes(id));
+  if (!left.length) return `<p class="nudge resurface-done">🔁 Resgate de hoje feito: ${ids.length} ${ids.length === 1 ? 'grifo revisitado' : 'grifos revisitados'}. Amanhã tem mais.</p>`;
+  const n = noteById(left[0]);
+  const b = bookById(n.bookId);
+  return `<section class="card resurface">
+    <div class="row between"><b>🔁 Resgate do dia</b><span class="small muted">${ids.length - left.length + 1} de ${ids.length}</span></div>
+    <div class="note-text resurface-text">${renderText(n.text.length > 600 ? `${n.text.slice(0, 599)}…` : n.text)}</div>
+    <div class="small muted">${b ? esc(b.title) : 'Nota solta'}${n.page ? ` · p. ${n.page}` : ''} · ${sinceLabel(n.createdAt || Date.now())}</div>
+    <div class="row gap-s wrap" style="margin-top:10px">
+      <button class="btn small primary" data-action="resurface" data-id="${n.id}" data-what="keep">✓ Manter</button>
+      <button class="btn small" data-action="resurface" data-id="${n.id}" data-what="card">🧠 Virar card</button>
+      <button class="btn small ghost" data-action="resurface" data-id="${n.id}" data-what="off">Não mostrar mais</button>
+      <a class="btn small ghost" href="#/nota/${n.id}">Abrir</a>
+    </div></section>`;
+}
+
 function home() {
   const s = state.stats, set = state.settings;
   const ch = G.weeklyChallenge(s);
@@ -474,13 +527,14 @@ function home() {
     : (s.streak > 0 ? `Leia hoje para manter sua sequência de ${s.streak} dias!` : 'Que tal começar uma sequência hoje?');
 
   return `${firstSteps()}
+  ${resurfaceCard()}
   ${levelCard()}
   <p class="nudge">${streakMsg}</p>
   <section class="grid2">
     <div class="card center">${C.ring(s.pagesToday / set.dailyGoal)}<div class="small"><b>${s.pagesToday}</b> / ${set.dailyGoal} páginas hoje</div></div>
     <div class="card center">${C.ring(s.finishedThisYear / set.yearGoal)}<div class="small"><b>${s.finishedThisYear}</b> / ${set.yearGoal} livros em ${s.year}</div></div>
   </section>
-  ${dailyCard()}
+  ${resurfacePending() ? '' : dailyCard()}
   ${s.dueCards ? `<a class="card due-card" href="#/revisar"><span class="big-emoji">🧠</span>
     <div class="grow"><b>${s.dueCards} ${s.dueCards === 1 ? 'card' : 'cards'} para revisar</b><div class="small muted">Leva poucos minutos e fixa o que você leu.</div></div>
     <span class="btn small primary">Revisar</span></a>` : ''}
@@ -580,6 +634,7 @@ function bookDetail(id) {
     <a class="btn" href="#/mapa/${encodeURIComponent(`b:${b.id}`)}">🕸️ No mapa</a>
     ${notes.length ? `<button class="btn" data-action="aiCards" data-book="${b.id}">✨ Cards com IA</button>` : ''}
     ${notes.length >= 3 ? `<button class="btn" data-action="aiSummary" data-book="${b.id}">✨ Fichamento com IA</button>` : ''}
+    <button class="btn" data-action="reference" data-id="${b.id}">📚 Referência</button>
     <button class="btn ghost" data-action="editBook" data-id="${b.id}">✏️ Editar</button>
   </div>
   ${b.review ? `<section class="card"><div class="small muted">Minha opinião</div><p>${esc(b.review).replace(/\n/g, '<br>')}</p></section>` : ''}
@@ -614,10 +669,46 @@ function notesView() {
     : empty('Suas citações e reflexões aparecem aqui.', '<button class="btn primary" data-action="scan">📷 Capturar um grifo</button>')}</div>`;
 }
 
+// ---------- menções sem ligação (como no Obsidian) ----------
+// Nomes que a pessoa já usa (livros, artigos, notas com título, temas, ideias) e que aparecem no texto
+// da nota sem [[ ]]. Compara sem acento e sem maiúscula, só palavra inteira.
+// (cada letra vira uma só, sem acento: o texto comparado tem o mesmo tamanho do original)
+const foldChars = (s) => s.split('').map((c) => c.normalize('NFD')[0].toLowerCase()).join('');
+export function unlinkedMentions(n) {
+  const own = norm(noteTitle(n) || '');
+  const book = norm(bookById(n.bookId)?.title || '');
+  const linked = new Set(linksOf(n.text).map(norm));
+  // as ligações que já existem viram espaços, para não achar um nome dentro delas
+  const masked = foldChars(n.text.replace(LINK_RE, (m) => ' '.repeat(m.length)));
+  const names = new Map();
+  for (const c of linkCandidates()) names.set(norm(c.label), c.label);
+  for (const a of state.articles) names.set(norm(a.title), a.title);
+  const taken = [];
+  const out = [];
+  // nomes mais longos primeiro: "Sistema 1" antes de "Sistema"
+  for (const [k, label] of [...names].sort((x, y) => y[1].length - x[1].length)) {
+    if (label.length < 4 || k === own || k === book || linked.has(k)) continue;
+    const f = foldChars(label);
+    const re = new RegExp(`(?<![\\p{L}\\p{N}])${f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}])`, 'u');
+    const m = re.exec(masked);
+    if (!m || taken.some(([a, z]) => m.index < z && m.index + f.length > a)) continue;
+    taken.push([m.index, m.index + f.length]);
+    out.push({ label, index: m.index, length: f.length });
+  }
+  return out.slice(0, 8);
+}
+// troca o trecho por [[Nome]] (ou [[Nome|trecho]] quando escrito diferente, para o texto continuar igual)
+function linkMention(n, m) {
+  const orig = n.text.slice(m.index, m.index + m.length);
+  const link = orig === m.label ? `[[${orig}]]` : `[[${m.label}|${orig}]]`;
+  return n.text.slice(0, m.index) + link + n.text.slice(m.index + m.length);
+}
+
 function noteDetail(id) {
   const n = noteById(id);
   if (!n) return empty('Nota não encontrada.', '<a class="btn" href="#/notas">Voltar</a>');
   const b = bookById(n.bookId);
+  const mentions = unlinkedMentions(n);
   const out = [...new Set(linksOf(n.text))];
   const backlinks = n.title ? state.notes.filter((x) => x.id !== n.id && linksOf(x.text).some((l) => norm(l) === norm(noteTitle(n)))) : [];
   const shared = state.notes.filter((x) => x.id !== n.id && (
@@ -633,12 +724,16 @@ function noteDetail(id) {
       ${n.source === 'ocr' ? '<span class="chip">📷 OCR</span>' : ''}
       ${(n.tags || []).map((t) => `<a class="chip tag" href="${conceptHref(t)}">#${esc(t)}</a>`).join('')}</div>
   </section>
+  ${mentions.length ? `<section class="card mentions"><div class="row between gap-s wrap"><b>🔗 Menções sem ligação</b>${mentions.length > 1 ? `<button class="btn small" data-action="linkAllMentions" data-id="${n.id}">Ligar todas</button>` : ''}</div>
+    <p class="small muted" style="margin:4px 0 8px">Esta nota fala de ideias que você já tem, mas sem [[ ]]. Toque para ligar:</p>
+    <div class="chips">${mentions.map((m) => `<button class="chip chip-btn mention" data-action="linkMention" data-id="${n.id}" data-name="${esc(m.label)}">＋ ${esc(m.label)}</button>`).join('')}</div></section>` : ''}
   <div class="quick">
     <button class="btn primary" data-action="postNote" data-id="${n.id}">📸 Criar post</button>
     <button class="btn" data-action="newCard" data-id="${n.id}">🧠 Criar card</button>
     <button class="btn" data-action="aiCards" data-id="${n.id}">✨ Cards com IA</button>
     <button class="btn" data-action="aiLinks" data-id="${n.id}">✨ Sugerir conexões</button>
     <button class="btn" data-action="feynman" data-id="${n.id}">🎓 Explicar com minhas palavras</button>
+    ${b ? `<button class="btn" data-action="citeNote" data-id="${n.id}">📎 Citar (ABNT/APA)</button>` : ''}
     <a class="btn" href="#/mapa/${encodeURIComponent(`n:${n.id}`)}">🕸️ No mapa</a>
     <button class="btn" data-action="shareNote" data-id="${n.id}">↗ Compartilhar</button>
     ${Cloud.user() ? `<button class="btn" data-action="noteToClub" data-id="${n.id}">👥 No clube</button>` : ''}
@@ -1211,7 +1306,7 @@ function settingsView() {
   </section>
   <section class="card"><h3>📤 Levar para outros apps${isPlus() ? '' : ' <span class="chip">⭐ Plus</span>'}</h3>
     <p class="small muted">Suas notas viram arquivos Markdown com as [[ligações]] (Obsidian e Notion) e seus cards viram um baralho do Anki.</p>
-    <div class="quick" style="margin:0"><button class="btn" data-action="exportMarkdown">🧩 Obsidian / Notion (.zip)</button><button class="btn" data-action="exportAnki">🧠 Anki (.txt)</button></div>
+    <div class="quick" style="margin:0"><button class="btn" data-action="exportMarkdown">🧩 Obsidian / Notion (.zip)</button><button class="btn" data-action="exportAnki">🧠 Anki (.txt)</button><button class="btn" data-action="bibliography">📚 Lista de referências</button></div>
     <p class="hint">No Obsidian: descompacte o .zip numa pasta e abra como cofre. No Notion: Importar → Texto e Markdown. No Anki: Arquivo → Importar (tipo, baralho e lacunas já vêm prontos).</p>
   </section>
   <section class="card"><h3>Dicas</h3><ul class="small">
@@ -2266,11 +2361,14 @@ function bookForm(existing, opts = {}) {
     };
     modal.addEventListener('close', closeScan, { once: true });
     if (opts.scan) openScan();
+    // editora, ano, cidade e edição da busca (para a referência ABNT/APA); não aparecem no formulário
+    let edicao = {};
     results.onclick = (e) => {
       const item = e.target.closest('.lookup-item');
       if (!item) return;
       const r = found[item.dataset.i];
       for (const k of ['title', 'author', 'pages', 'isbn']) if (r[k]) form[k].value = r[k];
+      edicao = Object.fromEntries(['publisher', 'year', 'city', 'edition'].filter((k) => r[k]).map((k) => [k, String(r[k])]));
       if (r.cover) setCover(r.cover);
       if (r.category && !form.subtheme.value) form.subtheme.value = r.category;
       results.innerHTML = '';
@@ -2284,6 +2382,7 @@ function bookForm(existing, opts = {}) {
         purpose: fd.purpose || 'hobby', genre: fd.genre.trim(), subtheme: fd.subtheme.trim(),
         status: fd.status, currentPage: Math.min(Number(fd.currentPage) || 0, Number(fd.pages) || Infinity),
         startDate: fd.startDate, endDate: fd.endDate, rating: Number(fd.rating) || 0, isbn: fd.isbn.trim(), cover: fd.cover.trim(),
+        ...edicao,
       });
       if (book.status === 'finished') { book.currentPage = book.pages; book.endDate ||= G.ymd(); }
       if (book.status === 'reading') book.startDate ||= G.ymd();
@@ -2331,6 +2430,7 @@ async function searchBooks(q) {
       out.items.push({
         title: [v.title, v.subtitle].filter(Boolean).join(': '), author: (v.authors || []).join(', '),
         pages: v.page_count || '', category: (v.subjects || [])[0] || '', isbn: v.isbn || isbn, cover: v.cover_url || '',
+        publisher: v.publisher || '', year: v.year || '', city: v.location || '', edition: v.edition || '',
       });
       return out;
     }
@@ -2346,14 +2446,16 @@ async function searchBooks(q) {
     category: (v.categories || [])[0] || '',
     isbn: ((v.industryIdentifiers || []).find((i) => i.type === 'ISBN_13') || (v.industryIdentifiers || [])[0] || {}).identifier || '',
     cover: (v.imageLinks?.thumbnail || '').replace('http://', 'https://'),
+    publisher: v.publisher || '', year: (v.publishedDate || '').slice(0, 4),
   }));
   if (out.items.length) return out;
 
   // 3) Open Library
-  const o = await get(`https://openlibrary.org/search.json?limit=6&fields=title,author_name,number_of_pages_median,cover_i,isbn&${isIsbn ? `isbn=${isbn}` : `q=${encodeURIComponent(q)}`}`);
+  const o = await get(`https://openlibrary.org/search.json?limit=6&fields=title,author_name,number_of_pages_median,cover_i,isbn,publisher,first_publish_year&${isIsbn ? `isbn=${isbn}` : `q=${encodeURIComponent(q)}`}`);
   out.items = (o?.docs || []).map((d) => ({
     title: d.title, author: (d.author_name || []).join(', '), pages: d.number_of_pages_median || '', category: '',
     isbn: (d.isbn || [])[0] || '', cover: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-M.jpg` : '',
+    publisher: (d.publisher || [])[0] || '', year: d.first_publish_year || '',
   }));
   return out;
 }
@@ -3004,6 +3106,7 @@ export const actions = {
   ...exportActions,
   ...pdfActions,
   ...tagActions,
+  ...refActions,
   ...wordActions,
   ...timerActions,
   ...reminderActions,
@@ -3031,6 +3134,40 @@ export const actions = {
   newNote: ({ id, link }) => noteForm(null, { bookId: id, link }),
   scan: ({ id }) => noteForm(null, { bookId: id, autoOCR: true }),
   editNote: ({ id }) => noteForm(noteById(id)),
+  // resgate do dia: manter, virar card ou tirar do resgate; em todos os casos, passa para o próximo
+  async resurface({ id, what }) {
+    const r = resurfaceToday();
+    const seen = { ...(state.settings.resurfaceSeen || {}), [id]: G.ymd() };
+    // guarda só os 500 vistos mais recentemente
+    const recent = Object.fromEntries(Object.entries(seen).sort((a, b) => b[1].localeCompare(a[1])).slice(0, 500));
+    const patch = { resurface: { ...r, done: [...new Set([...(r.done || []), id])] }, resurfaceSeen: recent };
+    if (what === 'off') patch.resurfaceOff = [...new Set([...(state.settings.resurfaceOff || []), id])];
+    state.settings = { ...state.settings, ...patch };
+    await db.setKV('settings', state.settings);
+    render();
+    if (what === 'card') cardForm({ note: noteById(id) });
+  },
+  async linkMention({ id, name }) {
+    const n = noteById(id);
+    const m = n && unlinkedMentions(n).find((x) => x.label === name);
+    if (!m) return;
+    await commit(() => persist('notes', { ...n, text: linkMention(n, m) }));
+    toast(`🔗 Ligado a ${esc(name)}`);
+  },
+  async linkAllMentions({ id }) {
+    let n = noteById(id);
+    let count = 0;
+    // uma de cada vez: as posições mudam depois de cada ligação
+    for (let i = 0; i < 8; i++) {
+      const [m] = unlinkedMentions(n);
+      if (!m) break;
+      n = { ...n, text: linkMention(n, m) };
+      count++;
+    }
+    if (!count) return;
+    await commit(() => persist('notes', n));
+    toast(`🔗 ${count} ${count === 1 ? 'ligação criada' : 'ligações criadas'}`);
+  },
   // Editar o texto ali mesmo, num campo comum (seleção, copiar e colar do próprio celular);
   // título, tags, livro e página ficam em "Mais opções"
   editNoteInline({ id }) {

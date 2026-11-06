@@ -532,3 +532,62 @@ test('planos: grátis, Plus e Pro, com preço mensal e anual', async ({ page }) 
   await page.getByRole('button', { name: /Anual/ }).click();
   await expect(page.locator('.plan-card').nth(2).locator('.plan-price')).toHaveText('R$ 279/ano');
 });
+
+test('nota: menções sem ligação viram [[ ]] com um toque (e "ligar todas")', async ({ page }) => {
+  await semear(page, { books: [livro('b1'), livro('b2', { title: 'Hábitos Atômicos', author: 'James Clear', genre: 'Produtividade' })],
+    notes: [nota('n1', 'b1', 'O [[Sistema 1]] é rápido.'), nota('n2', 'b1', 'O sistema 1 lembra o que li em hábitos atômicos sobre rotina.')] });
+  await page.goto('/#/nota/n2');
+  const caixa = page.locator('.mentions');
+  await expect(caixa.locator('.chip')).toHaveText(['＋ Hábitos Atômicos', '＋ Sistema 1']);
+  await caixa.getByRole('button', { name: '＋ Sistema 1' }).click();
+  await expect.poll(async () => (await lerBanco(page, 'notes')).find((n) => n.id === 'n2').text).toBe('O [[Sistema 1|sistema 1]] lembra o que li em hábitos atômicos sobre rotina.');
+  await expect(page.locator('#note-body')).toContainText('O sistema 1 lembra'); // o texto continua igual na leitura
+  await page.locator('.mentions .chip').first().click();
+  await expect.poll(async () => (await lerBanco(page, 'notes')).find((n) => n.id === 'n2').text).toContain('[[Hábitos Atômicos|hábitos atômicos]]');
+  await expect(page.locator('.mentions')).toHaveCount(0);
+});
+
+test('início: resgate do dia mostra grifos antigos; manter, virar card e não mostrar mais @celular', async ({ page }) => {
+  const antigo = Date.now() - 40 * 864e5;
+  await semear(page, { books: [livro('b1')], notes: [
+    nota('n1', 'b1', 'Primeiro grifo antigo com texto suficiente.', { createdAt: antigo }),
+    nota('n2', 'b1', 'Segundo grifo antigo com texto suficiente.', { createdAt: antigo }),
+    nota('n3', 'b1', 'Terceiro grifo antigo com texto suficiente.', { createdAt: antigo }),
+    nota('n4', 'b1', 'Grifo novo de hoje ainda não entra.'),
+  ] });
+  await page.goto('/#/');
+  const card = page.locator('.resurface');
+  await expect(card).toContainText('1 de 3');
+  await expect(card).toContainText('há 1 mês');
+  await card.getByRole('button', { name: 'Manter' }).click();
+  await expect(card).toContainText('2 de 3');
+  await card.getByRole('button', { name: 'Não mostrar mais' }).click();
+  await expect(card).toContainText('3 de 3');
+  await card.getByRole('button', { name: 'Virar card' }).click();
+  await expect(page.locator('#modal')).toBeVisible(); // formulário do card, já com o grifo
+  await page.getByRole('button', { name: 'Cancelar' }).click();
+  await expect(page.locator('.resurface-done')).toContainText('3 grifos revisitados');
+  const settings = await page.evaluate(async () => (await import('/js/db.js')).db.getKV('settings'));
+  expect(settings.resurfaceOff).toHaveLength(1);
+  expect(settings.resurface.ids).not.toContain('n4');
+});
+
+test('referências: ABNT e APA do livro, completar dados e citar um grifo', async ({ page }) => {
+  await semear(page, { books: [livro('b1', { title: 'Rápido e devagar: duas formas de pensar' })], notes: [nota('n1', 'b1', 'O Sistema 1 é rápido.', { page: 21 })] });
+  await page.goto('/#/livro/b1');
+  await page.getByRole('button', { name: 'Referência' }).click();
+  const box = page.locator('.ref-modal .ref-box');
+  await expect(box).toHaveText('KAHNEMAN, Daniel. Rápido e devagar: duas formas de pensar. [S. l.]: [s. n.], [s. d.].');
+  await expect(page.locator('.ref-missing')).toContainText('Editora, Cidade, Ano');
+  await page.getByLabel('Editora').fill('Objetiva');
+  await page.getByLabel('Cidade').fill('Rio de Janeiro');
+  await page.getByLabel('Ano').fill('2012');
+  await page.getByRole('button', { name: 'Salvar dados' }).click();
+  await expect(box).toHaveText('KAHNEMAN, Daniel. Rápido e devagar: duas formas de pensar. Rio de Janeiro: Objetiva, 2012.');
+  await page.getByRole('button', { name: 'APA' }).click();
+  await expect(page.locator('.ref-modal .ref-box')).toHaveText('Kahneman, D. (2012). Rápido e devagar: duas formas de pensar. Objetiva.');
+  await page.getByRole('button', { name: 'ABNT' }).click();
+  await page.goto('/#/nota/n1');
+  await page.getByRole('button', { name: /Citar/ }).click();
+  await expect(page.locator('.ref-modal .ref-box').first()).toHaveText('“O Sistema 1 é rápido.” (KAHNEMAN, 2012, p. 21)');
+});

@@ -271,3 +271,23 @@ test('IA: tarefas leves e pesadas, e o Pro lê mais notas', async () => {
   assert.equal(contar(buildParams('ask', { question: 'q', notes, depth: 'std' })), 80);
   assert.equal(contar(buildParams('ask', { question: 'q', notes, depth: 'pro' })), 160);
 });
+
+test('referências: ABNT e APA de livro, artigo e obra sem autor, e citação com página', async () => {
+  const R = await import('../js/referencias.js');
+  const hoje = new Date(2026, 10, 6);
+  const livro = { title: 'Rápido e devagar: duas formas de pensar', author: 'Daniel Kahneman', publisher: 'Objetiva', city: 'Rio de Janeiro', year: '2012' };
+  assert.equal(R.reference(livro, 'abnt').text, 'KAHNEMAN, Daniel. Rápido e devagar: duas formas de pensar. Rio de Janeiro: Objetiva, 2012.');
+  assert.match(R.reference(livro, 'abnt').html, /<b>Rápido e devagar<\/b>: duas formas de pensar/);
+  assert.equal(R.reference(livro, 'apa').text, 'Kahneman, D. (2012). Rápido e devagar: duas formas de pensar. Objetiva.');
+  assert.equal(R.citation(livro, 21, 'abnt'), '(KAHNEMAN, 2012, p. 21)');
+  assert.equal(R.citation(livro, 21, 'apa'), '(Kahneman, 2012, p. 21)');
+  const dois = { title: 'Freakonomics', author: 'Steven D. Levitt, Stephen J. Dubner', publisher: 'Campus', city: 'Rio de Janeiro', year: '2005', edition: '3' };
+  assert.equal(R.reference(dois, 'abnt').text, 'LEVITT, Steven D.; DUBNER, Stephen J. Freakonomics. 3. ed. Rio de Janeiro: Campus, 2005.');
+  assert.equal(R.reference(dois, 'apa').text, 'Levitt, S. D., & Dubner, S. J. (2005). Freakonomics (3ª ed.). Campus.');
+  assert.equal(R.reference({ title: 'Memórias', author: 'SILVA FILHO, João', year: '1990' }, 'apa').text, 'Silva Filho, J. (1990). Memórias.');
+  assert.equal(R.reference({ title: 'O livro sem autor' }, 'abnt').text, 'O LIVRO sem autor. [S. l.]: [s. n.], [s. d.].');
+  const artigo = { kind: 'article', title: 'Aplicativo de apoio', author: 'Maria Souza; Ana Lima; Paulo Reis; Lia Costa', site: 'Acta Paulista de Enfermagem', url: 'https://x.org/a', published: '2024-03-15' };
+  assert.equal(R.reference(artigo, 'abnt', hoje).text, 'SOUZA, Maria et al. Aplicativo de apoio. Acta Paulista de Enfermagem, 15 mar. 2024. Disponível em: https://x.org/a. Acesso em: 6 nov. 2026.');
+  assert.equal(R.citation(artigo, null, 'apa'), '(Souza et al., 2024)');
+  assert.deepEqual(R.missingFields({ title: 'X', author: 'A B' }), ['publisher', 'city', 'year']);
+});
