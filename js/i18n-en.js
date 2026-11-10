@@ -975,3 +975,10 @@ EN_PATTERNS.unshift(
   [/^(\d+) quadros de ideias$/, (m) => `${m[1]} idea boards`],
   [/^Quadros ilimitados e (\d+) GB para PDFs$/, (m) => `Unlimited boards and ${m[1]} GB for PDFs`],
 );
+
+// Pro: cota de IA avançada e fichamento grande
+Object.assign(EN, {
+  'O Pro tem mais IA avançada e lê mais das suas notas': 'Pro has more advanced AI and reads more of your notes',
+  'Fichamento de livros inteiros (até 300 grifos; acima de 120, conta 2 usos)': 'Whole-book summaries (up to 300 highlights; over 120 counts as 2 uses)',
+});
+EN_PATTERNS.unshift([/^(\d+) usos de IA avançada por mês$/, (m) => `${m[1]} advanced AI uses per month`]);

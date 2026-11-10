@@ -104,7 +104,7 @@ export function landingView({ invite = false, prices = {} } = {}) {
       <div class="lp-plan plus"><h3>⭐ Plus</h3><div class="lp-price">${esc(prices.plus?.month || '')}<small>/mês</small></div>
         <ul><li>Tudo do grátis</li><li>Pergunte à sua biblioteca com IA</li><li>Fichamento e cards feitos pela IA</li><li>Plano de revisão para provas</li><li>Artigos ilimitados e ${PLANOS.plus.pdfGB} GB para PDFs</li><li>${PLANOS.plus.boards} quadros de ideias</li><li>Temas extras e artes sem marca</li></ul></div>
       <div class="lp-plan"><h3>💎 Pro</h3><div class="lp-price">${esc(prices.pro?.month || '')}<small>/mês</small></div>
-        <ul><li>Tudo do Plus</li><li>Citações e referências ABNT/APA</li><li>Lista de referências da estante</li><li>Mais que o dobro de IA avançada</li><li>“Perguntar” lê o dobro das suas notas</li><li>Fichamento de livros inteiros</li><li>Quadros ilimitados e ${PLANOS.pro.pdfGB} GB para PDFs</li></ul></div>
+        <ul><li>Tudo do Plus</li><li>Citações e referências ABNT/APA</li><li>Lista de referências da estante</li><li>${PLANOS.pro.heavy} usos de IA avançada por mês</li><li>“Perguntar” lê o dobro das suas notas</li><li>Fichamento de livros inteiros</li><li>Quadros ilimitados e ${PLANOS.pro.pdfGB} GB para PDFs</li></ul></div>
     </div>
   </section>
 

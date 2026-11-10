@@ -1434,7 +1434,7 @@ function accountView() {
   <section class="card" id="invite-card"><h3>🎁 Convide amigos</h3><p class="small muted" style="margin:0">Carregando seu convite…</p></section>
   <div id="admin-link"></div>
   ${plan === 'free' ? '<a class="card wrapped-cta" href="#/plus"><span class="big-emoji">⭐</span><span class="grow"><b>Conheça os planos</b><span class="small muted">IA na sua biblioteca, PDFs na conta, estilos extras e artes sem marca</span></span></a>'
-    : plan === 'plus' ? '<a class="card wrapped-cta" href="#/plus"><span class="big-emoji">💎</span><span class="grow"><b>Precisa de mais IA?</b><span class="small muted">O Pro tem mais que o dobro de IA avançada e lê mais das suas notas</span></span></a>' : ''}
+    : plan === 'plus' ? '<a class="card wrapped-cta" href="#/plus"><span class="big-emoji">💎</span><span class="grow"><b>Precisa de mais IA?</b><span class="small muted">O Pro tem mais IA avançada e lê mais das suas notas</span></span></a>' : ''}
   <section class="card form"><h3>✉️ Resumo semanal</h3>
     <label class="check"><input type="checkbox" data-weekly ${p.weekly_email ? 'checked' : ''}> Receber todo domingo um e-mail com minhas páginas, sequência e um grifo da semana</label>
   </section>
@@ -1813,7 +1813,7 @@ function plusView() {
       'Plano para prova e exportar para Obsidian, Notion e Anki', 'Temas extras, retrospectiva completa e artes sem marca', `${P.plus.boards} quadros livres`] },
     { k: 'pro', title: '💎 Pro', note: 'para estudo e pesquisa', feats: [
       'Tudo do Plus', `IA avançada: ${P.pro.heavy} por mês`, `IA rápida: até ${nf(P.pro.light)} por mês`,
-      '“Perguntar” lê o dobro das suas notas', 'Fichamento de livros inteiros (até 300 grifos)', `${P.pro.pdfGB} GB para PDFs`, 'Quadros livres ilimitados', 'Referências ABNT e APA prontas'] },
+      '“Perguntar” lê o dobro das suas notas', 'Fichamento de livros inteiros (até 300 grifos; acima de 120, conta 2 usos)', `${P.pro.pdfGB} GB para PDFs`, 'Quadros livres ilimitados', 'Referências ABNT e APA prontas'] },
   ];
   const button = (c) => {
     if (plan === 'personal' || c.k === 'free') return '';

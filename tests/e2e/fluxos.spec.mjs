@@ -535,10 +535,10 @@ test('planos: grátis, Plus e Pro, com preço mensal e anual', async ({ page }) 
   await expect(page.locator('.plan-card h3')).toHaveText(['Grátis', /Plus/, /Pro/]); // os emojis viram ícones
   await expect(page.locator('.plan-card.featured')).toContainText('Mais escolhido');
   await expect(page.locator('.plan-card').nth(1)).toContainText('IA avançada: 12 por mês');
-  await expect(page.locator('.plan-card').nth(2)).toContainText('IA avançada: 30 por mês');
+  await expect(page.locator('.plan-card').nth(2)).toContainText('IA avançada: 20 por mês');
   await expect(page.locator('.plan-card').nth(1).locator('.plan-price')).toHaveText('R$ 12,90/mês');
   await page.getByRole('button', { name: /Anual/ }).click();
-  await expect(page.locator('.plan-card').nth(2).locator('.plan-price')).toHaveText('R$ 279/ano');
+  await expect(page.locator('.plan-card').nth(2).locator('.plan-price')).toHaveText('R$ 299/ano');
 });
 
 test('nota: menções sem ligação viram [[ ]] com um toque (e "ligar todas")', async ({ page }) => {

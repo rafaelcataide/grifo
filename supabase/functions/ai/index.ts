@@ -3,7 +3,7 @@
 import Anthropic from "npm:@anthropic-ai/sdk@0.131.0";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
 import { buildParams, parseResult, TASK_NAMES, taskKind } from "../_shared/ai-tasks.js";
-import { planoDe, periodoDe } from "../_shared/planos.js";
+import { planoDe, periodoDe, pesoDe, FICHAMENTO_GRANDE } from "../_shared/planos.js";
 
 // teto somando todos os usuários: mesmo com muitas contas, o gasto diário tem limite
 const GLOBAL_DAILY_LIMIT = Number(Deno.env.get("AI_GLOBAL_DAILY_LIMIT") ?? "500");
@@ -59,6 +59,16 @@ Deno.serve(async (req) => {
       : `Você usou os ${cap} usos de IA deste mês.`;
     return json({ error: "cota", kind, plan, message }, 429);
   }
+  // fichamento de livro inteiro no Pro conta 2 usos: tenta o segundo; sem saldo, devolve o primeiro
+  const peso = pesoDe(plan, task, input);
+  if (peso === 2) {
+    const { data: second, error: secondError } = await admin.rpc("ai_month_hit", { uid: user.id, kind, per: period, lim: cap });
+    if (secondError || second === -1) {
+      await admin.rpc("ai_month_refund", { uid: user.id, kind, per: period });
+      if (secondError) return json({ error: "falha ao registrar uso" }, 500);
+      return json({ error: "cota", kind, plan, message: `O fichamento de um livro com mais de ${FICHAMENTO_GRANDE} grifos conta como 2 usos de IA avançada, e só resta 1 este mês.` }, 429);
+    }
+  }
 
   // profundidade: o Pro lê mais notas no "Perguntar" e no fichamento
   const params = buildParams(task, { ...input, depth: plan === "pro" ? "pro" : "std" });
@@ -66,7 +76,7 @@ Deno.serve(async (req) => {
     const message = await anthropic.beta.messages.create(params);
     return json(parseResult(message));
   } catch (e) {
-    await admin.rpc("ai_month_refund", { uid: user.id, kind, per: period }); // falha do serviço não gasta cota
+    for (let i = 0; i < peso; i++) await admin.rpc("ai_month_refund", { uid: user.id, kind, per: period }); // falha do serviço não gasta cota
     if (e instanceof Anthropic.RateLimitError) return json({ error: "ocupado", message: "A IA está ocupada. Tente em instantes." }, 429);
     if (e instanceof Anthropic.APIError) return json({ error: "ia", message: `Erro da IA (${e.status}).` }, 502);
     return json({ error: "ia", message: (e as Error).message }, 500);

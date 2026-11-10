@@ -251,6 +251,16 @@ test('tags: separa por ; e vírgula, tira # e repetidas', async () => {
   assert.deepEqual(splitTags(''), []);
 });
 
+test('planos: fichamento de livro inteiro no Pro conta 2 usos', async () => {
+  const { pesoDe } = await import('../supabase/functions/_shared/planos.js');
+  const notas = (n) => ({ notes: Array.from({ length: n }, (_, i) => ({ id: i })) });
+  assert.equal(pesoDe('pro', 'summary', notas(121)), 2);
+  assert.equal(pesoDe('pro', 'summary', notas(120)), 1);
+  assert.equal(pesoDe('plus', 'summary', notas(300)), 1);
+  assert.equal(pesoDe('pro', 'ask', notas(300)), 1);
+  assert.equal(pesoDe('pro', 'summary', undefined), 1);
+});
+
 test('planos: cotas por plano e período (mês ou o total do teste grátis)', async () => {
   const { PLANOS, planoDe, periodoDe } = await import('../supabase/functions/_shared/planos.js');
   assert.equal(planoDe('nada'), PLANOS.free);

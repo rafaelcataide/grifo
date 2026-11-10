@@ -13,7 +13,7 @@ export const CONFIG = {
     plus: { month: '', year: '' }, // ex.: 'https://buy.stripe.com/xxxx'
     pro: { month: '', year: '' },
   },
-  prices: { plus: { month: 'R$ 12,90', year: 'R$ 119' }, pro: { month: 'R$ 29,90', year: 'R$ 279' } },
+  prices: { plus: { month: 'R$ 12,90', year: 'R$ 119' }, pro: { month: 'R$ 29,90', year: 'R$ 299' } },
   // Portal do cliente do Stripe (trocar de plano, cartão, cancelar). Vazio = sem o botão.
   billingPortalUrl: '',
 
