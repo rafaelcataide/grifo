@@ -13,13 +13,15 @@ export const EMOJI_ICONS = {
   '↗': 'share', '🏃': 'run', '🧱': 'stack-2', '⚡': 'bolt', '🔔': 'bell', '💬': 'message-circle', '🔄': 'refresh', '🔑': 'key',
   '🎨': 'palette', '✓': 'check', '🐞': 'bug', '⚠️': 'alert-triangle', '❓': 'help-circle', '⏸': 'player-pause', '▶': 'player-play',
   '■': 'player-stop', '📰': 'news', '📝': 'notes', '✔': 'check', '🌸': 'flower', '📜': 'file-text', '🧩': 'layout-grid', '👋': 'confetti', '📋': 'clipboard',
+  '🌳': 'binary-tree', '🗂️': 'layout-board', '🗂': 'layout-board', '🔁': 'repeat', '📎': 'paperclip', '💎': 'diamond', '🎁': 'gift', '🔍': 'search', '➝': 'arrow-right',
+  '↔': 'arrows-left-right', '📦': 'package', '📲': 'device-mobile-share', '🚀': 'rocket', '＋': 'plus', '－': 'minus', '⤢': 'arrows-maximize', '⊞': 'fold-down', '⊟': 'fold-up',
 };
 
 const SPRITE = 'icons/ui.svg';
 export const ic = (name, cls = '') => `<svg class="ic ${cls}" aria-hidden="true"><use href="${SPRITE}#${name}"></use></svg>`;
 
 // Onde o emoji vira ícone: controles, rótulos e títulos. Fora disso (avisos, medalhas…) fica o emoji.
-const WHERE = 'button, .btn, .icon-btn, .tab, .tabbar a, .seg a, label, h1, h2, h3, .chip, .avatar.ph, .imp-opt b, .big-emoji, .onb-emoji, .login-points li, .lookup-item, a.wl, .legend-row span';
+const WHERE = '.resurface b, .mentions b, .orphans summary b, button, .btn, .icon-btn, .tab, .tabbar a, .seg a, label, h1, h2, h3, .chip, .avatar.ph, .imp-opt b, .big-emoji, .onb-emoji, .login-points li, .lookup-item, a.wl, .legend-row span';
 // Nas dicas, o emoji pode estar no meio da frase ("no botão 🧠 de uma nota")
 const INLINE = '.hint, .nudge, .card ul.small li';
 const SKIP = '.toast, .badge, .streak, [data-no-tr], .club-post-text, .note-text, .daily-text, .review-card';

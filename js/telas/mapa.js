@@ -12,7 +12,8 @@ export let graphApi = null;
 // Dados do mapa: cada tema é uma ilha (grupo) com seus livros e subtemas; as ligações das notas
 // vão do livro para a ideia citada; as próprias notas ficam guardadas para aparecer ao tocar no livro.
 // cor de cada tema: posição na lista de todos os temas da biblioteca, para não mudar com os filtros
-export const themeIndex = (key) => [...new Set(state.books.map((b) => norm(b.genre || '')).filter(Boolean))].sort().indexOf(key);
+// (livros e artigos: um tema pode ter só artigos)
+export const themeIndex = (key) => [...new Set(sources().map((b) => norm(b.genre || '')).filter(Boolean))].sort().indexOf(key);
 
 // Pontos que uma nota liga: o livro dela, as tags e os [[ ]] (livro, nota com título ou ideia)
 export function noteEnds(n) {

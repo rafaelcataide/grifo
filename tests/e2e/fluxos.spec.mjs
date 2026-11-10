@@ -544,8 +544,8 @@ test('nota: menções sem ligação viram [[ ]] com um toque (e "ligar todas")',
     notes: [nota('n1', 'b1', 'O [[Sistema 1]] é rápido.'), nota('n2', 'b1', 'O sistema 1 lembra o que li em hábitos atômicos sobre rotina.')] });
   await page.goto('/#/nota/n2');
   const caixa = page.locator('.mentions');
-  await expect(caixa.locator('.chip')).toHaveText(['＋ Hábitos Atômicos', '＋ Sistema 1']);
-  await caixa.getByRole('button', { name: '＋ Sistema 1' }).click();
+  await expect(caixa.locator('.chip')).toHaveText(['Hábitos Atômicos', 'Sistema 1']); // o ＋ vira ícone
+  await caixa.getByRole('button', { name: 'Sistema 1' }).click();
   await expect.poll(async () => (await lerBanco(page, 'notes')).find((n) => n.id === 'n2').text).toBe('O [[Sistema 1|sistema 1]] lembra o que li em hábitos atômicos sobre rotina.');
   await expect(page.locator('#note-body')).toContainText('O sistema 1 lembra'); // o texto continua igual na leitura
   await page.locator('.mentions .chip').first().click();

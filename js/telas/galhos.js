@@ -99,7 +99,8 @@ export function mountGalhos(body) {
 function colorOf(n) {
   const c = M.colors;
   const ti = n.theme ? themeIndex(n.theme) : -1;
-  const tone = (a) => (ti >= 0 ? groupColor(ti, c.dark, a) : null);
+  // sem cor de tema: o fundo do cartão e a borda neutra (nunca vazio, que o SVG pinta de preto)
+  const tone = (a) => (ti >= 0 ? groupColor(ti, c.dark, a) : a < 0.5 ? c.surface : c.border);
   switch (n.kind) {
     case 'lib': return { fill: c.accent, stroke: c.accent, text: '#fff' };
     case 'theme': return { fill: tone(0.22), stroke: tone(1), text: c.text };
