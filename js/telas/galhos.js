@@ -5,7 +5,7 @@ import { esc } from '../util.js';
 import { tr } from '../i18n.js';
 import { buildIndex, nodeOf, childrenOf, layoutTree } from '../arvore.js';
 import { groupColor } from '../graph.js';
-import { state, $, sources, bookById, bookInScope, getScope, scopeActive, scopeFilters, resolveLink, conceptHref, srcHref, toast, render } from '../app.js';
+import { state, $, sources, bookById, bookInScope, getScope, scopeActive, scopeFilters, scopeFilterButton, resolveLink, conceptHref, srcHref, toast, render } from '../app.js';
 import { themeIndex, connectModal } from './mapa.js';
 import { downloadFile } from './artes.js';
 
@@ -37,8 +37,8 @@ const fit = (s, w, px) => { const max = Math.max(4, Math.floor((w - 22) / px)); 
 
 /** HTML da tela (o desenho é feito em mountGalhos). */
 export function galhosHtml() {
-  return `<input type="search" class="search" id="galhos-search" placeholder="Encontrar tema, livro ou ideia…" style="margin-bottom:8px">
-  ${scopeFilters('mapScope')}
+  return `<div class="row gap-s map-top"><input type="search" class="search grow" id="galhos-search" placeholder="Encontrar tema, livro ou ideia…">${scopeFilterButton('mapScope')}</div>
+  ${scopeFilters('mapScope', { button: false })}
   <div class="map-trail" id="galhos-trail"></div>
   <section class="card graph-wrap galhos-wrap">
     <svg id="galhos" class="galhos" data-no-tr role="img" aria-label="Mapa em galhos"></svg>

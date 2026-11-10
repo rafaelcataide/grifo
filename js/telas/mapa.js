@@ -4,7 +4,7 @@
 import { esc, norm, linksOf, plainText, splitTags } from '../util.js';
 import { uid } from '../db.js';
 import { LOCALE } from '../i18n.js';
-import { state, $, view, render, srcHref, sources, bookById, noteById, empty, conceptHref, seg, resolveLink, renderText, noteLabel, persist, commit, toast, openModal, closeModal, IDEAS_SEG, getScope, scopeActive, bookInScope, scopeFilters, aiRun, datalist, linkCandidates, actions } from '../app.js';
+import { state, $, view, render, scopeFilterButton, srcHref, sources, bookById, noteById, empty, conceptHref, seg, resolveLink, renderText, noteLabel, persist, commit, toast, openModal, closeModal, IDEAS_SEG, getScope, scopeActive, bookInScope, scopeFilters, aiRun, datalist, linkCandidates, actions } from '../app.js';
 
 // ---------- mapa mental ----------
 export let graphApi = null;
@@ -136,7 +136,7 @@ const setMapMode = (m) => { try { localStorage.setItem('grifo.mapMode', m); } ca
 
 export function mapView(arg) {
   const mode = arg ? 'rede' : mapMode(); // #/mapa/<ponto> (links antigos e "No mapa" da nota) abre a rede focada
-  const head = `${seg(IDEAS_SEG, 'map')}<div class="map-modes seg-mini" role="group" aria-label="Como ver o mapa">${MAP_MODES.map(([k, l]) => `<button class="${k === mode ? 'active' : ''}" data-map-mode="${k}">${l}</button>`).join('')}</div>`;
+  const head = `${seg(IDEAS_SEG, 'map')}<div class="map-modes seg-mini" role="group" aria-label="Como ver o mapa">${MAP_MODES.map(([k, l]) => `<button class="${k === mode ? 'active' : ''}" data-map-mode="${k}" title="${l.replace(/^\S+ /, '')}" aria-label="${l.replace(/^\S+ /, '')}">${l}</button>`).join('')}</div>`;
   if (mode === 'rede') return head + redeView();
   return `${head}<div id="map-body" data-mode="${mode}"><p class="small muted">Carregando…</p></div>`;
 }
@@ -168,9 +168,8 @@ export function redeView() {
   const d = graphData(scope); // só para saber se há algo a mostrar; o que fica escondido é decidido ao desenhar
   const orphans = looseNotes();
   return `
-  <input type="search" class="search" id="graph-search" placeholder="Encontrar no mapa…" style="margin-bottom:8px">
-  ${scopeFilters('mapScope')}
-  <div class="map-show"><span class="small muted">Mostrar:</span>${MAP_SHOW.map(([k, label]) => `<label class="chip-toggle"><input type="checkbox" data-map-show="${k}" ${show[k] ? 'checked' : ''}> ${label}</label>`).join('')}</div>
+  <div class="row gap-s map-top"><input type="search" class="search grow" id="graph-search" placeholder="Encontrar no mapa…">${scopeFilterButton('mapScope')}</div>
+  ${scopeFilters('mapScope', { button: false, extra: `<div class="map-show"><span class="small muted">Mostrar:</span>${MAP_SHOW.map(([k, label]) => `<label class="chip-toggle"><input type="checkbox" data-map-show="${k}" ${show[k] ? 'checked' : ''}> ${label}</label>`).join('')}</div>` })}
   ${d.nodes.length ? `<div class="map-trail" id="map-trail" hidden></div>
   <section class="card graph-wrap">
     <canvas id="graph" aria-label="Mapa de ideias: cada tema é uma ilha com seus livros"></canvas>

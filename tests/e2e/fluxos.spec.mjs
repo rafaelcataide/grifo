@@ -155,7 +155,7 @@ test('PDF: abrir, ver as páginas e importar o grifo feito em outro app', async 
 test('post da citação: escolher tema e cor desenha a arte', async ({ page }) => {
   await semear(page, { books: [livro('b1')], notes: [nota('n1', 'b1', 'Ler devagar é a forma mais rápida de lembrar.')] });
   await page.goto('/#/nota/n1');
-  await page.getByRole('button', { name: 'Criar post' }).click();
+  await page.getByRole('button', { name: 'Post', exact: true }).click();
   await page.locator('label[for=sg-style-ereader]').click();
   await page.locator('label[for=sg-tone-rosa]').click();
   await expect(page.locator('#studio-preview img')).toBeVisible();
@@ -328,6 +328,7 @@ test('excluir uma nota some da tela e avisa', async ({ page }) => {
   await semear(page, { books: [livro('b1')], notes: [nota('n1', 'b1', 'Nota que vai embora.'), nota('n2', 'b1', 'Nota que fica.')] });
   await page.goto('/#/nota/n1');
   page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: /Mais/ }).click(); // ações menos usadas ficam no Mais
   await page.getByRole('button', { name: 'Excluir nota' }).click();
   await expect(page).toHaveURL(/#\/notas$/);
   await expect(page.getByText('Nota excluída')).toBeVisible();
@@ -358,6 +359,7 @@ test('duas abas abertas: o que é excluído numa some da outra', async ({ page, 
   await expect(outra.locator('#note-list .note')).toHaveCount(2);
   await page.goto('/#/nota/n1');
   page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: /Mais/ }).click(); // ações menos usadas ficam no Mais
   await page.getByRole('button', { name: 'Excluir nota' }).click();
   await expect(outra.locator('#note-list .note')).toHaveCount(1);
   await expect(outra.locator('#note-list')).not.toContainText('vai embora');
@@ -581,7 +583,8 @@ test('início: resgate do dia mostra grifos antigos; manter, virar card e não m
 test('referências: ABNT e APA do livro, completar dados e citar um grifo', async ({ page }) => {
   await semear(page, { books: [livro('b1', { title: 'Rápido e devagar: duas formas de pensar' })], notes: [nota('n1', 'b1', 'O Sistema 1 é rápido.', { page: 21 })] });
   await page.goto('/#/livro/b1');
-  await page.getByRole('button', { name: 'Referência' }).click();
+  await page.getByRole('button', { name: /Mais/ }).click();
+  await page.getByRole('button', { name: /Referência/ }).click();
   const box = page.locator('.ref-modal .ref-box');
   await expect(box).toHaveText('KAHNEMAN, Daniel. Rápido e devagar: duas formas de pensar. [S. l.]: [s. n.], [s. d.].');
   await expect(page.locator('.ref-missing')).toContainText('Editora, Cidade, Ano');
@@ -594,6 +597,7 @@ test('referências: ABNT e APA do livro, completar dados e citar um grifo', asyn
   await expect(page.locator('.ref-modal .ref-box')).toHaveText('Kahneman, D. (2012). Rápido e devagar: duas formas de pensar. Objetiva.');
   await page.getByRole('button', { name: 'ABNT' }).click();
   await page.goto('/#/nota/n1');
+  await page.getByRole('button', { name: /Mais/ }).click();
   await page.getByRole('button', { name: /Citar/ }).click();
   await expect(page.locator('.ref-modal .ref-box').first()).toHaveText('“O Sistema 1 é rápido.” (KAHNEMAN, 2012, p. 21)');
 });
@@ -671,4 +675,22 @@ test('quadro livre: cartões de grifo e texto, seta com rótulo e arrastar', asy
     const [b] = await lerBanco(page, 'boards');
     return b && b.edges.length === 1 && b.items.length === 2 && b.items.find((i) => i.type === 'text').x > 0 ? b.title : '';
   }).toBe('TCC capítulo 2');
+});
+
+test('celular: ações secundárias no "Mais" e filtros recolhidos com contador @so-celular', async ({ page }) => {
+  await semear(page, { books: [livro('b1'), livro('b2', { title: 'Hábitos Atômicos', genre: 'Produtividade' })], notes: [nota('n1', 'b1', 'Uma nota.'), nota('n2', 'b2', 'Outra nota.')] });
+  await page.goto('/#/nota/n1');
+  await expect(page.locator('.quick .btn')).toHaveCount(4); // Criar card, Editar, Post, Mais
+  await page.getByRole('button', { name: /Mais/ }).click();
+  await expect(page.locator('#modal.sheet .sheet-item')).toContainText(['Cards com IA', 'Sugerir conexões']);
+  await page.getByRole('button', { name: 'Fechar' }).click();
+  await page.goto('/#/notas');
+  const panel = page.locator('[data-filters="notesScope"]');
+  await expect(panel).toBeHidden(); // no celular começam recolhidos
+  await page.getByRole('button', { name: /Filtros/ }).click();
+  await expect(panel).toBeVisible();
+  await page.getByRole('combobox', { name: 'Todos os temas' }).fill('produt');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: /Filtros · 1/ })).toBeVisible();
+  await expect(page.locator('#note-list .note')).toHaveCount(1);
 });

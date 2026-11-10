@@ -934,3 +934,18 @@ EN_PATTERNS.unshift(
   [/^(\d+) (livro|livros)$/, (m) => `${m[1]} book${m[1] === '1' ? '' : 's'}`],
   [/^(\d+) grifos$/, '$1 highlights'], [/^1 grifo$/, '1 highlight'],
 );
+
+// menos opções por tela: "Mais", filtros recolhidos
+Object.assign(EN, {
+  '⋯ Mais': '⋯ More', 'Mais': 'More', 'Mais ações da nota': 'More note actions', 'Mais ações do livro': 'More book actions',
+  '📸 Post': '📸 Post', 'Post': 'Post', '🕸️ Ver no mapa': '🕸️ See on the map', 'Ver no mapa': 'See on the map', '👥 Mandar para o clube': '👥 Send to the club', 'Mandar para o clube': 'Send to the club',
+  '✏️ Título, tags, livro e página': '✏️ Title, tags, book and page', 'Título, tags, livro e página': 'Title, tags, book and page',
+  '🗑️ Excluir nota': '🗑️ Delete note', 'Excluir nota': 'Delete note', '🗑️ Excluir livro': '🗑️ Delete book', 'Excluir livro': 'Delete book',
+  '📚 Referência (ABNT/APA)': '📚 Reference (ABNT/APA)', 'Referência (ABNT/APA)': 'Reference (ABNT/APA)', '🏁 Concluir': '🏁 Finish', 'Concluir': 'Finish',
+  'Ajustes e conta': 'Settings and account', 'Filtros': 'Filters', '🎚️ Filtros': '🎚️ Filters',
+});
+EN_PATTERNS.unshift(
+  [/^(📸 )?Arte “(Terminei!|Lendo agora)”$/, (m) => `${m[1] || ''}“${m[2] === 'Terminei!' ? 'Finished!' : 'Reading now'}” art`],
+  [/^([\d.,]+) (página registrada|páginas registradas) · (\d+) (dia de leitura|dias de leitura) · (\d+) (card|cards)$/, (m) => `${m[1]} page${m[1] === '1' ? '' : 's'} logged · ${m[3]} reading day${m[3] === '1' ? '' : 's'} · ${m[5]} card${m[5] === '1' ? '' : 's'}`],
+  [/^(🎚️ )?Filtros · (\d+)$/, (m) => `${m[1] || ''}Filters · ${m[2]}`],
+);

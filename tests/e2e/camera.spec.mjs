@@ -2,6 +2,8 @@
 import { test, expect } from '@playwright/test';
 import { modoPessoal, semear, livro } from './ajuda.mjs';
 
+// a câmera falsa do Chromium às vezes demora a responder com a máquina cheia: tenta de novo
+test.describe.configure({ retries: 2 });
 test.use({ launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] }, permissions: ['camera'] });
 
 test.beforeEach(async ({ page }) => {

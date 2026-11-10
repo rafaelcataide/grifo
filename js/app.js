@@ -199,9 +199,8 @@ function applyTheme(mode) {
   try { localStorage.setItem('theme', mode); } catch { /* sem armazenamento: vale só nesta sessão */ }
   if (mode === 'auto') delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = mode;
-  const btn = $('#theme-btn');
-  btn.textContent = THEME_ICON[mode];
-  btn.title = `Tema: ${THEME_LABEL[mode]}`;
+  const btn = $('#theme-btn'); // (o botão saiu do topo: o tema fica em Ajustes)
+  if (btn) { btn.textContent = THEME_ICON[mode]; btn.title = `Tema: ${THEME_LABEL[mode]}`; }
   requestAnimationFrame(() => {
     const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
     document.querySelector('meta[name="theme-color"]').content = bg;
@@ -237,7 +236,20 @@ function confetti() {
   }
 }
 
+// Folha "Mais": as ações menos usadas de uma tela, numa lista (no celular, sobe da parte de baixo).
+// items: { label, action, data } ou { label, href }; danger: em vermelho. Tocar fecha a folha e faz a ação.
+export function moreSheet(title, items) {
+  const attrs = (data = {}) => Object.entries(data).map(([k, v]) => `data-${k}="${esc(v)}"`).join(' ');
+  openModal(`<div class="sheet-list"><h3>${esc(title)}</h3>
+    ${items.filter(Boolean).map((it) => (it.href
+      ? `<a class="sheet-item" href="${it.href}">${it.label}</a>`
+      : `<button type="button" class="sheet-item${it.danger ? ' danger' : ''}" data-action="${it.action}" ${attrs(it.data)} data-sheet>${it.label}</button>`)).join('')}
+    <button type="button" class="btn ghost block" data-action="close">Fechar</button></div>`);
+  modal.classList.add('sheet');
+}
+
 export function openModal(html, mount) {
+  modal.classList.remove('sheet');
   modalBody.innerHTML = html;
   delete modal.dataset.dirty;
   if (!modal.open) modal.showModal();
@@ -626,23 +638,14 @@ function bookDetail(id) {
     <div class="small muted row between"><span>pág. ${b.status === 'finished' ? b.pages : b.currentPage || 0} de ${b.pages}</span><b>${pct(b)}%</b></div>` : ''}
   ${forecast ? `<p class="nudge">${forecast}</p>` : ''}
   <div class="quick">
-    ${b.status !== 'finished' ? `<button class="btn primary" data-action="startTimer" data-id="${b.id}">⏱️ Começar a ler</button><button class="btn" data-action="logReading" data-id="${b.id}">📖 Registrar leitura</button>` : ''}
-    <button class="btn" data-action="newNote" data-id="${b.id}">✍️ Nota</button>
-    <button class="btn" data-action="scan" data-id="${b.id}">📷 Grifo</button>
-    ${b.status === 'reading' ? `<button class="btn" data-action="finishBook" data-id="${b.id}">🏁 Concluir</button>` : ''}
-    <button class="btn" data-action="shareBook" data-id="${b.id}">📸 ${b.status === 'finished' ? 'Terminei!' : 'Lendo agora'}</button>
-    <a class="btn" href="#/mapa/${encodeURIComponent(`b:${b.id}`)}">🕸️ No mapa</a>
-    ${notes.length ? `<button class="btn" data-action="aiCards" data-book="${b.id}">✨ Cards com IA</button>` : ''}
-    ${notes.length >= 3 ? `<button class="btn" data-action="aiSummary" data-book="${b.id}">✨ Fichamento com IA</button>` : ''}
-    <button class="btn" data-action="reference" data-id="${b.id}">📚 Referência</button>
-    <button class="btn ghost" data-action="editBook" data-id="${b.id}">✏️ Editar</button>
+    ${b.status !== 'finished'
+      ? `<button class="btn primary" data-action="startTimer" data-id="${b.id}">⏱️ Começar a ler</button><button class="btn" data-action="logReading" data-id="${b.id}">📖 Registrar leitura</button>`
+      : `<button class="btn primary" data-action="scan" data-id="${b.id}">📷 Grifo</button>`}
+    ${b.status !== 'finished' ? `<button class="btn" data-action="scan" data-id="${b.id}">📷 Grifo</button>` : `<button class="btn" data-action="newNote" data-id="${b.id}">✍️ Nota</button>`}
+    <button class="btn" data-action="bookMore" data-id="${b.id}" aria-label="Mais ações do livro">⋯ Mais</button>
   </div>
   ${b.review ? `<section class="card"><div class="small muted">Minha opinião</div><p>${esc(b.review).replace(/\n/g, '<br>')}</p></section>` : ''}
-  <section class="grid3">
-    <div class="card stat"><b>${read}</b><span>páginas registradas</span></div>
-    <div class="card stat"><b>${readDays}</b><span>dias de leitura</span></div>
-    <div class="card stat"><b>${cards.length}</b><span>cards de memória</span></div>
-  </section>
+  <p class="small muted book-stats">${nf(read)} ${read === 1 ? 'página registrada' : 'páginas registradas'} · ${readDays} ${readDays === 1 ? 'dia de leitura' : 'dias de leitura'} · ${cards.length} ${cards.length === 1 ? 'card' : 'cards'}</p>
   <h3>Notas (${notes.length})</h3>
   ${notes.length ? notes.map((n) => noteCard(n, false)).join('') : empty('Sem notas ainda. Fotografe um trecho grifado ou escreva uma reflexão.')}
   ${mentions.length ? `<h3>Citado em outras notas</h3><section class="card backlinks">${mentions.map((n) => `<a href="#/nota/${n.id}">${esc(noteLabel(n))}<br><small>${esc(bookById(n.bookId)?.title || '')}</small></a>`).join('')}</section>` : ''}
@@ -651,8 +654,7 @@ function bookDetail(id) {
   ${sessions.length ? `<div class="card list">${sessions.map((x) => `<div class="row between li">
       <span>${fmtDate(x.date)} · pág. ${x.fromPage}→${x.toPage}${x.minutes ? ` · ${x.minutes} min` : ''}</span>
       <span class="row gap-s"><b>+${x.pages}</b><button class="icon-btn" data-action="deleteSession" data-id="${x.id}" aria-label="Excluir">🗑️</button></span>
-    </div>`).join('')}</div>` : empty('Nenhuma sessão registrada.')}
-  <button class="btn danger ghost block" data-action="deleteBook" data-id="${b.id}">Excluir livro</button>`;
+    </div>`).join('')}</div>` : empty('Nenhuma sessão registrada.')}`;
 }
 
 function notesView() {
@@ -728,23 +730,16 @@ function noteDetail(id) {
     <p class="small muted" style="margin:4px 0 8px">Esta nota fala de ideias que você já tem, mas sem [[ ]]. Toque para ligar:</p>
     <div class="chips">${mentions.map((m) => `<button class="chip chip-btn mention" data-action="linkMention" data-id="${n.id}" data-name="${esc(m.label)}">＋ ${esc(m.label)}</button>`).join('')}</div></section>` : ''}
   <div class="quick">
-    <button class="btn primary" data-action="postNote" data-id="${n.id}">📸 Criar post</button>
-    <button class="btn" data-action="newCard" data-id="${n.id}">🧠 Criar card</button>
-    <button class="btn" data-action="aiCards" data-id="${n.id}">✨ Cards com IA</button>
-    <button class="btn" data-action="aiLinks" data-id="${n.id}">✨ Sugerir conexões</button>
-    <button class="btn" data-action="feynman" data-id="${n.id}">🎓 Explicar com minhas palavras</button>
-    ${b ? `<button class="btn" data-action="citeNote" data-id="${n.id}">📎 Citar (ABNT/APA)</button>` : ''}
-    <a class="btn" href="#/mapa/${encodeURIComponent(`n:${n.id}`)}">🕸️ No mapa</a>
-    <button class="btn" data-action="shareNote" data-id="${n.id}">↗ Compartilhar</button>
-    ${Cloud.user() ? `<button class="btn" data-action="noteToClub" data-id="${n.id}">👥 No clube</button>` : ''}
-    <button class="btn ghost" data-action="editNoteInline" data-id="${n.id}">✏️ Editar</button>
+    <button class="btn primary" data-action="newCard" data-id="${n.id}">🧠 Criar card</button>
+    <button class="btn" data-action="editNoteInline" data-id="${n.id}">✏️ Editar</button>
+    <button class="btn" data-action="postNote" data-id="${n.id}">📸 Post</button>
+    <button class="btn" data-action="noteMore" data-id="${n.id}" aria-label="Mais ações da nota">⋯ Mais</button>
   </div>
   ${out.length ? `<h3>Liga-se a</h3><div class="chips">${out.map((l) => { const r = resolveLink(l); return `<a class="wl ${r.type}" href="${r.href}">${esc(l)}</a>`; }).join(' ')}</div>` : ''}
   ${backlinks.length ? `<h3>Notas que citam esta</h3><section class="card backlinks">${backlinks.map((x) => `<a href="#/nota/${x.id}">${esc(noteLabel(x))}<br><small>${esc(bookById(x.bookId)?.title || '')}</small></a>`).join('')}</section>` : ''}
   ${shared.length ? `<h3>Ideias próximas</h3><section class="card backlinks">${shared.map((x) => `<a href="#/nota/${x.id}">${esc(noteLabel(x))}<br><small>${esc(bookById(x.bookId)?.title || '')}</small></a>`).join('')}</section>` : ''}
   <h3>Cards (${cards.length})</h3>
-  ${cards.length ? cards.map(cardItem).join('') : empty('Transforme esta nota em perguntas para revisar depois.')}
-  <button class="btn danger ghost block" data-action="deleteNote" data-id="${n.id}">Excluir nota</button>`;
+  ${cards.length ? cards.map(cardItem).join('') : empty('Transforme esta nota em perguntas para revisar depois.')}`;
 }
 
 function conceptView(raw) {
@@ -803,7 +798,21 @@ function scopeOptions(key, field) {
   return [...special, ...uniq(pool.map((b) => [b.id, isArticle(b) ? `${b.title} (${tr('artigo')})` : b.title]))];
 }
 const SCOPE_ALL = { purpose: 'Todas as finalidades', theme: 'Todos os temas', author: 'Todos os autores', book: 'Todos os livros e artigos' };
-export function scopeFilters(key) {
+// Filtros recolhidos: o botão "Filtros · N" mostra ou esconde os campos. A escolha fica na sessão;
+// sem escolha, começam abertos só em tela grande.
+const filtersOpen = (key) => {
+  try { const v = sessionStorage.getItem(`filtersOpen:${key}`); return v === null ? innerWidth >= 900 : v === '1'; } catch { return false; }
+};
+export function scopeFilterButton(key) {
+  const n = SCOPE_FIELDS.filter((k) => getScope(key)[k]).length;
+  return `<button type="button" class="btn small filters-toggle${n ? ' on' : ''}" data-action="toggleFilters" data-key="${key}" aria-expanded="${filtersOpen(key)}">🎚️ ${n ? `Filtros · ${n}` : 'Filtros'}</button>`;
+}
+/** Filtros de finalidade, tema, autor e livro. button: false quando a tela põe o botão em outro lugar; extra: mais opções no mesmo painel. */
+export function scopeFilters(key, { button = true, extra = '' } = {}) {
+  const panel = scopeFilterPanel(key, extra);
+  return button ? `<div class="filters-row">${scopeFilterButton(key)}</div>${panel}` : panel;
+}
+function scopeFilterPanel(key, extra) {
   const f = getScope(key);
   const combo = (field) => {
     const cur = f[field] ? scopeOptions(key, field).find(([v]) => v === f[field])?.[1] || '' : '';
@@ -813,10 +822,10 @@ export function scopeFilters(key) {
       <ul class="combo-list" role="listbox" hidden></ul>
     </div>`;
   };
-  return `<div class="scope-filters">
+  return `<div class="filters-panel" data-filters="${key}"${filtersOpen(key) ? '' : ' hidden'}><div class="scope-filters">
     ${SCOPE_FIELDS.map(combo).join('')}
     ${scopeActive(f) ? `<button class="btn small ghost" data-action="clearScope" data-key="${key}">✕ Limpar filtros</button>` : ''}
-  </div>`;
+  </div>${extra}</div>`;
 }
 function applyScope(key, field, value) {
   const f = { ...getScope(key), [field]: value };
@@ -3134,6 +3143,47 @@ export const actions = {
   newNote: ({ id, link }) => noteForm(null, { bookId: id, link }),
   scan: ({ id }) => noteForm(null, { bookId: id, autoOCR: true }),
   editNote: ({ id }) => noteForm(noteById(id)),
+  toggleFilters({ key }, el) {
+    const panel = document.querySelector(`[data-filters="${key}"]`);
+    if (!panel) return;
+    panel.hidden = !panel.hidden;
+    el.setAttribute('aria-expanded', String(!panel.hidden));
+    try { sessionStorage.setItem(`filtersOpen:${key}`, panel.hidden ? '0' : '1'); } catch { /* sem armazenamento */ }
+  },
+  noteMore({ id }) {
+    const n = noteById(id);
+    if (!n) return;
+    const b = bookById(n.bookId);
+    const d = { id };
+    moreSheet(tr('Mais ações da nota'), [
+      { label: '✨ Cards com IA', action: 'aiCards', data: d },
+      { label: '✨ Sugerir conexões', action: 'aiLinks', data: d },
+      { label: '🎓 Explicar com minhas palavras', action: 'feynman', data: d },
+      b && { label: '📎 Citar (ABNT/APA)', action: 'citeNote', data: d },
+      b && { label: '🕸️ Ver no mapa', href: `#/mapa/${encodeURIComponent(`b:${b.id}`)}` },
+      { label: '↗ Compartilhar', action: 'shareNote', data: d },
+      Cloud.user() && { label: '👥 Mandar para o clube', action: 'noteToClub', data: d },
+      { label: '✏️ Título, tags, livro e página', action: 'editNote', data: d },
+      { label: '🗑️ Excluir nota', action: 'deleteNote', data: d, danger: true },
+    ]);
+  },
+  bookMore({ id }) {
+    const b = bookById(id);
+    if (!b) return;
+    const notes = state.notes.filter((n) => n.bookId === id).length;
+    const d = { id };
+    moreSheet(tr('Mais ações do livro'), [
+      { label: '✍️ Nota', action: 'newNote', data: d },
+      b.status === 'reading' && { label: '🏁 Concluir', action: 'finishBook', data: d },
+      { label: `📸 Arte “${b.status === 'finished' ? 'Terminei!' : 'Lendo agora'}”`, action: 'shareBook', data: d },
+      { label: '🕸️ Ver no mapa', href: `#/mapa/${encodeURIComponent(`b:${id}`)}` },
+      notes && { label: '✨ Cards com IA', action: 'aiCards', data: { book: id } },
+      notes >= 3 && { label: '✨ Fichamento com IA', action: 'aiSummary', data: { book: id } },
+      { label: '📚 Referência (ABNT/APA)', action: 'reference', data: d },
+      { label: '✏️ Editar', action: 'editBook', data: d },
+      { label: '🗑️ Excluir livro', action: 'deleteBook', data: d, danger: true },
+    ]);
+  },
   // resgate do dia: manter, virar card ou tirar do resgate; em todos os casos, passa para o próximo
   async resurface({ id, what }) {
     const r = resurfaceToday();
@@ -3276,6 +3326,7 @@ document.addEventListener('click', (e) => {
   if (a) {
     e.preventDefault();
     e.stopPropagation();
+    if (a.hasAttribute('data-sheet')) closeModal();
     actions[a.dataset.action]?.(a.dataset, a);
     return;
   }
@@ -3389,7 +3440,7 @@ export function render() {
   renderTimer();
   const acc = $('#account-btn');
   const avatar = Cloud.user() && Cloud.currentProfile()?.avatar_url;
-  acc.innerHTML = avatar ? `<img src="${esc(avatar)}" alt="" class="avatar xs" referrerpolicy="no-referrer">` : '👤';
+  acc.innerHTML = avatar ? `<img src="${esc(avatar)}" alt="" class="avatar xs" referrerpolicy="no-referrer">` : '⚙️';
   // número no ícone do app instalado (cards pendentes)
   if ('setAppBadge' in navigator) (due ? navigator.setAppBadge(due) : navigator.clearAppBadge()).catch(() => {});
 }
