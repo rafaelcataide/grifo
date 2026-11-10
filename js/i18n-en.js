@@ -906,3 +906,31 @@ EN_PATTERNS.unshift(
   [/^Referência \((ABNT NBR 6023|APA 7)\)$/, 'Reference ($1)'],
   [/^⭐ Referências e citações prontas fazem parte do Grifo Pro · ver planos$/, '⭐ Ready-made references and citations are part of Grifo Pro · see plans'],
 );
+// mapa em galhos, modos e quadros livres
+Object.assign(EN, {
+  '🌳 Galhos': '🌳 Branches', 'Galhos': 'Branches', '🕸️ Rede': '🕸️ Network', 'Rede': 'Network', '🗂️ Quadros': '🗂️ Boards', 'Quadros': 'Boards', 'Como ver o mapa': 'How to view the map',
+  'Encontrar tema, livro ou ideia…': 'Find a theme, book or idea…', 'Mapa em galhos': 'Branch map', 'Minha biblioteca': 'My library', 'Sem tema': 'No theme', 'Notas soltas': 'Loose notes', 'Ideias próximas': 'Related ideas',
+  'Toque num galho para abrir ou fechar. Toque duas vezes (ou em “Centralizar aqui”) para colocar o tema, livro ou ideia no centro.': 'Tap a branch to open or close it. Double-tap (or “Center here”) to put the theme, book or idea in the center.',
+  '🎯 Centralizar aqui': '🎯 Center here', 'Centralizar aqui': 'Center here', '🕸️ Ver na rede': '🕸️ See in network', 'Ver na rede': 'See in network', 'Abrir os galhos': 'Open branches', 'Fechar os galhos': 'Close branches', 'Baixar como imagem': 'Download as image',
+  'Biblioteca': 'Library', 'Tema': 'Theme', 'Subtema': 'Subtheme', 'Grifos': 'Highlights', 'Grifo': 'Highlight', 'Não consegui gerar a imagem.': "Couldn't create the image.",
+  'Monte o raciocínio de um trabalho ou prova: arraste grifos, livros e textos como cartões e ligue com setas.': 'Build the reasoning for a paper or exam: drag highlights, books and text as cards and link them with arrows.',
+  '＋ Novo quadro': '＋ New board', 'Novo quadro': 'New board', '🗂️ Novo quadro': '🗂️ New board', 'ex: TCC – capítulo 2': 'e.g. Thesis – chapter 2', 'Criar': 'Create',
+  'Crie um quadro para um trabalho, um capítulo ou uma prova e junte nele os grifos que importam.': 'Create a board for a paper, a chapter or an exam and gather the highlights that matter.',
+  '← Quadros': '← Boards', 'Renomear': 'Rename', 'Renomear quadro': 'Rename board', '＋ Grifo': '＋ Highlight', '＋ Livro': '＋ Book', '＋ Texto': '＋ Text', 'Excluir quadro': 'Delete board',
+  'Arraste os cartões. Toque em 🔗 num cartão e depois em outro para ligar com uma seta; toque no rótulo da seta para mudar ou apagar.': 'Drag the cards. Tap 🔗 on a card and then another to link them with an arrow; tap the arrow label to change or delete it.',
+  'Grifo apagado': 'Deleted highlight', 'Livro apagado': 'Deleted book', 'Ligar a outro cartão': 'Link to another card', 'Ligar': 'Link', 'Editar texto': 'Edit text', 'Tirar do quadro': 'Remove from board',
+  'Toque no cartão de destino': 'Tap the target card', '➝ Nova seta': '➝ New arrow', '➝ Seta': '➝ Arrow', 'Como se ligam?': 'How are they connected?', 'ex: explica, contradiz…': 'e.g. explains, contradicts…', 'Apagar seta': 'Delete arrow',
+  'explica': 'explains', 'contradiz': 'contradicts', 'é exemplo de': 'is an example of', 'causa': 'causes', 'complementa': 'complements', 'depende de': 'depends on', 'leva a': 'leads to',
+  '✏️ Texto do cartão': '✏️ Card text', '＋ Grifo no quadro': '＋ Highlight on the board', '＋ Livro no quadro': '＋ Book on the board', 'Buscar nos grifos…': 'Search highlights…', 'Buscar livro ou artigo…': 'Search books or articles…', 'no quadro': 'on the board',
+  'ex: Minha tese: decisões rápidas parecem certas porque…': 'e.g. My thesis: quick decisions feel right because…', 'Adicionar': 'Add', 'Quadro não encontrado.': 'Board not found.', '🗑️ Quadro excluído': '🗑️ Board deleted',
+  'Quadros livres ilimitados': 'Unlimited free-form boards', 'Referências ABNT e APA prontas': 'Ready-made ABNT and APA references',
+});
+EN_PATTERNS.unshift(
+  [/^(\d+) (cartão|cartões) · (\d+) (seta|setas)$/, (m) => `${m[1]} card${m[1] === '1' ? '' : 's'} · ${m[3]} arrow${m[3] === '1' ? '' : 's'}`],
+  [/^(\d+) de (\d+) (quadro|quadros) no seu plano · ilimitados no Pro$/, '$1 of $2 boards on your plan · unlimited on Pro'],
+  [/^(\d+) (quadro livre|quadros livres)$/, (m) => `${m[1]} free-form board${m[1] === '1' ? '' : 's'}`],
+  [/^⭐ Seu plano tem (\d+) (quadro|quadros) · ver planos$/, '⭐ Your plan includes $1 boards · see plans'],
+  [/^Excluir o quadro “(.+)”\? Os grifos e livros continuam no app\.$/, 'Delete the board “$1”? Highlights and books stay in the app.'],
+  [/^(\d+) (livro|livros)$/, (m) => `${m[1]} book${m[1] === '1' ? '' : 's'}`],
+  [/^(\d+) grifos$/, '$1 highlights'], [/^1 grifo$/, '1 highlight'],
+);

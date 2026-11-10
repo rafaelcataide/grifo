@@ -64,6 +64,7 @@ test('tags antigas gravadas juntas são separadas ao abrir o app', async ({ page
 
 test('mapa: esconder tags não esconde a ideia de mesmo nome', async ({ page }) => {
   await semear(page, { books: [livro('b1')], notes: [nota('n1', 'b1', 'Sobre [[Umbanda]].', { tags: ['umbanda'] })] });
+  await page.evaluate(() => localStorage.setItem('grifo.mapMode', 'rede')); // estes testes são da rede de pontos
   await page.goto('/#/mapa');
   await page.locator('[data-map-show=tags]').uncheck();
   await page.locator('#graph-search').fill('Umbanda');
@@ -73,6 +74,7 @@ test('mapa: esconder tags não esconde a ideia de mesmo nome', async ({ page }) 
 
 test('mapa: filtro por tema digitando no campo', async ({ page }) => {
   await semear(page, { books: [livro('b1'), livro('b2', { title: 'Hábitos Atômicos', author: 'James Clear', genre: 'Produtividade' })] });
+  await page.evaluate(() => localStorage.setItem('grifo.mapMode', 'rede')); // estes testes são da rede de pontos
   await page.goto('/#/mapa');
   await expect(page.locator('#graph-legend a')).toHaveCount(2);
   await page.getByRole('combobox', { name: 'Todos os temas' }).fill('produt');
@@ -391,6 +393,7 @@ const mapaSemente = () => ({
 
 test('mapa: tocar num ponto abre o modo foco, com caminho, passos e notas no painel', async ({ page }) => {
   await semear(page, mapaSemente());
+  await page.evaluate(() => localStorage.setItem('grifo.mapMode', 'rede')); // estes testes são da rede de pontos
   await page.goto('/#/mapa');
   await page.locator('#graph-search').fill('Sistema 1');
   await page.locator('#graph-search').press('Enter');
@@ -412,6 +415,7 @@ test('mapa: tocar num ponto abre o modo foco, com caminho, passos e notas no pai
 
 test('mapa: sugestão por palavras em comum e "Ligar com…" cria a nota com o porquê', async ({ page }) => {
   await semear(page, mapaSemente());
+  await page.evaluate(() => localStorage.setItem('grifo.mapMode', 'rede')); // estes testes são da rede de pontos
   await page.goto('/#/mapa');
   await page.locator('#graph-search').fill('Sistema 1');
   await page.locator('#graph-search').press('Enter');
@@ -428,6 +432,7 @@ test('mapa: sugestão por palavras em comum e "Ligar com…" cria a nota com o p
 
 test('mapa: nota sem ligação aparece na caixa e pode ser ligada a uma ideia', async ({ page }) => {
   await semear(page, mapaSemente());
+  await page.evaluate(() => localStorage.setItem('grifo.mapMode', 'rede')); // estes testes são da rede de pontos
   await page.goto('/#/mapa');
   const caixa = page.locator('details.orphans');
   await caixa.locator('summary').click();
@@ -514,6 +519,7 @@ test('grifo: "📷 Grifo" não abre a câmera sozinho, deixa escolher', async ({
 
 test('mapa: compartilhar o mapa como imagem (estúdio de artes lendo o mapa)', async ({ page }) => {
   await semear(page, mapaSemente());
+  await page.evaluate(() => localStorage.setItem('grifo.mapMode', 'rede')); // estes testes são da rede de pontos
   await page.goto('/#/mapa');
   await expect(page.locator('#graph-legend a')).toHaveCount(2);
   await page.getByRole('button', { name: 'Compartilhar mapa como imagem' }).click();
@@ -590,4 +596,79 @@ test('referências: ABNT e APA do livro, completar dados e citar um grifo', asyn
   await page.goto('/#/nota/n1');
   await page.getByRole('button', { name: /Citar/ }).click();
   await expect(page.locator('.ref-modal .ref-box').first()).toHaveText('“O Sistema 1 é rápido.” (KAHNEMAN, 2012, p. 21)');
+});
+
+const arvoreSemente = () => ({
+  books: [livro('b1'), livro('b2', { title: 'Hábitos Atômicos', author: 'James Clear', genre: 'Produtividade', subtheme: 'Rotina' })],
+  notes: [nota('n1', 'b1', 'O [[Sistema 1]] decide rápido.'), nota('n2', 'b2', 'Hábitos são [[Sistema 1]] treinado.')],
+});
+const galho = (page, path) => page.locator(`#galhos [data-path="${path}"]`);
+
+test('mapa em galhos: abre e fecha galhos, muda o centro e busca @celular', async ({ page }) => {
+  await semear(page, arvoreSemente());
+  await page.goto('/#/mapa');
+  await expect(galho(page, 'root')).toContainText('Minha biblioteca');
+  await expect(galho(page, 'root/theme:psicologia')).toBeVisible();
+  await expect(galho(page, 'root/theme:psicologia/subtheme:psicologia|vieses')).toHaveCount(0); // fechado
+  await galho(page, 'root/theme:psicologia').click();
+  await expect(galho(page, 'root/theme:psicologia/subtheme:psicologia|vieses')).toBeVisible();
+  await expect(page.locator('#galhos-panel')).toContainText('Psicologia');
+  await page.locator('#galhos-panel').getByRole('button', { name: /Centralizar aqui/ }).click();
+  await expect(galho(page, 'root')).toContainText('Psicologia');
+  await expect(page.locator('#galhos-trail')).toContainText('Minha biblioteca');
+  // busca leva a ideia para o centro, com os livros que a citam
+  await page.locator('#galhos-search').fill('sistema');
+  await page.locator('#galhos-search').press('Enter');
+  await expect(galho(page, 'root')).toContainText('Sistema 1');
+  await expect(page.locator('#galhos [data-path^="root/ideaBook:"]')).toHaveCount(2);
+  await page.locator('#galhos-trail').getByRole('button', { name: /Minha biblioteca/ }).click();
+  await expect(galho(page, 'root')).toContainText('Minha biblioteca');
+});
+
+test('mapa: trocar entre galhos, rede e quadros', async ({ page }) => {
+  await semear(page, arvoreSemente());
+  await page.goto('/#/mapa');
+  await expect(page.locator('#galhos')).toBeVisible();
+  await page.getByRole('button', { name: 'Rede' }).click();
+  await expect(page.locator('#graph')).toBeVisible();
+  await page.getByRole('button', { name: 'Quadros' }).click();
+  await expect(page.getByRole('button', { name: /Novo quadro/ })).toBeVisible();
+  await page.goto('/#/mapa'); // lembra o último modo
+  await expect(page.getByRole('button', { name: /Novo quadro/ })).toBeVisible();
+});
+
+test('quadro livre: cartões de grifo e texto, seta com rótulo e arrastar', async ({ page }) => {
+  await semear(page, arvoreSemente());
+  await page.evaluate(() => localStorage.setItem('grifo.mapMode', 'quadros'));
+  await page.goto('/#/mapa');
+  await page.getByRole('button', { name: /Novo quadro/ }).click();
+  await page.getByLabel('Nome').fill('TCC capítulo 2');
+  await page.getByRole('button', { name: 'Criar' }).click();
+  await expect(page).toHaveURL(/#\/quadro\//);
+  await page.getByRole('button', { name: /Grifo/ }).click();
+  await page.locator('#pick-q').fill('decide');
+  await page.locator('[data-pick="n1"]').click();
+  await page.getByRole('button', { name: /Texto/ }).click();
+  await page.locator('#btext-form textarea').fill('Minha tese');
+  await page.getByRole('button', { name: 'Adicionar' }).click();
+  const cards = page.locator('.bcard');
+  await expect(cards).toHaveCount(2);
+  // ligar: 🔗 no grifo, depois o texto
+  await cards.first().click();
+  await cards.first().getByRole('button', { name: 'Ligar a outro cartão' }).click();
+  await expect(page.locator('#board-hint')).toBeVisible();
+  await cards.nth(1).click();
+  await page.locator('#edge-form [name=label]').fill('explica');
+  await page.locator('#edge-form').getByRole('button', { name: 'Salvar' }).click();
+  await expect(page.locator('.bedge-label')).toHaveText('explica');
+  // arrastar o texto e conferir que salvou a posição
+  const box = await cards.nth(1).boundingBox();
+  await page.mouse.move(box.x + 30, box.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 130, box.y + 80, { steps: 6 });
+  await page.mouse.up();
+  await expect.poll(async () => {
+    const [b] = await lerBanco(page, 'boards');
+    return b && b.edges.length === 1 && b.items.length === 2 && b.items.find((i) => i.type === 'text').x > 0 ? b.title : '';
+  }).toBe('TCC capítulo 2');
 });

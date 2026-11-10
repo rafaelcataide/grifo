@@ -4,7 +4,7 @@
 import { esc, norm, linksOf, plainText, splitTags } from '../util.js';
 import { uid } from '../db.js';
 import { LOCALE } from '../i18n.js';
-import { state, $, view, srcHref, sources, bookById, noteById, empty, conceptHref, seg, resolveLink, renderText, noteLabel, persist, commit, toast, openModal, closeModal, IDEAS_SEG, getScope, scopeActive, bookInScope, scopeFilters, aiRun, datalist, linkCandidates, actions } from '../app.js';
+import { state, $, view, render, srcHref, sources, bookById, noteById, empty, conceptHref, seg, resolveLink, renderText, noteLabel, persist, commit, toast, openModal, closeModal, IDEAS_SEG, getScope, scopeActive, bookInScope, scopeFilters, aiRun, datalist, linkCandidates, actions } from '../app.js';
 
 // ---------- mapa mental ----------
 export let graphApi = null;
@@ -128,12 +128,45 @@ export function freeSuggestions(center, nodes, linked) {
 
 export let mapCtx = null; // dados do mapa na tela: pontos, ponto em foco, sugestões
 
-export function mapView() {
+// ---------- modos do mapa: galhos (padrão), rede e quadros ----------
+export const MAP_MODES = [['galhos', '🌳 Galhos'], ['rede', '🕸️ Rede'], ['quadros', '🗂️ Quadros']];
+export const mapMode = () => { try { return localStorage.getItem('grifo.mapMode') || 'galhos'; } catch { return 'galhos'; } };
+const setMapMode = (m) => { try { localStorage.setItem('grifo.mapMode', m); } catch { /* sem armazenamento */ } };
+
+export function mapView(arg) {
+  const mode = arg ? 'rede' : mapMode(); // #/mapa/<ponto> (links antigos e "No mapa" da nota) abre a rede focada
+  const head = `${seg(IDEAS_SEG, 'map')}<div class="map-modes seg-mini" role="group" aria-label="Como ver o mapa">${MAP_MODES.map(([k, l]) => `<button class="${k === mode ? 'active' : ''}" data-map-mode="${k}">${l}</button>`).join('')}</div>`;
+  if (mode === 'rede') return head + redeView();
+  return `${head}<div id="map-body" data-mode="${mode}"><p class="small muted">Carregando…</p></div>`;
+}
+mapView.mount = async (arg) => {
+  view.querySelectorAll('[data-map-mode]').forEach((b) => {
+    b.onclick = () => { setMapMode(b.dataset.mapMode); if (location.hash !== '#/mapa') location.hash = '#/mapa'; else render(); };
+  });
+  const mode = arg ? 'rede' : mapMode();
+  if (mode === 'rede') return redeView.mount(arg);
+  const body = $('#map-body');
+  // galhos e quadros são carregados só quando usados
+  const mod = mode === 'galhos' ? await import('./galhos.js') : await import('./quadros.js');
+  if (!body?.isConnected) return;
+  if (mode === 'galhos') mod.mountGalhos(body); else mod.mountQuadrosLista(body);
+};
+// quadro aberto (#/quadro/<id>)
+export function quadroView() { return '<div id="board-page"><p class="small muted">Carregando…</p></div>'; }
+quadroView.mount = async (id) => {
+  setMapMode('quadros');
+  const mod = await import('./quadros.js');
+  const el = $('#board-page');
+  if (el?.isConnected) mod.mountQuadro(el, id);
+};
+
+// a rede de pontos (o mapa de antes): ilhas por tema, modo foco, ligar pontos
+export function redeView() {
   const scope = getScope('mapScope');
   const show = mapShow();
   const d = graphData(scope); // só para saber se há algo a mostrar; o que fica escondido é decidido ao desenhar
   const orphans = looseNotes();
-  return `${seg(IDEAS_SEG, 'map')}
+  return `
   <input type="search" class="search" id="graph-search" placeholder="Encontrar no mapa…" style="margin-bottom:8px">
   ${scopeFilters('mapScope')}
   <div class="map-show"><span class="small muted">Mostrar:</span>${MAP_SHOW.map(([k, label]) => `<label class="chip-toggle"><input type="checkbox" data-map-show="${k}" ${show[k] ? 'checked' : ''}> ${label}</label>`).join('')}</div>
@@ -255,7 +288,7 @@ export async function connectItems(from, toRaw, why) {
   toast(`🔗 ${esc(a)} ↔ ${esc(to)} · <u>ver nota</u>`, '', () => { location.hash = `#/nota/${note.id}`; });
 }
 
-mapView.mount = async (arg) => {
+redeView.mount = async (arg) => {
   const canvas = $('#graph');
   const orphansBox = view.querySelector('.orphans');
   if (orphansBox) orphansBox.onclick = (e) => { const b = e.target.closest('[data-orphan]'); if (b) connectModal({ note: noteById(b.dataset.orphan) }); };

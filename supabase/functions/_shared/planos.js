@@ -2,9 +2,9 @@
 // IA leve = tarefas rápidas no Haiku (custam centavos de centavo); IA pesada = Sonnet (perguntar,
 // fichamento, recomendações), que é o que pesa no custo. No grátis, a pesada é só para experimentar.
 export const PLANOS = {
-  free: { nome: 'Grátis', light: 20, heavy: 3, heavyTotal: true, daily: 20, articles: 10, pdfGB: 0 },
-  plus: { nome: 'Plus', light: 1000, heavy: 12, heavyTotal: false, daily: 100, articles: Infinity, pdfGB: 2 },
-  pro: { nome: 'Pro', light: 2000, heavy: 30, heavyTotal: false, daily: 200, articles: Infinity, pdfGB: 10 },
+  free: { nome: 'Grátis', light: 20, heavy: 3, heavyTotal: true, daily: 20, articles: 10, pdfGB: 0, boards: 1 },
+  plus: { nome: 'Plus', light: 1000, heavy: 12, heavyTotal: false, daily: 100, articles: Infinity, pdfGB: 2, boards: 3 },
+  pro: { nome: 'Pro', light: 2000, heavy: 30, heavyTotal: false, daily: 200, articles: Infinity, pdfGB: 10, boards: Infinity },
 };
 
 export const planoDe = (plan) => PLANOS[plan] || PLANOS.free;

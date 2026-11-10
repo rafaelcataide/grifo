@@ -12,7 +12,7 @@ import { landingView } from './landing.js';
 import { PLANOS, planoDe } from '../supabase/functions/_shared/planos.js';
 import { refActions } from './telas/referencias.js';
 import { vocabView, wordActions, tagsView, tagActions } from './telas/vocabulario.js';
-import { graphApi, mapShow, fold, mapView } from './telas/mapa.js';
+import { graphApi, mapShow, fold, mapView, quadroView } from './telas/mapa.js';
 import { articleStarted, articleItem, articlesView, articleView, pdfView, pdfActions, articleActions, saveSharedArticle } from './telas/artigos.js';
 import { adminView } from './telas/admin.js';
 import { exportActions, downloadFile, shareActions } from './telas/artes.js';
@@ -1797,14 +1797,14 @@ function plusView() {
   const cards = [
     { k: 'free', title: 'Grátis', price: 'R$ 0', note: 'para sempre', feats: [
       'Livros, notas, grifos por foto e mapa de ideias', 'Cards de revisão, vocabulário, metas e clubes',
-      `Até ${P.free.articles} artigos e PDFs`, `IA rápida: ${P.free.light} por mês`, `IA avançada: ${P.free.heavy} usos para experimentar`] },
+      `Até ${P.free.articles} artigos e PDFs`, `IA rápida: ${P.free.light} por mês`, `IA avançada: ${P.free.heavy} usos para experimentar`, `${P.free.boards} quadro livre`] },
     { k: 'plus', title: '⭐ Plus', badge: 'Mais escolhido', feats: [
       'Tudo do grátis', 'Artigos e PDFs ilimitados', `PDFs sincronizados entre aparelhos (${P.plus.pdfGB} GB)`,
       `IA avançada: ${P.plus.heavy} por mês`, `IA rápida: até ${nf(P.plus.light)} por mês`,
-      'Plano para prova e exportar para Obsidian, Notion e Anki', 'Temas extras, retrospectiva completa e artes sem marca'] },
+      'Plano para prova e exportar para Obsidian, Notion e Anki', 'Temas extras, retrospectiva completa e artes sem marca', `${P.plus.boards} quadros livres`] },
     { k: 'pro', title: '💎 Pro', note: 'para estudo e pesquisa', feats: [
       'Tudo do Plus', `IA avançada: ${P.pro.heavy} por mês`, `IA rápida: até ${nf(P.pro.light)} por mês`,
-      '“Perguntar” lê o dobro das suas notas', 'Fichamento de livros inteiros (até 300 grifos)', `${P.pro.pdfGB} GB para PDFs`] },
+      '“Perguntar” lê o dobro das suas notas', 'Fichamento de livros inteiros (até 300 grifos)', `${P.pro.pdfGB} GB para PDFs`, 'Quadros livres ilimitados', 'Referências ABNT e APA prontas'] },
   ];
   const button = (c) => {
     if (plan === 'personal' || c.k === 'free') return '';
@@ -3351,13 +3351,13 @@ document.addEventListener('submit', async (e) => {
 // ---------------- roteamento ----------------
 const routes = {
   '': home, livros: booksView, livro: bookDetail, notas: notesView, nota: noteDetail, conceito: conceptView,
-  mapa: mapView, revisar: reviewView, stats: statsView, conquistas: achievementsView, ajustes: settingsView,
+  mapa: mapView, quadro: quadroView, revisar: reviewView, stats: statsView, conquistas: achievementsView, ajustes: settingsView,
   conta: accountView, admin: adminView, busca: searchView, tags: tagsView, vocabulario: vocabView, artigos: articlesView, pdf: pdfView, artigo: articleView, u: publicProfileView, clubes: clubsView, perguntar: askView, plus: plusView,
   privacidade: privacyView, termos: termsView,
 };
 // páginas que qualquer pessoa pode abrir sem login
 const OPEN_ROUTES = ['u', 'privacidade', 'termos'];
-const TAB_OF = { vocabulario: 'notas', tags: 'notas', pdf: 'livros', busca: 'nenhuma', artigos: 'livros', artigo: 'livros', livro: 'livros', nota: 'notas', conceito: 'notas', mapa: 'notas', perguntar: 'notas', stats: 'progresso', conquistas: 'progresso', clubes: 'progresso' };
+const TAB_OF = { quadro: 'notas', vocabulario: 'notas', tags: 'notas', pdf: 'livros', busca: 'nenhuma', artigos: 'livros', artigo: 'livros', livro: 'livros', nota: 'notas', conceito: 'notas', mapa: 'notas', perguntar: 'notas', stats: 'progresso', conquistas: 'progresso', clubes: 'progresso' };
 
 export function render() {
   if (!state.stats) return; // ainda carregando (ex.: o endereço mudou durante a abertura): o início desenha depois

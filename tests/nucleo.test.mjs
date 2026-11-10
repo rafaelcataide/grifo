@@ -291,3 +291,29 @@ test('referências: ABNT e APA de livro, artigo e obra sem autor, e citação co
   assert.equal(R.citation(artigo, null, 'apa'), '(Souza et al., 2024)');
   assert.deepEqual(R.missingFields({ title: 'X', author: 'A B' }), ['publisher', 'city', 'year']);
 });
+
+test('mapa em galhos: temas, subtemas, livros, ideias e posições dos dois lados', async () => {
+  const A = await import('../js/arvore.js');
+  const books = [
+    { id: 'b1', title: 'Rápido e Devagar', genre: 'Psicologia', subtheme: 'Vieses' },
+    { id: 'b2', title: 'Hábitos Atômicos', genre: 'Produtividade' },
+    { id: 'b3', title: 'Pense de Novo', genre: 'Psicologia', subtheme: 'Vieses' },
+  ];
+  const notes = [
+    { id: 'n1', bookId: 'b1', text: 'O [[Sistema 1]] e a [[Heurística]].', tags: ['mente'] },
+    { id: 'n2', bookId: 'b2', text: '[[Sistema 1]] cria hábitos.' },
+    { id: 'n3', bookId: null, text: 'Solta: [[Sistema 1]].' },
+  ];
+  const idx = A.buildIndex({ books, notes, resolve: () => ({ type: 'concept' }) });
+  const kids = (n) => A.childrenOf(idx, n).map((c) => `${c.kind}:${c.label}`);
+  assert.deepEqual(kids(A.nodeOf(idx, 'lib')), ['theme:Psicologia', 'theme:Produtividade', 'loose:Notas soltas']);
+  assert.deepEqual(kids(A.nodeOf(idx, 'theme', 'psicologia')), ['subtheme:Vieses']);
+  assert.deepEqual(kids(A.nodeOf(idx, 'book', 'b1')), ['idea:#mente', 'idea:Heurística', 'idea:Sistema 1', 'notes:1 grifo']);
+  assert.deepEqual(kids(A.nodeOf(idx, 'idea', 'sistema 1')), ['ideaBook:Hábitos Atômicos', 'ideaBook:Rápido e Devagar', 'note:Solta: Sistema 1.', 'related:Ideias próximas']);
+  const L = A.layoutTree(A.nodeOf(idx, 'lib'), { children: (n) => A.childrenOf(idx, n), expanded: new Set(['root/theme:psicologia']), measure: () => 100 });
+  const at = Object.fromEntries(L.nodes.map((n) => [n.label, n]));
+  assert.equal(at['Minha biblioteca'].x, 0);
+  assert.ok(at.Psicologia.x > 0 && at.Vieses.x > at.Psicologia.x); // um galho e o filho, para a direita
+  assert.ok(at['Notas soltas'].x < 0); // o outro lado
+  assert.equal(L.edges.length, L.nodes.length - 1);
+});
