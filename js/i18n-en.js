@@ -949,3 +949,29 @@ EN_PATTERNS.unshift(
   [/^([\d.,]+) (página registrada|páginas registradas) · (\d+) (dia de leitura|dias de leitura) · (\d+) (card|cards)$/, (m) => `${m[1]} page${m[1] === '1' ? '' : 's'} logged · ${m[3]} reading day${m[3] === '1' ? '' : 's'} · ${m[5]} card${m[5] === '1' ? '' : 's'}`],
   [/^(🎚️ )?Filtros · (\d+)$/, (m) => `${m[1] || ''}Filters · ${m[2]}`],
 );
+
+// apresentação: galhos, artigos, vocabulário, ABNT
+Object.assign(EN, {
+  'Fotografe a página ou grife o PDF e o Grifo guarda só o que você marcou. Conecte ideias entre livros e artigos e revise para não esquecer o que leu.': "Snap the page or highlight the PDF and Grifo keeps only what you marked. Connect ideas across books and articles and review so you don't forget what you read.",
+  'Abra um livro e veja seus temas e grifos em galhos, como um mapa mental. Ligue notas com': 'Open a book and see its themes and highlights as branches, like a mind map. Link notes with',
+  'e monte': 'and build', 'quadros': 'boards', 'para juntar ideias de livros diferentes.': 'to bring together ideas from different books.',
+  'Seu livro': 'Your book', 'Memória': 'Memory', 'Foco': 'Focus', 'outro livro': 'another book',
+  'Traga o artigo por link ou envie o PDF e grife direto nele, até em artigos de duas colunas. Os grifos viram notas, ao lado dos seus livros.': 'Bring an article by link or upload the PDF and highlight right on it, even two-column papers. Highlights become notes, next to your books.',
+  'Vocabulário': 'Vocabulary',
+  'Selecione uma palavra e veja o significado na hora, como no Kindle. Ela vai para o seu vocabulário e vira card com definição e sinônimos.': 'Select a word and see its meaning right away, like on Kindle. It goes to your vocabulary and becomes a card with definition and synonyms.',
+  'efêmero': 'ephemeral', 'adj. Que dura pouco; passageiro.': 'adj. Lasting a very short time; fleeting.', 'sinônimos: breve, fugaz, transitório': 'synonyms: brief, fleeting, transient',
+  'Nada fica esquecido': 'Nothing gets forgotten',
+  'Todo dia o Grifo traz de volta uma nota antiga e mostra notas que falam do mesmo assunto mas ainda não estão ligadas.': "Every day Grifo brings back an old note and shows notes on the same subject that aren't linked yet.",
+  'Estudantes e pesquisadores': 'Students and researchers',
+  'Grifo, fichamento, vocabulário e cards de revisão no mesmo lugar. Citações e referências em ABNT ou APA prontas para o trabalho.': 'Highlights, reading notes, vocabulary and review cards in one place. Citations and references in ABNT or APA ready for your paper.',
+  'Cards de revisão e vocabulário': 'Review cards and vocabulary',
+  'Citações e referências ABNT/APA': 'ABNT/APA citations and references', 'Lista de referências da estante': 'Reference list for your whole shelf',
+  'Serve para trabalhos acadêmicos?': 'Does it work for academic papers?',
+  'Sim. Guarde artigos e PDFs, grife, e no Pro copie a citação com a página e a referência em ABNT ou APA, ou a lista de referências inteira.': 'Yes. Save articles and PDFs, highlight them, and with Pro copy the citation with the page and the reference in ABNT or APA, or the whole reference list.',
+});
+EN_PATTERNS.unshift(
+  [/^Mapa de ideias e (\d+) quadros?$/, (m) => `Idea map and ${m[1]} board${m[1] === '1' ? '' : 's'}`],
+  [/^Artigos ilimitados e (\d+) GB para PDFs$/, (m) => `Unlimited articles and ${m[1]} GB for PDFs`],
+  [/^(\d+) quadros de ideias$/, (m) => `${m[1]} idea boards`],
+  [/^Quadros ilimitados e (\d+) GB para PDFs$/, (m) => `Unlimited boards and ${m[1]} GB for PDFs`],
+);

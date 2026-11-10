@@ -854,3 +854,16 @@ dialog.cam::backdrop { background: #000; }
 @media (pointer: coarse) {
   .graph-tools [data-g="in"], .graph-tools [data-g="out"], .graph-tools [data-graph="in"], .graph-tools [data-graph="out"] { display: none; }
 }
+
+/* apresentação: mapa em galhos, PDF e vocabulário */
+.lp-map path.ln { fill: none; }
+.lp-map .ln.dash { stroke-dasharray: 3 3; }
+.lp-map .note { fill: var(--surface); stroke: var(--muted); stroke-width: 1.5; }
+.lp-pdf { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; max-width: 220px; width: 100%; justify-self: center; background: var(--surface-2); border-radius: 10px; padding: 12px; }
+.lp-pdf div { display: grid; gap: 6px; }
+.lp-pdf i { display: block; height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--muted) 35%, transparent); }
+.lp-pdf i.hl { background: color-mix(in srgb, var(--gold) 70%, transparent); }
+.lp-word { background: var(--surface-2); border-radius: 12px; padding: 14px; display: grid; gap: 4px; }
+.lp-word b { font-family: "Fraunces", Georgia, serif; font-size: 1.1rem; }
+.lp-word span { font-size: .9rem; }
+.lp-word small { color: var(--muted); font-size: .78rem; }
