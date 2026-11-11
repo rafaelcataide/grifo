@@ -60,15 +60,73 @@ function isHighlight(r, g, b) {
   return true;
 }
 
-// Blocos com marca-texto colorido
+// Cor do papel: o tom mais comum entre os pixels claros da foto (o papel pode ser creme, ou azulado pela
+// luz). Devolve as proporções de vermelho e verde (r/(r+g+b), g/(r+g+b)) e o brilho do papel.
+export function paperColor(img) {
+  const { width: w, height: h, data } = img;
+  const lumHist = new Uint32Array(256);
+  let n = 0;
+  for (let y = 0; y < h; y += 3) {
+    for (let x = 0; x < w; x += 3) {
+      const i = (y * w + x) * 4;
+      if (data[i] >= 254 && data[i + 1] >= 254 && data[i + 2] >= 254) continue; // cantos preenchidos ao endireitar
+      lumHist[((data[i] * 299 + data[i + 1] * 587 + data[i + 2] * 114) / 1000) | 0]++;
+      n++;
+    }
+  }
+  if (!n) return { cr: 1 / 3, cg: 1 / 3, lum: 255 };
+  const pct = (p) => { let acc = 0; for (let v = 0; v < 256; v++) { acc += lumHist[v]; if (acc >= n * p) return v; } return 255; };
+  const mid = pct(0.5), lum = pct(0.9);
+  const N = 60, lo = 0.2, span = 0.3; // proporções entre 0,20 e 0,50
+  const hist = new Uint32Array(N * N);
+  for (let y = 0; y < h; y += 3) {
+    for (let x = 0; x < w; x += 3) {
+      const i = (y * w + x) * 4;
+      const r = data[i], g = data[i + 1], b = data[i + 2];
+      if ((r * 299 + g * 587 + b * 114) / 1000 < mid || (r >= 254 && g >= 254 && b >= 254)) continue;
+      const s = r + g + b;
+      const a = Math.floor(((r / s - lo) / span) * N), c = Math.floor(((g / s - lo) / span) * N);
+      if (a >= 0 && a < N && c >= 0 && c < N) hist[a * N + c]++;
+    }
+  }
+  let best = -1, ba = N / 2, bc = N / 2;
+  for (let a = 1; a < N - 1; a++) {
+    for (let c = 1; c < N - 1; c++) {
+      let sum = 0;
+      for (let da = -1; da <= 1; da++) for (let dc = -1; dc <= 1; dc++) sum += hist[(a + da) * N + c + dc];
+      if (sum > best) { best = sum; ba = a; bc = c; }
+    }
+  }
+  return { cr: lo + ((ba + 0.5) / N) * span, cg: lo + ((bc + 0.5) / N) * span, lum };
+}
+
+// Marca-texto claro (rosa, lilás, verde ou amarelo quase transparente): pixel claro cujo tom se afasta do
+// tom do papel. Tons de pele e de madeira (alaranjado pouco saturado) continuam de fora.
+const PALE_DIST = 0.016;
+function isPale(r, g, b, paper) {
+  if (r >= 254 && g >= 254 && b >= 254) return false;
+  if ((r * 299 + g * 587 + b * 114) / 1000 < paper.lum * 0.55) return false; // tinta, sombra forte
+  const s = r + g + b;
+  const dr = r / s - paper.cr, dg = g / s - paper.cg;
+  if (dr * dr + dg * dg < PALE_DIST * PALE_DIST) return false;
+  const mx = Math.max(r, g, b), d = mx - Math.min(r, g, b);
+  if (d >= 10) {
+    const hh = hue(r, g, b, mx, d);
+    if (hh >= 8 && hh < 45 && d / mx < 0.55) return false;
+  }
+  return true;
+}
+
+// Blocos com marca-texto colorido (forte ou claro)
 function colorMask(img, B, gw, gh) {
   const { width: w, height: h, data } = img;
+  const paper = paperColor(img);
   const count = new Uint32Array(gw * gh);
   for (let y = 0; y < h; y++) {
     const row = ((y / B) | 0) * gw;
     for (let x = 0; x < w; x++) {
       const i = (y * w + x) * 4;
-      if (isHighlight(data[i], data[i + 1], data[i + 2])) count[row + ((x / B) | 0)]++;
+      if (isHighlight(data[i], data[i + 1], data[i + 2]) || isPale(data[i], data[i + 1], data[i + 2], paper)) count[row + ((x / B) | 0)]++;
     }
   }
   const mask = new Uint8Array(gw * gh);
@@ -160,10 +218,11 @@ export function textiness(img, p) {
   }
   return { dark: dark / n, flips: flips / rows / Math.max(1, p.x1 - p.x0) };
 }
-const looksLikeText = (t) => t.dark > 0.04 && t.dark < 0.45 && t.flips > 0.022;
+// zoom: quanto a foto foi ampliada (letras ampliadas alternam menos vezes por pixel)
+const looksLikeText = (t, zoom = 1) => t.dark > 0.04 && t.dark < 0.45 && t.flips * Math.max(1, zoom) > 0.022;
 
 // Trechos grifados de um tipo: 'color' (marca-texto colorido) ou 'gray' (grifo cinza do Kindle)
-function findPassages(img, kind = 'color') {
+function findPassages(img, kind = 'color', zoom = 1) {
   const { width: w, height: h } = img;
   const B = Math.max(6, Math.round(Math.max(w, h) / 300));
   const gw = Math.ceil(w / B), gh = Math.ceil(h / B);
@@ -174,7 +233,8 @@ function findPassages(img, kind = 'color') {
   // espalha 5 blocos para os lados e fecha os buracos dentro do trecho: o traço do marca-texto falha nas pontas
   // das linhas, e a faixa cinza do Kindle começa colada na primeira letra (que é escura)
   const found = passagesFrom(gray ? grayMask(img, B, gw, gh) : colorMask(img, B, gw, gh), w, h, B, gw, gh, 5, 3);
-  return { ...found, gray, passages: found.passages.filter((p) => bigEnough(p) && looksLikeText(textiness(img, p))) };
+  globalThis.__ocrTrace?.push(found.passages.map((p) => ({ kind, w, h, box: [p.x0, p.y0, p.x1, p.y1], big: bigEnough(p), ...textiness(img, p) }))); // inspeção em testes
+  return { ...found, gray, passages: found.passages.filter((p) => bigEnough(p) && looksLikeText(textiness(img, p), zoom)) };
 }
 export const __test = { colorMask, grayMask, passagesFrom };
 
@@ -288,6 +348,53 @@ function passagesFrom(mask, w, h, B, gw, gh, spread = 2, close = 0) {
     }
   }
   return { passages, dil, gw, B };
+}
+
+// Inclinação das linhas de texto, em graus (positivo = as linhas descem para a direita). Testa vários
+// ângulos e fica com o que deixa as linhas mais separadas (faixas de tinta e de papel bem marcadas).
+// Devolve 0 se a foto não tiver linhas de texto claras ou se a inclinação for desprezível.
+export function estimateSkew(img, maxDeg = 25) {
+  const { width: w, height: h, data } = img;
+  const W = Math.min(480, w), k = w / W, H = Math.max(1, Math.round(h / k));
+  const g = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) {
+    const sy = Math.min(h - 1, Math.round(y * k));
+    for (let x = 0; x < W; x++) {
+      const i = (sy * w + Math.min(w - 1, Math.round(x * k))) * 4;
+      g[y * W + x] = (data[i] + data[i + 1] + data[i + 2]) / 3;
+    }
+  }
+  // "tinta": mais escuro que a média da vizinhança (não depende da luz da foto)
+  const S = new Float64Array((W + 1) * (H + 1));
+  for (let y = 0; y < H; y++) {
+    let row = 0;
+    for (let x = 0; x < W; x++) { row += g[y * W + x]; S[(y + 1) * (W + 1) + x + 1] = S[y * (W + 1) + x + 1] + row; }
+  }
+  const r = 6, xs = [], ys = [];
+  for (let y = r; y < H - r; y++) {
+    for (let x = r; x < W - r; x++) {
+      const mean = (S[(y + r + 1) * (W + 1) + x + r + 1] - S[(y - r) * (W + 1) + x + r + 1] - S[(y + r + 1) * (W + 1) + x - r] + S[(y - r) * (W + 1) + x - r]) / ((2 * r + 1) ** 2);
+      if (mean - g[y * W + x] > 12) { xs.push(x); ys.push(y); }
+    }
+  }
+  if (xs.length < W * H * 0.01) return 0;
+  const rows = new Float32Array(H * 3);
+  const score = (deg) => {
+    const t = Math.tan((deg * Math.PI) / 180);
+    rows.fill(0);
+    for (let i = 0; i < xs.length; i++) rows[Math.round(ys[i] - xs[i] * t) + H]++;
+    let v = 0;
+    for (let j = 1; j < rows.length; j++) v += (rows[j] - rows[j - 1]) ** 2;
+    return v;
+  };
+  const all = [];
+  let best = 0, bestV = -1;
+  for (let a = -maxDeg; a <= maxDeg; a++) { const v = score(a); all.push(v); if (v > bestV) { bestV = v; best = a; } }
+  const typical = [...all].sort((p, q) => p - q)[all.length >> 1];
+  if (bestV < typical * 1.5) return 0; // nenhum ângulo se destaca: não é uma página de texto
+  let fine = best;
+  for (let a = best - 0.75; a <= best + 0.75; a += 0.25) { const v = score(a); if (v > bestV) { bestV = v; fine = a; } }
+  return Math.abs(fine) < 0.75 ? 0 : fine;
 }
 
 function canvasOf(w, h) {
@@ -433,30 +540,53 @@ export async function runOCR(file, mode, onProgress = () => {}, { crop } = {}) {
   // são ampliadas, porque o OCR erra muito com letras de poucos pixels.
   const side = Math.max(sw, sh);
   const scale = side > MAX_SIDE ? MAX_SIDE / side : side < MIN_SIDE ? Math.min(4, MIN_SIDE / side) : 1;
-  const w = Math.round(sw * scale), h = Math.round(sh * scale);
-  const src = canvasOf(w, h);
-  const sctx = src.getContext('2d', { willReadFrequently: true });
+  let w = Math.round(sw * scale), h = Math.round(sh * scale);
+  let src = canvasOf(w, h);
+  let sctx = src.getContext('2d', { willReadFrequently: true });
   sctx.imageSmoothingQuality = 'high';
   sctx.drawImage(bmp, sx, sy, sw, sh, 0, 0, w, h);
-  const img = sctx.getImageData(0, 0, w, h);
+  let img = sctx.getImageData(0, 0, w, h);
 
-  const worker = await getWorker();
+  // Página torta: endireita antes de procurar grifos e ler (o OCR só lê bem linhas horizontais).
+  // A foto gira num quadro maior, para não cortar os cantos; o que sobra em volta fica branco.
+  const angle = estimateSkew(img);
+  if (angle) {
+    const rad = (-angle * Math.PI) / 180, cos = Math.abs(Math.cos(rad)), sin = Math.abs(Math.sin(rad));
+    const nw = Math.round(w * cos + h * sin), nh = Math.round(w * sin + h * cos);
+    const rot = canvasOf(nw, nh);
+    const rctx = rot.getContext('2d', { willReadFrequently: true });
+    rctx.imageSmoothingQuality = 'high';
+    rctx.translate(nw / 2, nh / 2);
+    rctx.rotate(rad);
+    rctx.drawImage(src, -w / 2, -h / 2);
+    rctx.setTransform(1, 0, 0, 1, 0, 0);
+    const turned = rctx.getImageData(0, 0, nw, nh);
+    for (let i = 0; i < turned.data.length; i += 4) {
+      if (turned.data[i + 3] < 250) { turned.data[i] = turned.data[i + 1] = turned.data[i + 2] = 255; turned.data[i + 3] = 255; }
+    }
+    rctx.putImageData(turned, 0, 0);
+    src = rot; sctx = rctx; img = turned; w = nw; h = nh;
+  }
+
+  // o motor de OCR só é carregado quando há o que ler (foto sem grifo não baixa nada)
+  let worker = null;
+  const setMode = async (psm) => { worker ||= await getWorker(); await worker.setParameters({ tessedit_pageseg_mode: psm }); };
   // grifo: cada recorte é um bloco de texto (modo 6); página inteira: detecção automática de colunas (modo 3)
-  await worker.setParameters({ tessedit_pageseg_mode: mode === 'highlight' ? '6' : '3' });
 
   // Lê os recortes de uma imagem já preparada (out) e devolve o texto
+  let confSum = 0, confN = 0; // confiança média da leitura (pesada pelo tamanho de cada trecho)
   async function read(out, boxes, gray) {
     const texts = [];
     try {
       for (let k = 0; k < boxes.length; k++) {
         const b = boxes[k];
-        const pad = mode === 'highlight' ? 10 : 0;
+        const pad = boxes.whole ? 0 : 10;
         const x0 = Math.max(0, b.x0 - pad), y0 = Math.max(0, b.y0 - pad);
         const cw = Math.min(w, b.x1 + pad) - x0, ch = Math.min(h, b.y1 + pad) - y0;
         logger = (msg, p) => onProgress(boxes.length > 1 ? `${msg} (trecho ${k + 1}/${boxes.length})` : msg, p);
         // marca-texto colorido: a sombra da página escurece parte da faixa, e nenhum preto e branco serve para todas
         // as fotos; lê com o limite único e com o adaptativo suave e fica com a leitura de maior confiança
-        const ways = mode === 'page' ? [null] : gray ? ['gray'] : ['otsu', 'soft'];
+        const ways = boxes.whole ? [null] : gray ? ['gray'] : ['otsu', 'soft'];
         let data = null;
         for (const how of ways) {
           const crop = canvasOf(cw, ch);
@@ -469,8 +599,8 @@ export async function runOCR(file, mode, onProgress = () => {}, { crop } = {}) {
           globalThis.__ocrScores?.push([how, r.score, Math.round(r.confidence)]);
           if (!data || r.score > data.score) data = r;
         }
-        const t = cleanText(mode === 'highlight' ? trimEdges(data, gray) : data.text, mode === 'page');
-        if (t) texts.push(t);
+        const t = cleanText(boxes.whole ? data.text : trimEdges(data, gray), boxes.whole);
+        if (t) { texts.push(t); confSum += data.confidence * t.length; confN += t.length; }
       }
     } finally {
       logger = null;
@@ -478,7 +608,10 @@ export async function runOCR(file, mode, onProgress = () => {}, { crop } = {}) {
     return texts.join('\n\n');
   }
 
-  if (mode === 'page') {
+  const result = (text, regions, boxes) => ({ text, regions, preview: preview(src, w, h, boxes), size: [bmp.width, bmp.height], conf: confN ? Math.round(confSum / confN) : 0, angle });
+  // Lê tudo o que está na imagem (página inteira, ou a área marcada quando não há grifo nela)
+  async function readWhole() {
+    await setMode('3');
     const out = canvasOf(w, h);
     const octx = out.getContext('2d');
     const proc = octx.createImageData(w, h);
@@ -488,14 +621,17 @@ export async function runOCR(file, mode, onProgress = () => {}, { crop } = {}) {
       proc.data[i + 3] = 255;
     }
     octx.putImageData(proc, 0, 0);
-    return { text: await read(out, [{ x0: 0, y0: 0, x1: w, y1: h }], false), regions: 0, preview: preview(src, w, h, []), size: [bmp.width, bmp.height] };
+    const boxes = [{ x0: 0, y0: 0, x1: w, y1: h }];
+    boxes.whole = true;
+    return read(out, boxes, false);
   }
+  if (mode === 'page') return result(await readWhole(), 0, []);
 
   // Grifos: primeiro marca-texto colorido; se não achar ou não sair texto, o grifo cinza do Kindle
   onProgress('Procurando grifos');
   let last = { passages: [] };
   for (const kind of ['color', 'gray']) {
-    const found = findPassages(img, kind);
+    const found = findPassages(img, kind, scale);
     if (!found.passages.length) continue;
     last = found;
     const { passages, dil, gw, B } = found;
@@ -513,8 +649,38 @@ export async function runOCR(file, mode, onProgress = () => {}, { crop } = {}) {
       }
     }
     octx.putImageData(proc, 0, 0);
+    await setMode('6');
     const text = await read(out, passages, found.gray);
-    if (text.replace(/[^\p{L}]/gu, '').length >= 8) return { text, regions: passages.length, preview: preview(src, w, h, passages), size: [bmp.width, bmp.height] };
+    if (text.replace(/[^\p{L}]/gu, '').length >= 8) return result(text, passages.length, passages);
+    confSum = confN = 0;
   }
-  return { text: '', regions: last.passages.length, preview: preview(src, w, h, last.passages), size: [bmp.width, bmp.height] };
+  // a pessoa marcou uma área e não há grifo nela: lê o que está na área
+  if (crop) {
+    const text = await readWhole();
+    if (text.replace(/[^\p{L}]/gu, '').length >= 8) return result(text, 0, []);
+  }
+  return result('', last.passages.length, last.passages);
+}
+
+/**
+ * Foto pronta para a leitura por IA: só a área escolhida, com a rotação da câmera aplicada, reduzida
+ * (lado maior de até maxSide) e em JPEG. Devolve o conteúdo em base64 (sem o prefixo "data:").
+ */
+export async function photoForAI(file, crop, maxSide = 1568) {
+  const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  const sx = crop ? Math.round(crop.x0 * bmp.width) : 0, sy = crop ? Math.round(crop.y0 * bmp.height) : 0;
+  const sw = crop ? Math.max(1, Math.round((crop.x1 - crop.x0) * bmp.width)) : bmp.width;
+  const sh = crop ? Math.max(1, Math.round((crop.y1 - crop.y0) * bmp.height)) : bmp.height;
+  const k = Math.min(1, maxSide / Math.max(sw, sh));
+  const c = canvasOf(Math.max(1, Math.round(sw * k)), Math.max(1, Math.round(sh * k)));
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(bmp, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  const blob = await new Promise((ok) => c.toBlob(ok, 'image/jpeg', 0.85));
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
 }

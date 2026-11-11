@@ -13,7 +13,7 @@ export const EMOJI_ICONS = {
   '↗': 'share', '🏃': 'run', '🧱': 'stack-2', '⚡': 'bolt', '🔔': 'bell', '💬': 'message-circle', '🔄': 'refresh', '🔑': 'key',
   '🎨': 'palette', '✓': 'check', '🐞': 'bug', '⚠️': 'alert-triangle', '❓': 'help-circle', '⏸': 'player-pause', '▶': 'player-play',
   '■': 'player-stop', '📰': 'news', '📝': 'notes', '✔': 'check', '🌸': 'flower', '📜': 'file-text', '🧩': 'layout-grid', '👋': 'confetti', '📋': 'clipboard',
-  '🌳': 'binary-tree', '🗂️': 'layout-board', '🗂': 'layout-board', '🔁': 'repeat', '📎': 'paperclip', '💎': 'diamond', '🎁': 'gift', '🔍': 'search', '➝': 'arrow-right',
+  '🌳': 'binary-tree', '🗂️': 'layout-board', '🗂': 'layout-board', '🔁': 'repeat', '📎': 'paperclip', '💎': 'diamond', '🎁': 'gift', '🔍': 'search', '✂️': 'crop', '✂': 'crop', '➝': 'arrow-right',
   '↔': 'arrows-left-right', '📦': 'package', '📲': 'device-mobile-share', '🚀': 'rocket', '＋': 'plus', '－': 'minus', '⤢': 'arrows-maximize', '⊞': 'fold-down', '⊟': 'fold-up', '⋯': 'dots', '🎚️': 'adjustments-horizontal', '🎚': 'adjustments-horizontal',
 };
 

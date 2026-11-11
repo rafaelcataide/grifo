@@ -2,7 +2,7 @@
 // Usuários logados, com cota por plano (grátis, Plus, Pro): IA leve e pesada por mês, e um teto diário.
 import Anthropic from "npm:@anthropic-ai/sdk@0.131.0";
 import { createClient } from "npm:@supabase/supabase-js@2.117.2";
-import { buildParams, parseResult, TASK_NAMES, taskKind } from "../_shared/ai-tasks.js";
+import { buildParams, parseResult, TASK_NAMES, taskKind, validateInput } from "../_shared/ai-tasks.js";
 import { planoDe, periodoDe, pesoDe, FICHAMENTO_GRANDE } from "../_shared/planos.js";
 
 // teto somando todos os usuários: mesmo com muitas contas, o gasto diário tem limite
@@ -36,6 +36,8 @@ Deno.serve(async (req) => {
     return json({ error: "corpo inválido" }, 400);
   }
   if (!TASK_NAMES.includes(task)) return json({ error: "tarefa desconhecida" }, 400);
+  const invalid = validateInput(task, input);
+  if (invalid) return json({ error: "entrada", message: invalid }, 400);
 
   // plano e cota: o servidor decide (o app só mostra); AI_FOR_ALL=true trata todos como Pro (testes)
   const { data: planRow } = await admin.rpc("plan_of", { uid: user.id });

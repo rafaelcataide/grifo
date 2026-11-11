@@ -142,10 +142,78 @@ test('IA: formato do pedido (modelo, saída estruturada, fallback) e recusa', ()
     if (p.model === 'claude-sonnet-5-5') assert.equal(p.fallbacks, 'default');
     else assert.equal(p.fallbacks, undefined);
     assert.ok(p.output_config.effort);
-    assert.equal(typeof p.messages[0].content, 'string');
+    assert.equal(typeof p.messages[0].content, task === 'readphoto' ? 'object' : 'string');
   }
   assert.deepEqual(parseResult({ stop_reason: 'end_turn', content: [{ type: 'text', text: '{"ok":1}' }] }), { ok: 1 });
   assert.throws(() => parseResult({ stop_reason: 'refusal', content: [] }), /não pôde/);
+});
+
+test('IA: leitura de grifo pela foto leva a imagem e confere a entrada antes de gastar cota', async () => {
+  const { validateInput, IMAGE_MAX, taskKind } = await import('../supabase/functions/_shared/ai-tasks.js');
+  const image = 'A'.repeat(400);
+  const p = buildParams('readphoto', { image, mode: 'highlight' });
+  assert.equal(p.model, 'claude-haiku-5-5');
+  assert.equal(taskKind('readphoto'), 'light');
+  assert.deepEqual(p.messages[0].content[0], { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: image } });
+  assert.match(p.messages[0].content[1].text, /grifos/);
+  assert.match(buildParams('readphoto', { image, mode: 'page' }).messages[0].content[1].text, /página/);
+  assert.equal(validateInput('readphoto', { image }), null);
+  assert.equal(validateInput('readphoto', {}), 'foto ausente');
+  assert.equal(validateInput('readphoto', { image: 'A'.repeat(IMAGE_MAX + 1) }), 'foto grande demais');
+  assert.equal(validateInput('readphoto', { image: `${'A'.repeat(200)}<script>` }), 'foto inválida');
+  assert.equal(validateInput('cards', { notes: [] }), null);
+});
+
+// página de mentira: papel de uma cor, linhas de "texto" escuras inclinadas e, se pedido, uma faixa de grifo
+function paginaFalsa({ w = 600, h = 400, paper = [200, 200, 190], deg = 0, hl = null }) {
+  const data = new Uint8ClampedArray(w * h * 4);
+  const t = Math.tan((deg * Math.PI) / 180);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const yy = y - (x - w / 2) * t; // posição ao longo da linha inclinada
+      let c = paper;
+      if (hl && yy > hl.y0 && yy < hl.y1 && x > 60 && x < w - 60) c = hl.color;
+      // linhas a cada 24 px, 8 px de altura, com "letras" (colunas alternadas) entre as margens
+      if (x > 50 && x < w - 50 && ((yy % 24) + 24) % 24 < 8 && Math.floor(x / 4) % 2 === 0 && yy > 30 && yy < h - 30) c = [40, 40, 40];
+      const i = (y * w + x) * 4;
+      data[i] = c[0]; data[i + 1] = c[1]; data[i + 2] = c[2]; data[i + 3] = 255;
+    }
+  }
+  return { width: w, height: h, data };
+}
+
+test('OCR: mede a inclinação das linhas da página (e não inventa ângulo onde não há texto)', async () => {
+  const { estimateSkew } = await import('../js/ocr.js');
+  assert.equal(estimateSkew(paginaFalsa({ deg: 0 })), 0);
+  for (const deg of [-12, -5, 4, 10, 18]) {
+    const got = estimateSkew(paginaFalsa({ deg }));
+    assert.ok(Math.abs(got - deg) <= 1, `inclinação de ${deg}° lida como ${got}°`);
+  }
+  // foto lisa, sem texto: nada a endireitar
+  const lisa = paginaFalsa({});
+  for (let i = 0; i < lisa.data.length; i += 4) lisa.data[i] = lisa.data[i + 1] = lisa.data[i + 2] = 180;
+  assert.equal(estimateSkew(lisa), 0);
+});
+
+test('OCR: acha grifo claro pela diferença para a cor do papel (creme ou azulado), sem marcar papel liso', async () => {
+  const { __test, paperColor } = await import('../js/ocr.js');
+  const B = 6;
+  const blocos = (img) => {
+    const gw = Math.ceil(img.width / B), gh = Math.ceil(img.height / B);
+    const mask = __test.colorMask(img, B, gw, gh);
+    return { mask, gw, total: mask.reduce((a, b) => a + b, 0) };
+  };
+  // rosa claro em papel creme e verde claro em papel azulado: cores tiradas de fotos reais
+  for (const [paper, color] of [[[195, 195, 183], [204, 165, 166]], [[185, 200, 220], [150, 190, 178]], [[228, 216, 218], [232, 188, 225]]]) {
+    const img = paginaFalsa({ paper, hl: { y0: 150, y1: 230, color } });
+    const p = paperColor(img);
+    const s = paper[0] + paper[1] + paper[2];
+    assert.ok(Math.abs(p.cr - paper[0] / s) < 0.01 && Math.abs(p.cg - paper[1] / s) < 0.01, 'cor do papel');
+    const { mask, gw, total } = blocos(img);
+    assert.ok(total > 300, `grifo ${color} em papel ${paper}: ${total} blocos`);
+    assert.equal(mask[Math.floor(60 / B) * gw + 20], 0, 'fora do grifo fica de fora');
+    assert.equal(blocos(paginaFalsa({ paper })).total, 0, 'página sem grifo');
+  }
 });
 
 test('texto: ligações [[ ]] e escape de HTML', async () => {

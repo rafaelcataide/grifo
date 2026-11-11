@@ -12,7 +12,7 @@ test.beforeEach(async ({ page }) => {
   page.on('pageerror', (e) => { throw new Error(`Erro na página: ${e.message}`); });
 });
 
-test('câmera do Grifo: abre por cima da nota, tira a foto e segue para escolher a área @celular', async ({ page }) => {
+test('câmera do Grifo: abre por cima da nota, tira a foto e lê na hora @celular', async ({ page }) => {
   await semear(page, { books: [livro('b1')] });
   await page.goto('/#/notas');
   await page.getByRole('button', { name: 'Grifo' }).first().click();
@@ -25,8 +25,9 @@ test('câmera do Grifo: abre por cima da nota, tira a foto e segue para escolher
   const shutter = cam.locator('.cam-shutter');
   await shutter.dispatchEvent('click'); // clique direto: o vídeo ao vivo deixa a checagem de "parado" do Playwright instável
   await expect(cam).toHaveCount(0, { timeout: 20_000 });
-  await expect(page.locator('#ocr-crop')).toBeVisible({ timeout: 20_000 }); // a foto chegou: agora escolhe a área
-  await page.locator('#crop-cancel').click();
+  // a foto chegou e já foi lida, sem passo de escolher a área (que fica como opção depois)
+  await expect(page.getByRole('button', { name: 'Ajustar área' })).toBeVisible({ timeout: 60_000 });
+  await expect(page.locator('#ocr-crop')).toBeHidden();
 });
 
 test('câmera do Grifo: fechar não muda nada', async ({ page }) => {

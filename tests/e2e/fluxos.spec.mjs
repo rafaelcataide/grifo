@@ -207,7 +207,7 @@ test('tags: renomear, juntar com outra e remover', async ({ page }) => {
   expect(notes).toEqual({ n1: ['psicologia', 'mente'], n2: ['Psicologia'], n3: [] });
 });
 
-test('OCR: depois da foto, dá para marcar só a área que vai ser lida @celular', async ({ page }) => {
+test('OCR: a foto é lida na hora; depois dá para marcar só a área que vai ser lida @celular', async ({ page }) => {
   await semear(page, { books: [livro('b1')] });
   await page.goto('/#/notas');
   await page.getByRole('button', { name: 'Nova' }).click();
@@ -215,6 +215,10 @@ test('OCR: depois da foto, dá para marcar só a área que vai ser lida @celular
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
   await page.locator('#ocr-file').setInputFiles({ name: 'pagina.png', mimeType: 'image/png', buffer: png });
   const crop = page.locator('#ocr-crop');
+  // sem passo no meio: lê direto e só então oferece "Ajustar área" (a foto de teste não tem texto)
+  await expect(page.locator('#ocr-status')).toContainText('Nenhum grifo encontrado', { timeout: 60_000 });
+  await expect(crop).toBeHidden();
+  await page.getByRole('button', { name: 'Ajustar área' }).click();
   await expect(crop).toBeVisible();
   await expect(page.locator('#crop-go')).toHaveText(/Ler a foto toda/);
   await page.locator('#crop-img').evaluate((img) => { img.style.width = '300px'; img.style.height = '200px'; });
@@ -227,7 +231,38 @@ test('OCR: depois da foto, dá para marcar só a área que vai ser lida @celular
   await expect(page.locator('#crop-go')).toHaveText(/Ler esta área/);
   await page.locator('#crop-cancel').click();
   await expect(crop).toBeHidden();
-  await expect(page.locator('#ocr-status')).toContainText('Fotografe a página');
+});
+
+test('OCR: foto difícil é lida pela IA sozinha, e "Ler com IA" troca o texto lido @celular', async ({ page }) => {
+  await semear(page, { books: [livro('b1')], settings: { aiKey: 'chave-de-teste' } }); // modo pessoal com IA ligada (as chamadas são simuladas)
+  await page.goto('/#/notas');
+  const pedidos = await page.evaluateHandle(() => {
+    const log = [];
+    globalThis.__aiMock = async (task, input) => {
+      log.push({ task, mode: input.mode, image: input.image.length });
+      return { found: true, text: log.length === 1 ? 'Ler devagar é a forma mais rápida de lembrar.' : 'Segunda leitura.' };
+    };
+    return log;
+  });
+  await page.getByRole('button', { name: 'Nova' }).click();
+  await expect(page.locator('#ocr-ai')).toBeChecked();
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  await page.locator('#ocr-file').setInputFiles({ name: 'pagina.png', mimeType: 'image/png', buffer: png });
+  // o OCR do aparelho não leu nada: a IA lê a mesma foto, sem a pessoa pedir
+  await expect(page.locator('#ocr-status')).toContainText('Lido com IA', { timeout: 60_000 });
+  await expect(page.locator('textarea[name="text"]')).toHaveValue('Ler devagar é a forma mais rápida de lembrar.');
+  // pedir de novo troca o texto dessa foto (não empilha)
+  await page.getByRole('button', { name: 'Ler com IA' }).click();
+  await expect(page.locator('textarea[name="text"]')).toHaveValue('Segunda leitura.');
+  const log = await pedidos.jsonValue();
+  expect(log.map((p) => p.task)).toEqual(['readphoto', 'readphoto']);
+  expect(log[0].mode).toBe('highlight');
+  expect(log[0].image).toBeGreaterThan(100);
+  // desligando a opção, a foto difícil fica só com o aviso
+  await page.locator('#ocr-ai').uncheck();
+  await page.locator('#ocr-file').setInputFiles({ name: 'pagina.png', mimeType: 'image/png', buffer: png });
+  await expect(page.locator('#ocr-status')).toContainText('Nenhum grifo encontrado', { timeout: 60_000 });
+  expect((await pedidos.jsonValue()).length).toBe(2);
 });
 
 test('nota solta: criar sem livro e achar pelo filtro "Sem livro"', async ({ page }) => {

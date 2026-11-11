@@ -982,3 +982,19 @@ Object.assign(EN, {
   'Fichamento de livros inteiros (até 300 grifos; acima de 120, conta 2 usos)': 'Whole-book summaries (up to 300 highlights; over 120 counts as 2 uses)',
 });
 EN_PATTERNS.unshift([/^(\d+) usos de IA avançada por mês$/, (m) => `${m[1]} advanced AI uses per month`]);
+
+// leitura de grifos: lê na hora, área e IA depois
+Object.assign(EN, {
+  'Fotografe a página ou escolha uma foto: o texto grifado vira nota. Funciona com marca-texto colorido e com o grifo cinza do Kindle.': 'Snap the page or pick a photo: the highlighted text becomes a note. Works with colored highlighters and Kindle gray highlights.',
+  '✂️ Ajustar área': '✂️ Adjust area', 'Ajustar área': 'Adjust area', '✨ Ler com IA': '✨ Read with AI', 'Ler com IA': 'Read with AI',
+  'Usar a IA quando a foto estiver difícil de ler': 'Use AI when the photo is hard to read',
+  'Foto difícil de ler: lendo com IA…': 'Hard-to-read photo: reading with AI…', 'Lendo com IA…': 'Reading with AI…',
+  '✨ Lido com IA — revise antes de salvar.': '✨ Read with AI — review before saving.',
+  'A IA não encontrou texto grifado nessa foto.': 'The AI found no highlighted text in this photo.',
+  'Nenhum grifo encontrado. Tente com mais luz e mais perto, marque a área em "Ajustar área" ou use "Página inteira".': 'No highlight found. Try more light and get closer, mark the area in "Adjust area" or use "Whole page".',
+  'quando você usa a IA, o texto das notas envolvidas (ou a foto da página, na leitura de grifos por IA) é enviado para gerar a resposta. A Anthropic não usa esses dados para treinar modelos pela API.': "when you use the AI, the text of the notes involved (or the photo of the page, when AI reads highlights) is sent to generate the answer. Anthropic doesn't use this API data to train models.",
+});
+EN_PATTERNS.unshift(
+  [/^(.*) A foto chegou pequena \((\d+)×(\d+)\): chegue mais perto do texto para ler melhor\.$/, (m, tr) => `${tr(m[1], true)} The photo came in small (${m[2]}×${m[3]}): get closer to the text for a better read.`],
+  [/^Erro na leitura por IA: (.*)$/, (m) => `AI reading error: ${m[1]}`],
+);

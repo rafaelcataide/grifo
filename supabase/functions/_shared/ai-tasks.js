@@ -219,7 +219,43 @@ TASKS.classify = {
   build: ({ title, site, text, themes = [] }) => `<temas_existentes>\n${themes.slice(0, 80).map((t) => `- ${clip(t.theme, 60)}${t.subthemes?.length ? `: ${t.subthemes.slice(0, 12).map((x) => clip(x, 40)).join(', ')}` : ''}`).join('\n')}\n</temas_existentes>\n\n<artigo titulo="${clip(title, 200)}" site="${clip(site, 80)}">\n${clip(text, 5000)}\n</artigo>`,
 };
 
+// Lê o trecho grifado direto da foto (página torta, curva, grifo claro, foto pequena): o que o OCR do
+// aparelho não alcança. A foto chega reduzida (lado maior de até 1568 px), em JPEG base64.
+TASKS.readphoto = {
+  model: HAIKU,
+  effort: 'low',
+  system: `Você transcreve trechos de páginas de livros a partir de uma foto.
+- Modo "grifos": transcreva SOMENTE o texto marcado com marca-texto (de qualquer cor, mesmo bem claro) ou com o grifo cinza de leitores digitais. Ignore o texto sem marca, cabeçalhos, números de página, legendas e marcas d'água.
+- Modo "página": transcreva todo o texto principal da página, sem cabeçalho e número de página.
+- Copie exatamente o que está impresso, no idioma original: não corrija, não resuma, não traduza e não complete frases.
+- Junte as linhas em texto corrido e una as palavras separadas por hífen no fim da linha. Trechos grifados separados viram parágrafos separados por uma linha em branco.
+- Se a marca pegar só parte de uma palavra, escreva a palavra inteira.
+- Se não houver texto legível para o modo pedido, responda com found=false e text vazio.`,
+  schema: {
+    type: 'object',
+    properties: { found: { type: 'boolean' }, text: { type: 'string' } },
+    required: ['found', 'text'],
+    additionalProperties: false,
+  },
+  build: ({ image, mode }) => [
+    { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: image } },
+    { type: 'text', text: mode === 'page' ? 'Modo: página.' : 'Modo: grifos.' },
+  ],
+};
+
 export const TASK_NAMES = Object.keys(TASKS);
+
+// Confere o que chega antes de gastar cota. Devolve a mensagem de erro, ou null se está tudo certo.
+export const IMAGE_MAX = 4_000_000; // caracteres em base64 (cerca de 3 MB de foto)
+export function validateInput(task, input) {
+  if (task === 'readphoto') {
+    const img = input?.image;
+    if (typeof img !== 'string' || img.length < 100) return 'foto ausente';
+    if (img.length > IMAGE_MAX) return 'foto grande demais';
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(img)) return 'foto inválida';
+  }
+  return null;
+}
 
 // Parâmetros para client.beta.messages.create (SDK oficial da Anthropic)
 export function buildParams(task, input) {

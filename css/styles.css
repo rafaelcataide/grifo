@@ -867,3 +867,6 @@ dialog.cam::backdrop { background: #000; }
 .lp-word b { font-family: "Fraunces", Georgia, serif; font-size: 1.1rem; }
 .lp-word span { font-size: .9rem; }
 .lp-word small { color: var(--muted); font-size: .78rem; }
+
+/* leitura de grifos: opção de IA */
+#ocr-ai-wrap { font-weight: 400; }

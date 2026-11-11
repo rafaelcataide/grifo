@@ -1681,6 +1681,16 @@ export async function aiRun(task, input) {
   }
 }
 
+// IA em segundo plano: sem avisos nem troca de tela. Devolve null se a IA não estiver disponível;
+// erros (cota, rede) sobem para quem chamou decidir.
+export async function aiQuiet(task, input) {
+  if (globalThis.__aiMock) return globalThis.__aiMock(task, input);
+  if (AI.available(state.settings) !== 'ok') return null;
+  return AI.run(task, { ...input, lang }, state.settings);
+}
+// confiança do OCR do aparelho (0 a 100) abaixo da qual vale pedir a leitura por IA
+const OCR_WEAK = 88;
+
 // ---------- fichamento e técnica de Feynman (IA, Plus) ----------
 const busyModal = (title, msg) => openModal(`<div class="form"><h3>${title}</h3><p class="small muted">${msg}</p></div>`);
 
@@ -2176,7 +2186,7 @@ function privacyView() {
   <ul>
     <li><b>Supabase:</b> hospeda o banco de dados e o login.</li>
     <li><b>Google:</b> login com sua conta Google.</li>
-    <li><b>Anthropic (Claude):</b> quando você usa a IA, o texto das notas envolvidas é enviado para gerar a resposta. A Anthropic não usa esses dados para treinar modelos pela API.</li>
+    <li><b>Anthropic (Claude):</b> quando você usa a IA, o texto das notas envolvidas (ou a foto da página, na leitura de grifos por IA) é enviado para gerar a resposta. A Anthropic não usa esses dados para treinar modelos pela API.</li>
     <li><b>Stripe:</b> pagamentos do Grifo Plus, se você assinar.</li>
     <li><b>Cloudflare Turnstile:</b> verificação anti-robô no login por e-mail.</li>
     <li><b>Buscas de livros:</b> o título ou ISBN pesquisado é enviado à BrasilAPI, Google Livros e Open Library.</li>
@@ -2647,13 +2657,17 @@ export function noteForm(existing, { bookId, autoOCR, link } = {}) {
       </div>
       <input type="file" accept="image/*" hidden id="ocr-file">
       <input type="file" accept="image/*" capture="environment" hidden id="ocr-cam">
-      <div id="ocr-status" class="small muted">Fotografe a página ou escolha uma foto: o texto grifado vira nota. Funciona com marca-texto colorido e com o grifo cinza do Kindle. Dica: fotos tiradas pelo app da câmera (e escolhidas na Galeria) costumam ler melhor.</div>
+      <div id="ocr-status" class="small muted">Fotografe a página ou escolha uma foto: o texto grifado vira nota. Funciona com marca-texto colorido e com o grifo cinza do Kindle.</div>
       <div id="ocr-crop" class="ocr-crop" hidden>
         <div class="crop-stage" id="crop-stage"><img id="crop-img" alt="Foto escolhida"><div class="crop-rect" id="crop-rect" hidden></div></div>
         <span class="hint">Arraste o dedo (ou o mouse) sobre a foto para marcar só o trecho que quer ler.</span>
         <div class="row gap-s wrap"><button type="button" class="btn primary" id="crop-go">🔍 Ler a foto toda</button><button type="button" class="btn ghost" id="crop-cancel">Cancelar</button></div>
       </div>
-      <button type="button" class="btn small" id="ocr-fix" hidden>✨ Corrigir com IA</button>
+      <div class="row gap-s wrap" id="ocr-after" hidden>
+        <button type="button" class="btn small" id="ocr-area">✂️ Ajustar área</button>
+        <button type="button" class="btn small" id="ocr-fix">✨ Ler com IA</button>
+      </div>
+      ${AI.available(state.settings) === 'ok' ? '<label class="check small" id="ocr-ai-wrap"><input type="checkbox" id="ocr-ai"> Usar a IA quando a foto estiver difícil de ler</label>' : ''}
       <img id="ocr-preview" alt="Pré-visualização dos trechos detectados" hidden>
     </div>
     <label>Título (opcional) <input name="title" value="${esc(noteTitle(n))}" placeholder="ex: Normalização"><span class="hint">Com título, outras notas podem citar esta com [[título]].</span></label>
@@ -2700,7 +2714,7 @@ export function noteForm(existing, { bookId, autoOCR, link } = {}) {
           if (Cam.cameraAvailable()) {
             try {
               const blob = await Cam.capturePage({ texts: { hint: tr('Enquadre a página e segure firme'), opening: tr('Abrindo a câmera…'), steady: tr('Segure firme…'), auto: tr('Foto automática'), close: tr('Fechar'), torch: tr('Lanterna'), shot: tr('Tirar foto') } });
-              if (blob) handlePhoto(blob);
+              if (blob) newPhoto(blob);
               return;
             } catch (err) {
               console.warn('câmera do Grifo indisponível, usando a do sistema', err);
@@ -2712,57 +2726,86 @@ export function noteForm(existing, { bookId, autoOCR, link } = {}) {
         input.click();
       };
     });
-    // a IA corrige erros de leitura do trecho recém-lido (foto tremida, pequena, com sombra)
-    const fixBtn = $('#ocr-fix', root);
-    let lastOcr = '';
-    fixBtn.onclick = async () => {
-      fixBtn.disabled = true;
-      fixBtn.textContent = '✨ Corrigindo…';
-      try {
-        const { text } = await aiRun('fixocr', { text: lastOcr, book: bookById(form.bookId.value)?.title || '' });
-        if (text) {
-          form.text.value = form.text.value.includes(lastOcr) ? form.text.value.replace(lastOcr, text) : text;
-          lastOcr = text;
-          status.textContent = '✨ Texto corrigido pela IA. Confira antes de salvar.';
-        }
-      } catch (e) {
-        if (e.message) toast(esc(e.message), 'err');
-      }
-      fixBtn.disabled = false;
-      fixBtn.textContent = '✨ Corrigir com IA';
+    // A foto é lida na hora, sem passos no meio. Depois da leitura dá para marcar só uma área da foto
+    // ("Ajustar área") ou pedir a leitura por IA; as duas trocam o texto lido dessa mesma foto.
+    const after = $('#ocr-after', root), areaBtn = $('#ocr-area', root), fixBtn = $('#ocr-fix', root), aiAuto = $('#ocr-ai', root);
+    if (aiAuto) {
+      try { aiAuto.checked = localStorage.getItem('grifo.ocrAI') !== '0'; } catch { aiAuto.checked = true; }
+      aiAuto.onchange = () => { try { localStorage.setItem('grifo.ocrAI', aiAuto.checked ? '1' : '0'); } catch { /* sem armazenamento */ } };
+    }
+    let lastOcr = '', photo = null, photoArea = null;
+    const putText = (text) => {
+      const cur = form.text.value;
+      form.text.value = lastOcr && cur.includes(lastOcr) ? cur.replace(lastOcr, text) : cur.trim() ? `${cur.trim()}\n\n${text}` : text;
+      lastOcr = text;
+      form.source.value = 'ocr';
+      form.kind.value = 'quote';
+      showPreview();
     };
-    const chooseArea = attachCropper(root);
-    const onPhoto = (e) => { if (e.target.files[0]) handlePhoto(e.target.files[0]); };
-    const handlePhoto = async (f) => {
-      btns.forEach((x) => { x.disabled = true; });
+    // leitura por IA da foto (ou da área marcada); devolve o texto, ou '' se a IA não achou nada
+    const readWithAI = async (quiet) => {
+      const { photoForAI } = await import('./ocr.js');
+      const image = await photoForAI(photo, photoArea || undefined);
+      const r = await (quiet ? aiQuiet : aiRun)('readphoto', { image, mode });
+      return r?.found === false ? '' : (r?.text || '').trim();
+    };
+    const busy = (on) => [...btns, areaBtn, fixBtn].forEach((x) => { x.disabled = on; });
+    const readPhoto = async () => {
+      busy(true);
       try {
-        const area = await chooseArea(f);
-        if (area === false) return; // cancelou
         const { runOCR } = await import('./ocr.js'); // OCR: só quando há foto
-        const r = await runOCR(f, mode, (msg, p) => { status.textContent = `${msg}…${p != null ? ` ${Math.round(p * 100)}%` : ''}`; }, { crop: area || undefined });
+        const r = await runOCR(photo, mode, (msg, p) => { status.textContent = `${msg}…${p != null ? ` ${Math.round(p * 100)}%` : ''}`; }, { crop: photoArea || undefined });
         img.src = r.preview;
         img.hidden = false;
-        if (!r.text) {
+        after.hidden = false;
+        // leitura fraca (nada lido, ou o OCR com pouca certeza): a IA lê a mesma foto, se a pessoa deixou
+        let text = r.text, viaAI = false;
+        if ((!r.text || r.conf < OCR_WEAK) && aiAuto?.checked && navigator.onLine !== false) {
+          status.textContent = tr('Foto difícil de ler: lendo com IA…');
+          const t = await readWithAI(true).catch(() => '');
+          if (t) { text = t; viaAI = true; }
+        }
+        if (!text) {
           status.textContent = mode === 'highlight' && !r.regions
-            ? 'Nenhum grifo encontrado. Tente com mais luz, a página reta e mais perto, ou use "Página inteira".'
+            ? 'Nenhum grifo encontrado. Tente com mais luz e mais perto, marque a área em "Ajustar área" ou use "Página inteira".'
             : 'Não consegui ler texto nessa imagem. Tente uma foto mais nítida.';
         } else {
-          form.text.value = form.text.value.trim() ? `${form.text.value.trim()}\n\n${r.text}` : r.text;
-          form.source.value = 'ocr';
-          form.kind.value = 'quote';
-          status.textContent = `✔ ${r.regions ? `${r.regions} trecho(s) grifado(s) lido(s)` : 'Texto lido'} — revise e corrija antes de salvar.`;
-          lastOcr = r.text;
-          fixBtn.hidden = false;
+          putText(text);
+          status.textContent = viaAI ? '✨ Lido com IA — revise antes de salvar.'
+            : `✔ ${r.regions ? `${r.regions} trecho(s) grifado(s) lido(s)` : 'Texto lido'} — revise e corrija antes de salvar.`;
         }
         // foto pequena (câmera aberta pelo navegador às vezes entrega em resolução baixa): diz o que fazer
         const [pw, ph] = r.size || [];
-        if (pw && Math.max(pw, ph) < 1500) status.textContent += ` A foto chegou pequena (${pw}×${ph}): para ler melhor, tire a foto com o app da câmera do celular e escolha em 🖼️ Galeria.`;
+        if (!viaAI && pw && Math.max(pw, ph) < 1500) status.textContent += ` A foto chegou pequena (${pw}×${ph}): chegue mais perto do texto para ler melhor.`;
       } catch (err) {
         status.textContent = `Erro no OCR: ${err.message}`;
       } finally {
-        btns.forEach((x) => { x.disabled = false; });
+        busy(false);
       }
     };
+    const newPhoto = (f) => { photo = f; photoArea = null; lastOcr = ''; return readPhoto(); };
+    const chooseArea = attachCropper(root);
+    areaBtn.onclick = async () => {
+      if (!photo) return;
+      const area = await chooseArea(photo);
+      if (area === false) return; // cancelou
+      photoArea = area;
+      readPhoto();
+    };
+    fixBtn.onclick = async () => {
+      if (!photo) return;
+      busy(true);
+      status.textContent = tr('Lendo com IA…');
+      try {
+        const t = await readWithAI(false);
+        if (t) { putText(t); status.textContent = '✨ Lido com IA — revise antes de salvar.'; }
+        else status.textContent = 'A IA não encontrou texto grifado nessa foto.';
+      } catch (e) {
+        status.textContent = e.message ? `Erro na leitura por IA: ${e.message}` : '';
+      }
+      busy(false);
+    };
+    const onPhoto = (e) => { if (e.target.files[0]) newPhoto(e.target.files[0]); };
     file.onchange = onPhoto;
     cam.onchange = onPhoto;
     form.bookId.onchange = () => { if (!existing) form.page.value = bookById(form.bookId.value)?.currentPage || ''; };
