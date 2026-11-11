@@ -257,6 +257,9 @@ test('segurança: a política de conteúdo (CSP) cobre os serviços que o códig
       for (const m of src.matchAll(/https:\/\/[a-zA-Z0-9.-]+/g)) used.add(m[0]);
     }
   }
+  // folhas de estilo carregadas pelo código (o leitor de PDF usa a dele, do jsDelivr): precisam estar em style-src
+  const pdfSrc = fs.readFileSync(new URL('../js/pdf.js', import.meta.url), 'utf8');
+  if (/rel = 'stylesheet'/.test(pdfSrc)) assert.ok(dir['style-src'].includes('https://cdn.jsdelivr.net'), 'style-src libera a folha de estilo do leitor de PDF');
   const faltando = [...used].filter((o) => !ok(o) && !onlyLinks.includes(o));
   assert.deepEqual(faltando, [], 'endereços usados no código e ausentes da CSP');
 });

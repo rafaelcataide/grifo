@@ -3,9 +3,17 @@
 import { test, expect } from '@playwright/test';
 import { modoPessoal, semear, livro, artigo, nota, card, lerBanco, pdfDeTeste } from './ajuda.mjs';
 
+// bloqueios da política de segurança (CSP) em qualquer teste: um serviço usado pelo app ficou fora da lista
+const bloqueios = new WeakMap();
 test.beforeEach(async ({ page }) => {
   await modoPessoal(page);
   page.on('pageerror', (e) => { throw new Error(`Erro na página: ${e.message}`); });
+  const lista = [];
+  bloqueios.set(page, lista);
+  page.on('console', (m) => { if (/Content Security Policy/i.test(m.text())) lista.push(m.text().slice(0, 300)); });
+});
+test.afterEach(async ({ page }) => {
+  expect(bloqueios.get(page) || [], 'a CSP do index.html bloqueou algo que o app usa').toEqual([]);
 });
 
 // seleciona um trecho de um parágrafo arrastando o mouse (como no computador)
@@ -150,6 +158,30 @@ test('PDF: abrir, ver as páginas e importar o grifo feito em outro app', async 
   expect(n.page).toBe(1);
   expect(n.text).toContain('Cada ideia precisa de tempo');
   expect(n.text).toContain('Vale para os cards');
+});
+
+test('PDF: selecionar um trecho da página e Grifar salva a nota com a página @celular', async ({ page }) => {
+  await semear(page);
+  await page.goto('/#/artigos');
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Adicionar PDF' }).click();
+  await (await chooser).setFiles({ name: 'guia.pdf', mimeType: 'application/pdf', buffer: pdfDeTeste() });
+  await expect(page).toHaveURL(/#\/pdf\//, { timeout: 30_000 });
+  const trecho = page.locator('.pdf-page[data-page="1"] .textLayer span', { hasText: 'Ler devagar' }).first();
+  await expect(trecho).toBeVisible({ timeout: 30_000 });
+  // o texto selecionável fica por cima do desenho da página (depende do estilo do leitor de PDF ter carregado)
+  const pos = await page.evaluate(() => {
+    const pg = document.querySelector('.pdf-page[data-page="1"]');
+    const layer = pg.querySelector('.textLayer').getBoundingClientRect(), canvas = pg.querySelector('canvas').getBoundingClientRect();
+    return { estilo: getComputedStyle(pg.querySelector('.textLayer')).position, sobre: Math.abs(layer.top - canvas.top) < 4 && Math.abs(layer.height - canvas.height) < 4 };
+  });
+  expect(pos).toEqual({ estilo: 'absolute', sobre: true });
+  // seleciona o trecho (a seleção pelo toque ou pelo mouse termina num intervalo como este) e grifa
+  await trecho.evaluate((el) => { const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); });
+  await page.getByRole('button', { name: 'Grifar trecho' }).click();
+  await expect(page.getByRole('heading', { name: 'Seus grifos (2)' })).toBeVisible();
+  const nova = (await lerBanco(page, 'notes')).find((x) => x.text.startsWith('Ler devagar'));
+  expect(nova).toMatchObject({ source: 'pdf', page: 1, kind: 'quote' });
 });
 
 test('post da citação: escolher tema e cor desenha a arte', async ({ page }) => {
