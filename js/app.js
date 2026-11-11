@@ -2181,34 +2181,62 @@ function privacyView() {
   return `${legalBack()}<article class="card legal">
   <h2>Política de privacidade</h2>
   <p class="small muted">Atualizada em 11/11/2026 · Grifo — leituras que ficam</p>
+  <h3>Quem é o responsável</h3>
+  <p>${CONFIG.controllerName ? `<span>O Grifo é mantido por</span> <b data-no-tr>${esc(CONFIG.controllerName)}</b>. ` : ''}<span>Para falar sobre os seus dados, escreva</span> <span>${contactLine()}</span>.</p>
   <h3>O que coletamos</h3>
   <ul>
     <li><b>Conta:</b> nome, e-mail e foto do seu perfil Google (ou só o e-mail, no login por código).</li>
-    <li><b>Suas leituras:</b> livros, sessões de leitura, notas, grifos, cards, revisões, metas e conquistas que você registra.</li>
-    <li><b>Fotos de páginas:</b> são lidas no próprio aparelho para extrair o texto grifado. A foto só sai do aparelho na leitura por IA: quando a opção “Usar a IA quando a foto estiver difícil de ler” está ligada na tela da nota, ou quando você toca em “Ler com IA”. Nesse caso ela é enviada à Anthropic para extrair o texto e <b>não fica guardada</b> nos nossos servidores.</li>
+    <li><b>Suas leituras:</b> livros, artigos, sessões de leitura, notas, grifos, cards, revisões, palavras do vocabulário, quadros, metas e conquistas que você registra.</li>
+    <li><b>PDFs:</b> os arquivos que você envia ficam guardados numa área privada, que só a sua conta acessa.</li>
+    <li><b>Artigos por link:</b> o endereço que você cola é aberto pelo nosso servidor para extrair o texto da página.</li>
+    <li><b>Fotos de páginas:</b> são lidas no próprio aparelho. A foto só sai do aparelho na leitura por IA, depois que você responde “sim” à pergunta do app ou toca em “Ler com IA”. Nesse caso ela é enviada à Anthropic para extrair o texto e não fica guardada nos nossos servidores.</li>
+    <li><b>Uso do app:</b> eventos simples, como “criou uma nota” ou “abriu os planos”, sem o conteúdo das suas notas, para sabermos o que funciona.</li>
     <li><b>Erros do app:</b> mensagem técnica, tela e navegador, para corrigirmos falhas. Não inclui suas notas.</li>
+    <li><b>Notificações e e-mail semanal:</b> se você ativar, guardamos o endereço de notificação do aparelho, o horário escolhido e a sua preferência de e-mail.</li>
+    <li><b>Pagamento:</b> se você assinar, o Stripe processa o pagamento. Nós guardamos só o identificador de cliente e o plano; não vemos o número do cartão.</li>
   </ul>
-  <h3>Para que usamos</h3>
+  <h3>Para que usamos, e com que base legal</h3>
   <ul>
-    <li>Guardar e sincronizar seus dados entre seus aparelhos.</li>
-    <li>Mostrar estatísticas, metas e conquistas para você.</li>
-    <li>Recursos opcionais: perfil público e clubes (só o que você escolher mostrar) e IA (apenas quando você pede).</li>
+    <li><b>Para cumprir o serviço que você contratou:</b> guardar e sincronizar seus dados entre aparelhos, mostrar estatísticas, metas e conquistas e liberar o plano pago.</li>
+    <li><b>Com o seu consentimento:</b> perfil público, clubes, IA (inclusive a leitura de fotos), notificações e e-mail semanal. Cada um só funciona se você ligar, e pode ser desligado quando quiser.</li>
+    <li><b>Por interesse legítimo:</b> corrigir erros, entender o uso do app de forma agregada e proteger o serviço contra abuso.</li>
   </ul>
   <h3>Com quem compartilhamos</h3>
   <ul>
-    <li><b>Supabase:</b> hospeda o banco de dados e o login.</li>
+    <li><b>Supabase:</b> hospeda o banco de dados, o login e os arquivos, em servidores nos Estados Unidos.</li>
+    <li><b>GitHub Pages:</b> hospeda as páginas do app e recebe o endereço IP de quem o abre.</li>
+    <li><b>jsDelivr:</b> entrega bibliotecas de código usadas pelo app (como a leitura de fotos e de PDFs) e recebe o endereço IP ao baixá-las.</li>
     <li><b>Google:</b> login com sua conta Google.</li>
     <li><b>Anthropic (Claude):</b> quando você usa a IA, o texto das notas envolvidas (ou a foto da página, na leitura de grifos por IA) é enviado para gerar a resposta. A Anthropic não usa esses dados para treinar modelos pela API.</li>
-    <li><b>Stripe:</b> pagamentos do Grifo Plus, se você assinar.</li>
+    <li><b>Stripe:</b> pagamentos dos planos pagos, se você assinar.</li>
+    <li><b>Resend:</b> envia o e-mail semanal, se você ativar.</li>
+    <li><b>Serviço de notificações do seu navegador:</b> Google, Apple ou Mozilla entregam as notificações ao aparelho, se você ativar.</li>
     <li><b>Cloudflare Turnstile:</b> verificação anti-robô no login por e-mail.</li>
     <li><b>Buscas de livros:</b> o título ou ISBN pesquisado é enviado à BrasilAPI, Google Livros e Open Library.</li>
     <li><b>Dicionário:</b> a palavra procurada (só a palavra, sem o texto em volta) é enviada ao Wikcionário, ao Dicionário Aberto e à Free Dictionary API.</li>
   </ul>
   <p>Não vendemos seus dados e não usamos publicidade.</p>
+  <h3>Fora do Brasil</h3>
+  <p>Vários desses serviços ficam em outros países, principalmente nos Estados Unidos. Ao usar o Grifo, seus dados são tratados nesses países, com as proteções de contrato que cada serviço oferece.</p>
+  <h3>Por quanto tempo guardamos</h3>
+  <ul>
+    <li><b>Conta e leituras:</b> enquanto a conta existir. Ao excluir a conta, apagamos seus registros, seu perfil e seus PDFs e cancelamos a assinatura, se houver.</li>
+    <li><b>Erros do app:</b> apagados depois de 90 dias.</li>
+    <li><b>Eventos de uso:</b> apagados depois de 12 meses.</li>
+    <li><b>Sugestões que você enviou:</b> ficam sem ligação com você depois que a conta é excluída.</li>
+    <li><b>Pagamentos:</b> os registros ficam com o Stripe pelo prazo que a lei exige.</li>
+  </ul>
   <h3>O que é público</h3>
   <p>Nada, a menos que você ative o perfil público. Nele aparecem só nome, foto, nível, metas, temas e títulos de livros. Notas e grifos nunca são publicados. Colegas de clube veem seu nome e suas páginas da semana.</p>
+  <h3>Menores de idade</h3>
+  <p>O Grifo não é voltado a crianças. Menores de 18 anos devem usar o app com a autorização de um responsável.</p>
+  <h3>Segurança</h3>
+  <p>A conexão é sempre criptografada, cada conta só acessa os próprios dados e o app só carrega código dele mesmo e dos serviços listados acima.</p>
   <h3>Seus direitos (LGPD)</h3>
-  <p>Você pode acessar, baixar, corrigir e apagar seus dados a qualquer momento em <b>Conta → Seus dados</b>. Ao excluir a conta, tudo é apagado definitivamente dos nossos servidores. Dúvidas: ${contactLine()}.</p>
+  <p>Você pode acessar, baixar, corrigir e apagar seus dados a qualquer momento em <b>Conta → Seus dados</b>. Ao excluir a conta, tudo é apagado definitivamente dos nossos servidores.</p>
+  <p><span>Para pedir informações, a portabilidade dos dados ou retirar um consentimento, escreva</span> <span>${contactLine()}</span>. <span>Você também pode reclamar à Autoridade Nacional de Proteção de Dados (ANPD).</span></p>
+  <h3>Mudanças nesta política</h3>
+  <p>Quando esta política mudar, a data no topo é atualizada.</p>
   </article>`;
 }
 
@@ -2678,6 +2706,11 @@ export function noteForm(existing, { bookId, autoOCR, link } = {}) {
         <button type="button" class="btn small" id="ocr-area">✂️ Ajustar área</button>
         <button type="button" class="btn small" id="ocr-fix">✨ Ler com IA</button>
       </div>
+      <div class="ocr-consent" id="ocr-consent" hidden>
+        <span class="small">A leitura ficou difícil. Quer que a IA leia esta foto? Ela é enviada à Anthropic só para extrair o texto e não fica guardada nos nossos servidores.</span>
+        <div class="row gap-s wrap"><button type="button" class="btn small primary" id="ocr-consent-yes">Sim, usar a IA</button><button type="button" class="btn small ghost" id="ocr-consent-no">Agora não</button></div>
+        <span class="hint">Vale para as próximas fotos difíceis. Você muda isso na opção abaixo.</span>
+      </div>
       ${AI.available(state.settings) === 'ok' ? '<label class="check small" id="ocr-ai-wrap"><input type="checkbox" id="ocr-ai"> Usar a IA quando a foto estiver difícil de ler</label>' : ''}
       <img id="ocr-preview" alt="Pré-visualização dos trechos detectados" hidden>
     </div>
@@ -2740,9 +2773,14 @@ export function noteForm(existing, { bookId, autoOCR, link } = {}) {
     // A foto é lida na hora, sem passos no meio. Depois da leitura dá para marcar só uma área da foto
     // ("Ajustar área") ou pedir a leitura por IA; as duas trocam o texto lido dessa mesma foto.
     const after = $('#ocr-after', root), areaBtn = $('#ocr-area', root), fixBtn = $('#ocr-fix', root), aiAuto = $('#ocr-ai', root);
+    // A foto só sai do aparelho com um "sim": a opção começa desligada e, na primeira foto difícil,
+    // o app pergunta. A resposta fica guardada no aparelho ('1' sim, '0' não; sem valor = ainda não perguntou).
+    const consent = $('#ocr-consent', root);
+    const aiPref = () => { try { return localStorage.getItem('grifo.ocrAI'); } catch { return '0'; } };
+    const setAiPref = (on) => { try { localStorage.setItem('grifo.ocrAI', on ? '1' : '0'); } catch { /* sem armazenamento */ } if (aiAuto) aiAuto.checked = on; };
     if (aiAuto) {
-      try { aiAuto.checked = localStorage.getItem('grifo.ocrAI') !== '0'; } catch { aiAuto.checked = true; }
-      aiAuto.onchange = () => { try { localStorage.setItem('grifo.ocrAI', aiAuto.checked ? '1' : '0'); } catch { /* sem armazenamento */ } };
+      aiAuto.checked = aiPref() === '1';
+      aiAuto.onchange = () => setAiPref(aiAuto.checked);
     }
     let lastOcr = '', photo = null, photoArea = null;
     const putText = (text) => {
@@ -2771,7 +2809,9 @@ export function noteForm(existing, { bookId, autoOCR, link } = {}) {
         after.hidden = false;
         // leitura fraca (nada lido, ou o OCR com pouca certeza): a IA lê a mesma foto, se a pessoa deixou
         let text = r.text, viaAI = false;
-        if ((!r.text || r.conf < OCR_WEAK) && aiAuto?.checked && navigator.onLine !== false) {
+        const weak = (!r.text || r.conf < OCR_WEAK) && aiAuto && navigator.onLine !== false;
+        consent.hidden = !(weak && aiPref() === null); // ainda não respondeu: pergunta (a leitura do aparelho já fica no texto)
+        if (weak && aiAuto.checked) {
           status.textContent = tr('Foto difícil de ler: lendo com IA…');
           const t = await readWithAI(true).catch(() => '');
           if (t) { text = t; viaAI = true; }
@@ -2794,7 +2834,9 @@ export function noteForm(existing, { bookId, autoOCR, link } = {}) {
         busy(false);
       }
     };
-    const newPhoto = (f) => { photo = f; photoArea = null; lastOcr = ''; return readPhoto(); };
+    const newPhoto = (f) => { photo = f; photoArea = null; lastOcr = ''; consent.hidden = true; return readPhoto(); };
+    $('#ocr-consent-no', root).onclick = () => { setAiPref(false); consent.hidden = true; };
+    $('#ocr-consent-yes', root).onclick = () => { setAiPref(true); consent.hidden = true; fixBtn.click(); };
     const chooseArea = attachCropper(root);
     areaBtn.onclick = async () => {
       if (!photo) return;

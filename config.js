@@ -25,4 +25,7 @@ export const CONFIG = {
 
   // Contato mostrado na política de privacidade (LGPD). Vazio = só o botão "Enviar sugestão".
   contactEmail: '',
+  // Quem responde pelos dados (LGPD pede a identificação do controlador): seu nome ou razão social,
+  // com CPF/CNPJ se quiser. Aparece no começo da política de privacidade. Vazio = não aparece.
+  controllerName: '',
 };

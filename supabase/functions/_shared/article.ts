@@ -1,6 +1,7 @@
 // Baixa uma página e devolve o texto limpo (modo leitura), usado pela função "article".
 import { Readability } from "npm:@mozilla/readability@0.6.0";
 import { parseHTML } from "npm:linkedom@0.18.12";
+import { isPrivateIp } from "./net.js";
 
 const MAX_BYTES = 3_000_000;
 const MAX_TEXT = 150_000;
@@ -17,9 +18,20 @@ export function safeUrl(raw: string): URL | null {
   return u;
 }
 
+// Um nome público pode apontar para um IP interno (ex.: algo.exemplo.com → 127.0.0.1). Confere para onde
+// o nome resolve antes de cada acesso. Se o ambiente não deixar consultar o DNS, segue só com safeUrl.
+async function assertPublicHost(host: string) {
+  const ips: string[] = [];
+  for (const type of ["A", "AAAA"] as const) {
+    try { ips.push(...await Deno.resolveDns(host, type)); } catch { /* sem registro desse tipo, ou consulta não permitida */ }
+  }
+  if (ips.some(isPrivateIp)) throw new Error("Esse endereço não pode ser aberto pelo Grifo.");
+}
+
 async function download(start: URL): Promise<{ html: string; url: URL }> {
   let url = start;
   for (let hop = 0; hop < 5; hop++) {
+    await assertPublicHost(url.hostname);
     const res = await fetch(url, {
       redirect: "manual",
       headers: { "User-Agent": "Mozilla/5.0 (compatible; GrifoBot/1.0; +leitura)", "Accept": "text/html,application/xhtml+xml", "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8" },

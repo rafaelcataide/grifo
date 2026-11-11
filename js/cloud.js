@@ -147,7 +147,9 @@ async function loadProfile() {
   let { data } = await sb.from('profiles').select(PROFILE_COLS).eq('user_id', u.id).maybeSingle();
   if (!data) {
     const meta = u.user_metadata || {};
-    const row = { user_id: u.id, display_name: meta.full_name || meta.name || (u.email || '').split('@')[0], avatar_url: meta.avatar_url || meta.picture || null };
+    // foto: só a do Google (o banco recusa outros endereços: serviriam para rastrear quem abre o perfil)
+    const pic = meta.avatar_url || meta.picture || '';
+    const row = { user_id: u.id, display_name: String(meta.full_name || meta.name || (u.email || '').split('@')[0]).slice(0, 80), avatar_url: /^https:\/\/[a-z0-9-]+\.googleusercontent\.com\//.test(pic) && pic.length <= 500 ? pic : null };
     ({ data } = await sb.from('profiles').insert(row).select(PROFILE_COLS).maybeSingle());
     data ||= { ...row, is_public: false, stats: {} };
   }

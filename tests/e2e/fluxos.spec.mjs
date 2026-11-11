@@ -174,7 +174,7 @@ test('apresentação: quem não entrou vê a página do Grifo e o convite fica g
 test('em inglês: telas principais sem texto faltando na tradução', async ({ page }) => {
   await semear(page, { books: [livro('b1'), artigo('a1')], notes: [nota('n1', 'b1', 'x', { tags: ['mente'] })], cards: [card('c1', 'b1', 'n1')], settings: { firstStepsHidden: false } });
   await page.evaluate(() => localStorage.setItem('grifo.lang', 'en'));
-  for (const r of ['#/', '#/livros', '#/artigos', '#/artigo/a1', '#/notas', '#/mapa', '#/revisar', '#/busca', '#/tags', '#/vocabulario', '#/ajustes', '#/plus']) {
+  for (const r of ['#/', '#/livros', '#/artigos', '#/artigo/a1', '#/notas', '#/mapa', '#/revisar', '#/busca', '#/tags', '#/vocabulario', '#/ajustes', '#/plus', '#/privacidade']) {
     await page.goto(`/${r}`);
     await page.waitForTimeout(300);
   }
@@ -233,7 +233,7 @@ test('OCR: a foto é lida na hora; depois dá para marcar só a área que vai se
   await expect(crop).toBeHidden();
 });
 
-test('OCR: foto difícil é lida pela IA sozinha, e "Ler com IA" troca o texto lido @celular', async ({ page }) => {
+test('OCR: foto difícil pergunta antes de mandar para a IA; com o sim, lê sozinha das próximas vezes @celular', async ({ page }) => {
   await semear(page, { books: [livro('b1')], settings: { aiKey: 'chave-de-teste' } }); // modo pessoal com IA ligada (as chamadas são simuladas)
   await page.goto('/#/notas');
   const pedidos = await page.evaluateHandle(() => {
@@ -245,11 +245,16 @@ test('OCR: foto difícil é lida pela IA sozinha, e "Ler com IA" troca o texto l
     return log;
   });
   await page.getByRole('button', { name: 'Nova' }).click();
-  await expect(page.locator('#ocr-ai')).toBeChecked();
+  await expect(page.locator('#ocr-ai')).not.toBeChecked(); // começa desligada: a foto só sai do aparelho com um "sim"
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
   await page.locator('#ocr-file').setInputFiles({ name: 'pagina.png', mimeType: 'image/png', buffer: png });
-  // o OCR do aparelho não leu nada: a IA lê a mesma foto, sem a pessoa pedir
+  // o OCR do aparelho não leu nada: o app pergunta, e nada é enviado antes da resposta
+  await expect(page.locator('#ocr-consent')).toBeVisible({ timeout: 60_000 });
+  expect((await pedidos.jsonValue()).length).toBe(0);
+  await page.getByRole('button', { name: 'Sim, usar a IA' }).click();
   await expect(page.locator('#ocr-status')).toContainText('Lido com IA', { timeout: 60_000 });
+  await expect(page.locator('#ocr-consent')).toBeHidden();
+  await expect(page.locator('#ocr-ai')).toBeChecked();
   await expect(page.locator('textarea[name="text"]')).toHaveValue('Ler devagar é a forma mais rápida de lembrar.');
   // pedir de novo troca o texto dessa foto (não empilha)
   await page.getByRole('button', { name: 'Ler com IA' }).click();
@@ -263,6 +268,22 @@ test('OCR: foto difícil é lida pela IA sozinha, e "Ler com IA" troca o texto l
   await page.locator('#ocr-file').setInputFiles({ name: 'pagina.png', mimeType: 'image/png', buffer: png });
   await expect(page.locator('#ocr-status')).toContainText('Nenhum grifo encontrado', { timeout: 60_000 });
   expect((await pedidos.jsonValue()).length).toBe(2);
+  await expect(page.locator('#ocr-consent')).toBeHidden(); // já respondeu: não pergunta de novo
+});
+
+test('OCR: "Agora não" guarda a recusa e não manda a foto @celular', async ({ page }) => {
+  await semear(page, { books: [livro('b1')], settings: { aiKey: 'chave-de-teste' } });
+  await page.goto('/#/notas');
+  await page.evaluate(() => { globalThis.__pedidosIA = 0; globalThis.__aiMock = async () => { globalThis.__pedidosIA++; return { found: true, text: 'x' }; }; });
+  await page.getByRole('button', { name: 'Nova' }).click();
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  await page.locator('#ocr-file').setInputFiles({ name: 'pagina.png', mimeType: 'image/png', buffer: png });
+  await page.getByRole('button', { name: 'Agora não' }).click({ timeout: 60_000 });
+  await expect(page.locator('#ocr-consent')).toBeHidden();
+  await page.locator('#ocr-file').setInputFiles({ name: 'pagina.png', mimeType: 'image/png', buffer: png });
+  await expect(page.locator('#ocr-status')).toContainText('Nenhum grifo encontrado', { timeout: 60_000 });
+  await expect(page.locator('#ocr-consent')).toBeHidden();
+  expect(await page.evaluate(() => [globalThis.__pedidosIA, localStorage.getItem('grifo.ocrAI')])).toEqual([0, '0']);
 });
 
 test('nota solta: criar sem livro e achar pelo filtro "Sem livro"', async ({ page }) => {

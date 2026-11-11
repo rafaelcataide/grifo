@@ -873,3 +873,6 @@ dialog.cam::backdrop { background: #000; }
 
 /* a janela recebe o foco ao abrir (nenhum campo abre sozinho) */
 dialog#modal:focus { outline: none; }
+
+/* leitura por IA: pergunta da primeira vez */
+.ocr-consent { display: grid; gap: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }

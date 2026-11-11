@@ -216,6 +216,51 @@ test('OCR: acha grifo claro pela diferença para a cor do papel (creme ou azulad
   }
 });
 
+test('segurança: leitor de artigos recusa endereços de rede interna (IPv4 e IPv6)', async () => {
+  const { isPrivateIp } = await import('../supabase/functions/_shared/net.js');
+  for (const ip of ['127.0.0.1', '10.1.2.3', '172.16.0.1', '172.31.255.255', '192.168.1.1', '169.254.169.254', '100.64.0.1', '0.0.0.0', '224.0.0.1', '::1', '::', 'fe80::1', 'fd12:3456::1', '::ffff:10.0.0.1', '999.1.1.1', 'abc']) {
+    assert.equal(isPrivateIp(ip), true, ip);
+  }
+  for (const ip of ['8.8.8.8', '172.32.0.1', '200.160.2.3', '2606:4700:4700::1111', '::ffff:8.8.8.8']) {
+    assert.equal(isPrivateIp(ip), false, ip);
+  }
+});
+
+test('segurança: links externos só abrem http(s)', async () => {
+  const { safeHref } = await import('../js/util.js');
+  assert.equal(safeHref('https://exemplo.com/a?b=1'), 'https://exemplo.com/a?b=1');
+  assert.equal(safeHref(' http://exemplo.com '), 'http://exemplo.com/');
+  for (const ruim of ['javascript:alert(1)', 'JaVaScRiPt:alert(1)', 'data:text/html,<script>1</script>', 'file:///etc/passwd', 'exemplo.com', '', null, undefined]) {
+    assert.equal(safeHref(ruim), '#', String(ruim));
+  }
+});
+
+test('segurança: a política de conteúdo (CSP) cobre os serviços que o código chama e proíbe scripts embutidos', async () => {
+  const fs = await import('node:fs');
+  const html = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const csp = /http-equiv="Content-Security-Policy" content="([^"]+)"/.exec(html)?.[1] || '';
+  const dir = Object.fromEntries(csp.split(';').map((d) => d.trim().split(/\s+/)).map(([k, ...v]) => [k, v]));
+  assert.ok(!dir['script-src'].includes("'unsafe-inline'") && !dir['script-src'].includes("'unsafe-eval'"), 'script-src sem unsafe-inline/eval');
+  assert.deepEqual(dir['object-src'], ["'none'"]);
+  assert.deepEqual(dir['base-uri'], ["'self'"]);
+  assert.ok(!/<script(?![^>]*\bsrc=)[^>]*>/.test(html), 'index.html sem script embutido');
+  assert.ok(!/fonts\.googleapis|fonts\.gstatic/.test(html), 'fontes servidas pelo app');
+  // todo endereço https usado para buscar dados ou carregar código precisa estar liberado
+  const allowed = [...dir['connect-src'], ...dir['script-src']];
+  const ok = (origin) => allowed.includes(origin) || allowed.some((a) => a.includes('*') && new RegExp(`^${a.replace(/[.]/g, '\\.').replace('*', '[a-z0-9-]+')}$`).test(origin));
+  const onlyLinks = ['https://www.dicio.com.br', 'https://dicionario-aberto.net', 'https://rafaelcataide.github.io']; // aparecem só como link ou endereço do app
+  const used = new Set();
+  for (const f of ['js', 'js/telas']) {
+    for (const name of fs.readdirSync(new URL(`../${f}/`, import.meta.url))) {
+      if (!name.endsWith('.js') || name.startsWith('i18n')) continue;
+      const src = fs.readFileSync(new URL(`../${f}/${name}`, import.meta.url), 'utf8');
+      for (const m of src.matchAll(/https:\/\/[a-zA-Z0-9.-]+/g)) used.add(m[0]);
+    }
+  }
+  const faltando = [...used].filter((o) => !ok(o) && !onlyLinks.includes(o));
+  assert.deepEqual(faltando, [], 'endereços usados no código e ausentes da CSP');
+});
+
 test('texto: ligações [[ ]] e escape de HTML', async () => {
   const U = await import('../js/util.js');
   assert.deepEqual(U.linksOf('ver [[Hábitos]] e [[Normalização|normalizar]]'), ['Hábitos', 'Normalização']);
