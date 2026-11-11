@@ -554,7 +554,21 @@ test('nota: editar o texto ali mesmo, num campo comum do aparelho @celular', asy
   expect(n.tags).toEqual(['mente']);
 });
 
-test('grifo: "📷 Grifo" não abre a câmera sozinho, deixa escolher', async ({ page }) => {
+test('computador: sem atalho de câmera; na nota dá para escolher uma imagem', async ({ page }) => {
+  await semear(page, { books: [livro('b1')] });
+  await page.goto('/#/notas');
+  await expect(page.getByRole('button', { name: 'Nova' })).toBeVisible();
+  await expect(page.locator('[data-action="scan"]')).toHaveCount(0);
+  await page.goto('/#/livro/b1');
+  await expect(page.getByRole('button', { name: 'Registrar leitura' })).toBeVisible();
+  await expect(page.locator('[data-action="scan"]')).toHaveCount(0);
+  await page.locator('.quick').getByRole('button', { name: 'Nota' }).click(); // no lugar do Grifo
+  await expect(page.getByRole('button', { name: 'Câmera' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Escolher imagem' })).toBeVisible();
+  await expect(page.locator('#ocr-status')).toContainText('Tem uma foto da página?');
+});
+
+test('grifo: "📷 Grifo" não abre a câmera sozinho, deixa escolher @so-celular', async ({ page }) => {
   await semear(page, { books: [livro('b1')] });
   await page.goto('/#/notas');
   let abriu = false;

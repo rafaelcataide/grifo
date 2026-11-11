@@ -998,3 +998,16 @@ EN_PATTERNS.unshift(
   [/^(.*) A foto chegou pequena \((\d+)×(\d+)\): chegue mais perto do texto para ler melhor\.$/, (m, tr) => `${tr(m[1], true)} The photo came in small (${m[2]}×${m[3]}): get closer to the text for a better read.`],
   [/^Erro na leitura por IA: (.*)$/, (m) => `AI reading error: ${m[1]}`],
 );
+
+// computador: sem atalhos de câmera
+Object.assign(EN, {
+  '🖼️ Escolher imagem': '🖼️ Choose image', 'Escolher imagem': 'Choose image',
+  'Tem uma foto da página? Escolha a imagem e o texto grifado vira nota. Funciona com marca-texto colorido e com o grifo cinza do Kindle.': 'Have a photo of the page? Choose the image and the highlighted text becomes a note. Works with colored highlighters and Kindle gray highlights.',
+});
+
+Object.assign(EN, {
+  '✍️ Escrever uma nota': '✍️ Write a note', 'Escrever uma nota': 'Write a note',
+  '✍️ Escrever minha primeira nota': '✍️ Write my first note', 'Escrever minha primeira nota': 'Write my first note',
+  'Guarde um trecho de': 'Save a passage from',
+  ': digite, cole ou escolha uma foto da página. No celular, o Grifo lê o que você marcou com marca-texto direto pela câmera.': ': type, paste or choose a photo of the page. On your phone, Grifo reads what you highlighted straight from the camera.',
+});

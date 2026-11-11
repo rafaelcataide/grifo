@@ -12,7 +12,7 @@ test.beforeEach(async ({ page }) => {
   page.on('pageerror', (e) => { throw new Error(`Erro na página: ${e.message}`); });
 });
 
-test('câmera do Grifo: abre por cima da nota, tira a foto e lê na hora @celular', async ({ page }) => {
+test('câmera do Grifo: abre por cima da nota, tira a foto e lê na hora @so-celular', async ({ page }) => {
   await semear(page, { books: [livro('b1')] });
   await page.goto('/#/notas');
   await page.getByRole('button', { name: 'Grifo' }).first().click();
@@ -30,7 +30,7 @@ test('câmera do Grifo: abre por cima da nota, tira a foto e lê na hora @celula
   await expect(page.locator('#ocr-crop')).toBeHidden();
 });
 
-test('câmera do Grifo: fechar não muda nada', async ({ page }) => {
+test('câmera do Grifo: fechar não muda nada @so-celular', async ({ page }) => {
   await semear(page, { books: [livro('b1')] });
   await page.goto('/#/notas');
   await page.getByRole('button', { name: 'Grifo' }).first().click();

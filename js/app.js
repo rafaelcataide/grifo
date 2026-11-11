@@ -248,6 +248,10 @@ export function moreSheet(title, items) {
   modal.classList.add('sheet');
 }
 
+// Aparelho de tocar na tela (celular, tablet): é onde faz sentido fotografar a página. No computador,
+// os atalhos de câmera somem; quem tiver a foto ainda pode escolher a imagem na nota.
+export const hasCam = () => matchMedia('(pointer: coarse)').matches;
+
 export function openModal(html, mount) {
   modal.classList.remove('sheet');
   modalBody.innerHTML = html;
@@ -435,9 +439,9 @@ function onboarding() {
   } else {
     const b = state.books.find((x) => x.status === 'reading') || state.books[0];
     body = `<span class="onb-emoji">✨</span><h2>Agora o truque</h2>
-      <p class="muted">Fotografe uma página com trechos grifados de <b>${esc(b.title)}</b>. O Grifo lê só o que você marcou com marca-texto e vira uma nota.</p>
+      <p class="muted">${hasCam() ? `Fotografe uma página com trechos grifados de <b>${esc(b.title)}</b>. O Grifo lê só o que você marcou com marca-texto e vira uma nota.` : `Guarde um trecho de <b>${esc(b.title)}</b>: digite, cole ou escolha uma foto da página. No celular, o Grifo lê o que você marcou com marca-texto direto pela câmera.`}</p>
       <div class="onb-actions">
-        <button class="btn primary block" data-action="scan" data-id="${b.id}">📷 Capturar meu primeiro grifo</button>
+        ${hasCam() ? `<button class="btn primary block" data-action="scan" data-id="${b.id}">📷 Capturar meu primeiro grifo</button>` : `<button class="btn primary block" data-action="newNote" data-id="${b.id}">✍️ Escrever minha primeira nota</button>`}
         <button class="btn ghost block" data-action="finishOnboarding">Fazer isso depois</button>
       </div>`;
   }
@@ -462,7 +466,7 @@ const needsOnboarding = () => !state.settings.onboarded && !state.books.length &
 // Lista que leva a pessoa até sentir o valor do app; cada passo se marca sozinho e a lista some no fim
 const FIRST_STEPS = [
   { id: 'book', label: 'Adicione um livro que está lendo', done: () => state.books.length > 0, btn: ['➕ Livro', 'newBook'] },
-  { id: 'note', label: 'Guarde um grifo: foto da página ou texto', done: () => state.notes.length > 0, btn: ['📷 Grifo', 'scan'] },
+  { id: 'note', label: 'Guarde um grifo: foto da página ou texto', done: () => state.notes.length > 0, btn: hasCam() ? ['📷 Grifo', 'scan'] : ['✍️ Nota', 'newNote'] },
   { id: 'card', label: 'Transforme um grifo em card de revisão', done: () => state.cards.length > 0, href: ['🧠 Ver notas', '#/notas'] },
   { id: 'review', label: 'Faça sua primeira revisão', done: () => (state.reviews || []).length > 0, href: ['🧠 Revisar', '#/revisar'] },
   { id: 'link', label: 'Ligue duas ideias com [[ ]] numa nota', done: () => state.notes.some((n) => linksOf(n.text).length), btn: ['✍️ Nota', 'newNote'] },
@@ -570,7 +574,7 @@ function home() {
     <button class="btn" data-action="newBook">➕ Livro</button>
     <button class="btn" data-action="scanBook">▥ Escanear livro</button>
     <button class="btn" data-action="newNote">✍️ Nota</button>
-    <button class="btn" data-action="scan">📷 Grifo</button>
+    ${hasCam() ? '<button class="btn" data-action="scan">📷 Grifo</button>' : ''}
     <a class="btn" href="#/artigos">📰 Artigo</a>
   </div>
   <h2>Lendo agora</h2>
@@ -648,8 +652,8 @@ function bookDetail(id) {
   <div class="quick">
     ${b.status !== 'finished'
       ? `<button class="btn primary" data-action="startTimer" data-id="${b.id}">⏱️ Começar a ler</button><button class="btn" data-action="logReading" data-id="${b.id}">📖 Registrar leitura</button>`
-      : `<button class="btn primary" data-action="scan" data-id="${b.id}">📷 Grifo</button>`}
-    ${b.status !== 'finished' ? `<button class="btn" data-action="scan" data-id="${b.id}">📷 Grifo</button>` : `<button class="btn" data-action="newNote" data-id="${b.id}">✍️ Nota</button>`}
+      : hasCam() ? `<button class="btn primary" data-action="scan" data-id="${b.id}">📷 Grifo</button>` : ''}
+    ${b.status !== 'finished' && hasCam() ? `<button class="btn" data-action="scan" data-id="${b.id}">📷 Grifo</button>` : `<button class="btn${b.status === 'finished' && !hasCam() ? ' primary' : ''}" data-action="newNote" data-id="${b.id}">✍️ Nota</button>`}
     <button class="btn" data-action="bookMore" data-id="${b.id}" aria-label="Mais ações do livro">⋯ Mais</button>
   </div>
   ${b.review ? `<section class="card"><div class="small muted">Minha opinião</div><p>${esc(b.review).replace(/\n/g, '<br>')}</p></section>` : ''}
@@ -670,13 +674,13 @@ function notesView() {
   const notes = state.notes.filter((n) => noteInScope(n, scope)).sort((a, b) => b.createdAt - a.createdAt);
   return `${seg(IDEAS_SEG, 'list')}
   <div class="row between"><h2 style="margin-top:0">Notas</h2>
-    <div class="row gap-s"><button class="btn" data-action="scan">📷 Grifo</button><button class="btn primary" data-action="newNote">✍️ Nova</button></div></div>
+    <div class="row gap-s">${hasCam() ? '<button class="btn" data-action="scan">📷 Grifo</button>' : ''}<button class="btn primary" data-action="newNote">✍️ Nova</button></div></div>
   <p class="small muted">Dica: escreva <b>[[</b> numa nota para ligá-la a um livro, a outra nota ou a um conceito. As ligações formam o mapa mental.</p>
   <div class="row gap-s search-row"><input class="search grow" type="search" placeholder="Buscar em notas e tags…" data-filter-list="#note-list"><a class="btn" href="#/tags">🏷️ Tags</a></div>
   ${state.notes.length > 1 ? scopeFilters('notesScope') : ''}
   <div id="note-list">${notes.length ? notes.map((n) => noteCard(n)).join('')
     : state.notes.length ? empty('Nenhuma nota com esses filtros.', '<button class="btn" data-action="clearScope" data-key="notesScope">✕ Limpar filtros</button>')
-    : empty('Suas citações e reflexões aparecem aqui.', '<button class="btn primary" data-action="scan">📷 Capturar um grifo</button>')}</div>`;
+    : empty('Suas citações e reflexões aparecem aqui.', hasCam() ? '<button class="btn primary" data-action="scan">📷 Capturar um grifo</button>' : '<button class="btn primary" data-action="newNote">✍️ Escrever uma nota</button>')}</div>`;
 }
 
 // ---------- menções sem ligação (como no Obsidian) ----------
@@ -2660,12 +2664,11 @@ export function noteForm(existing, { bookId, autoOCR, link } = {}) {
         <input type="radio" name="ocr-mode" id="ocr-m-p" value="page"><label for="ocr-m-p">📄 Página inteira</label>
       </div>
       <div class="row gap-s wrap">
-        <button type="button" class="btn primary" data-ocr="cam">📷 Câmera</button>
-        <button type="button" class="btn" data-ocr="file">🖼️ Galeria</button>
+        ${hasCam() ? '<button type="button" class="btn primary" data-ocr="cam">📷 Câmera</button><button type="button" class="btn" data-ocr="file">🖼️ Galeria</button>' : '<button type="button" class="btn" data-ocr="file">🖼️ Escolher imagem</button>'}
       </div>
       <input type="file" accept="image/*" hidden id="ocr-file">
       <input type="file" accept="image/*" capture="environment" hidden id="ocr-cam">
-      <div id="ocr-status" class="small muted">Fotografe a página ou escolha uma foto: o texto grifado vira nota. Funciona com marca-texto colorido e com o grifo cinza do Kindle.</div>
+      <div id="ocr-status" class="small muted">${hasCam() ? 'Fotografe a página ou escolha uma foto: o texto grifado vira nota. Funciona com marca-texto colorido e com o grifo cinza do Kindle.' : 'Tem uma foto da página? Escolha a imagem e o texto grifado vira nota. Funciona com marca-texto colorido e com o grifo cinza do Kindle.'}</div>
       <div id="ocr-crop" class="ocr-crop" hidden>
         <div class="crop-stage" id="crop-stage"><img id="crop-img" alt="Foto escolhida"><div class="crop-rect" id="crop-rect" hidden></div></div>
         <span class="hint">Arraste o dedo (ou o mouse) sobre a foto para marcar só o trecho que quer ler.</span>
