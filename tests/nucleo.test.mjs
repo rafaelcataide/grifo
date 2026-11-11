@@ -264,6 +264,63 @@ test('segurança: a política de conteúdo (CSP) cobre os serviços que o códig
   assert.deepEqual(faltando, [], 'endereços usados no código e ausentes da CSP');
 });
 
+test('busca de livros: junta as bases, completa campos e põe primeiro as edições em português', async () => {
+  const B = await import('../js/livros-busca.js');
+  assert.equal(B.isbn13('85-390-0383-0'), '9788539003839'); // ISBN-10 vira 13
+  assert.equal(B.isbn13('978-85-390-0383-9'), '9788539003839');
+  assert.equal(B.isbn13('0-306-40615-2'), '9780306406157'); // par conhecido de ISBN-10 e ISBN-13
+  assert.equal(B.isbn13('abc'), '');
+
+  const google = B.fromGoogle({ items: [
+    { volumeInfo: { title: 'Thinking, Fast and Slow', authors: ['Daniel Kahneman'], pageCount: 499, language: 'en', publishedDate: '2011-10-25', industryIdentifiers: [{ type: 'ISBN_13', identifier: '9780374275631' }], imageLinks: { thumbnail: 'http://books.google.com/en.jpg' } } },
+    { volumeInfo: { title: 'Rápido e devagar', subtitle: 'Duas formas de pensar', authors: ['Daniel Kahneman'], language: 'pt-BR', publishedDate: '2012', industryIdentifiers: [{ type: 'ISBN_10', identifier: '8539003830' }], imageLinks: { thumbnail: 'http://books.google.com/pt.jpg' } } },
+    { volumeInfo: {} }, // sem título: fora
+  ] });
+  assert.equal(google.length, 2);
+  assert.deepEqual([google[1].title, google[1].lang, google[1].isbn, google[1].cover], ['Rápido e devagar: Duas formas de pensar', 'pt', '9788539003839', 'https://books.google.com/pt.jpg']);
+
+  const openLib = B.fromOpenLibrary({ docs: [
+    { title: 'Rápido e Devagar', author_name: ['Daniel Kahneman'], number_of_pages_median: 608, isbn: ['8539003830', '9788539003839'], publisher: ['Objetiva'], first_publish_year: 2011, language: ['por'] },
+    { title: 'Noise', author_name: ['Daniel Kahneman', 'Olivier Sibony'], language: ['eng', 'por'], cover_i: 7 },
+  ] });
+  assert.deepEqual([openLib[0].isbn, openLib[0].lang, openLib[1].lang, openLib[1].cover], ['9788539003839', 'pt', '', 'https://covers.openlibrary.org/b/id/7-M.jpg']);
+
+  // mesmo ISBN nas duas bases = um resultado só, com capa do Google e páginas e editora da Open Library
+  const juntos = B.mergeBooks([google, openLib]);
+  assert.equal(juntos.length, 3);
+  const pt = juntos.find((x) => x.isbn === '9788539003839');
+  assert.deepEqual([pt.title, pt.cover, pt.pages, pt.publisher, pt.srcs], ['Rápido e devagar: Duas formas de pensar', 'https://books.google.com/pt.jpg', 608, 'Objetiva', ['google', 'openlibrary']]);
+  // sem ISBN de um lado, vale título principal + sobrenome do autor
+  assert.equal(B.mergeBooks([[{ title: 'O Hobbit: ou lá e de volta outra vez', author: 'J. R. R. Tolkien', isbn: '', src: 'google' }], [{ title: 'O hobbit', author: 'J.R.R. Tolkien', isbn: '9788595084742', pages: 336, src: 'openlibrary' }]]).length, 1);
+  // edições com ISBN diferente continuam separadas
+  assert.equal(B.mergeBooks([[{ title: 'O Hobbit', author: 'Tolkien', isbn: '9788595084742', src: 'google' }], [{ title: 'O Hobbit', author: 'Tolkien', isbn: '9788578277109', src: 'openlibrary' }]]).length, 2);
+
+  // em português primeiro; em inglês por último; o app em inglês inverte
+  assert.deepEqual(B.rankBooks(juntos, { lang: 'pt' }).map((x) => x.title), ['Rápido e devagar: Duas formas de pensar', 'Thinking, Fast and Slow', 'Noise']);
+  // o que bate com o que foi digitado vem antes de registros mais completos que só têm uma palavra em comum
+  const lista = [
+    { title: 'Amor de Capitu', author: 'Fernando Sabino', lang: 'pt', cover: 'c', pages: 292, isbn: '1', publisher: 'Ática' },
+    { title: 'Enquanto isso em Dom Casmurro', author: 'José Martins', lang: 'pt', cover: 'c', pages: 124, isbn: '2', publisher: 'Edifurb' },
+    { title: 'Dom Casmurro', author: 'Machado de Assis', lang: '', pages: 269 },
+    { title: 'Dom Casmurro', author: '', lang: '', publisher: 'Paulus' },
+    { title: 'Dom Casmurro: a Novel', author: 'Machado de Assis', lang: 'en' },
+  ];
+  assert.deepEqual(B.rankBooks(lista, { lang: 'pt', query: 'dom casmurro' }).map((x) => `${x.title} / ${x.author}`), [
+    'Dom Casmurro / Machado de Assis', 'Dom Casmurro / ', 'Dom Casmurro: a Novel / Machado de Assis', 'Enquanto isso em Dom Casmurro / José Martins',
+  ]); // "Amor de Capitu" não tem as palavras digitadas: sai
+  assert.equal(B.rankBooks(lista, { query: 'machado assis' })[0].author, 'Machado de Assis'); // busca pelo autor
+  assert.equal(B.rankBooks(lista, { query: 'zzz qqq' }).length, 5); // nada bate: mostra o que veio
+  assert.equal(B.rankBooks(juntos, { lang: 'en' })[0].title, 'Thinking, Fast and Slow');
+  assert.equal(B.rankBooks(juntos, { lang: 'pt', limit: 2 }).length, 2);
+
+  // busca por ISBN: tudo é o mesmo livro; a BrasilAPI manda, as outras completam
+  const br = B.fromBrasilApi({ title: 'Rápido e devagar', authors: ['Daniel Kahneman'], publisher: 'Objetiva', location: 'Rio de Janeiro', year: 2012, isbn: '9788539003839' });
+  const um = B.mergeBooks([br, google.slice(1), openLib.slice(0, 1)], { sameBook: true });
+  assert.equal(um.length, 1);
+  assert.deepEqual([um[0].title, um[0].city, um[0].year, um[0].cover, um[0].pages], ['Rápido e devagar', 'Rio de Janeiro', '2012', 'https://books.google.com/pt.jpg', 608]);
+  assert.deepEqual(B.fromBrasilApi(null), []);
+});
+
 test('texto: ligações [[ ]] e escape de HTML', async () => {
   const U = await import('../js/util.js');
   assert.deepEqual(U.linksOf('ver [[Hábitos]] e [[Normalização|normalizar]]'), ['Hábitos', 'Normalização']);

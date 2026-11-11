@@ -102,6 +102,36 @@ test('revisão: revelar e responder tira o card de hoje', async ({ page }) => {
   expect(c.due > new Date().toISOString().slice(0, 10)).toBe(true);
 });
 
+test('novo livro: a busca junta Google Livros e Open Library, mostra a edição em português primeiro e preenche o formulário @celular', async ({ page }) => {
+  // as bases de livros são simuladas: o teste não depende da internet nem gasta a cota delas
+  const pedidos = [];
+  await page.route('https://www.googleapis.com/books/**', (route) => {
+    pedidos.push(route.request().url());
+    return route.fulfill({ json: { items: [
+      { volumeInfo: { title: 'Thinking, Fast and Slow', authors: ['Daniel Kahneman'], pageCount: 499, language: 'en', publishedDate: '2011', publisher: 'FSG', industryIdentifiers: [{ type: 'ISBN_13', identifier: '9780374275631' }] } },
+      { volumeInfo: { title: 'Rápido e devagar', subtitle: 'Duas formas de pensar', authors: ['Daniel Kahneman'], language: 'pt', publishedDate: '2012', industryIdentifiers: [{ type: 'ISBN_13', identifier: '9788539003830' }] } },
+    ] } });
+  });
+  await page.route('https://openlibrary.org/search.json**', (route) => {
+    pedidos.push(route.request().url());
+    return route.fulfill({ json: { docs: [{ title: 'Rápido e Devagar', author_name: ['Daniel Kahneman'], number_of_pages_median: 608, isbn: ['9788539003830'], publisher: ['Objetiva'], first_publish_year: 2012, language: ['por'] }] } });
+  });
+  await semear(page);
+  await page.goto('/#/livros');
+  await page.locator('[data-action="newBook"]').first().click();
+  await page.locator('#book-form [name="lookup"]').fill('rapido e devagar');
+  await page.locator('#lookup-btn').click();
+  const itens = page.locator('.lookup-item');
+  await expect(itens).toHaveCount(1); // a edição brasileira veio das duas bases e virou uma só; a em inglês não bate com o título digitado
+  await expect(itens.first()).toContainText('Rápido e devagar: Duas formas de pensar');
+  await expect(itens.first()).toContainText('Objetiva, 2012 · 608 pág.'); // editora e páginas vieram da Open Library
+  expect(pedidos.length).toBe(2); // as duas bases, uma vez cada
+  await itens.first().click();
+  await expect(page.locator('#book-form [name="title"]')).toHaveValue('Rápido e devagar: Duas formas de pensar');
+  await expect(page.locator('#book-form [name="pages"]')).toHaveValue('608');
+  await expect(page.locator('#book-form [name="isbn"]')).toHaveValue('9788539003830');
+});
+
 test('busca única: encontra livro, nota e texto de artigo', async ({ page }) => {
   await semear(page, { books: [livro('b1'), artigo('a1')], notes: [nota('n1', 'b1', 'A memória gosta de pausas.')] });
   await page.goto('/#/');

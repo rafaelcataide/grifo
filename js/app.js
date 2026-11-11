@@ -7,6 +7,7 @@ import * as S from './srs.js';
 import { createGraph, applyShow } from './graph.js';
 import * as Cloud from './cloud.js';
 import * as AI from './ai.js';
+import * as Busca from './livros-busca.js';
 import { CONFIG } from '../config.js';
 import { landingView } from './landing.js';
 import { PLANOS, planoDe } from '../supabase/functions/_shared/planos.js';
@@ -2366,7 +2367,7 @@ function bookForm(existing, opts = {}) {
       if (found.length) {
         results.innerHTML = `<div class="lookup">${found.map((r, i) => `<button type="button" class="lookup-item" data-i="${i}">
             ${r.cover ? `<img src="${esc(r.cover)}" alt="" referrerpolicy="no-referrer">` : '<span class="cover ph sm">📖</span>'}
-            <span><b>${esc(r.title)}</b><br><small>${esc(r.author)}${r.pages ? ` · ${r.pages} pág.` : ''}</small></span></button>`).join('')}</div>`;
+            <span><b>${esc(r.title)}</b><br><small data-no-tr>${esc([r.author, [r.publisher, r.year].filter(Boolean).join(', '), r.pages ? `${r.pages} ${tr('pág.')}` : ''].filter(Boolean).join(' · '))}</small></span></button>`).join('')}</div>${res.quota ? `<p class="small muted">${quotaMsg.replace('<br>', '')}</p>` : ''}`;
       } else if (res.offline && !res.quota) {
         results.innerHTML = '<p class="small muted">Sem conexão para buscar. Preencha manualmente.</p>';
       } else if (res.isbn) {
@@ -2465,57 +2466,43 @@ async function coverFromFile(file) {
   return c.toDataURL('image/jpeg', 0.8);
 }
 
-// Busca em várias bases, da mais forte para livros brasileiros até a mais genérica.
+// Busca de livros em três bases ao mesmo tempo: BrasilAPI (só por ISBN; a melhor para edições brasileiras),
+// Google Livros e Open Library. O mesmo livro vindo de bases diferentes vira um resultado só, com os
+// campos de uma completando os da outra (js/livros-busca.js). Por título, vêm primeiro as edições no idioma do app.
 // Devolve { items, isbn, quota, offline } para a tela explicar por que não achou.
 async function searchBooks(q) {
   const isbn = q.replace(/[-\s.]/g, '').toUpperCase();
   const isIsbn = /^(\d{9}[\dX]|\d{13})$/.test(isbn);
   const out = { items: [], isbn: isIsbn ? isbn : '', quota: false, offline: false };
-  const get = async (url) => {
+  let asked = 0, failed = 0;
+  const get = async (url, google = false) => {
+    asked++;
     try {
-      const r = await fetch(url);
-      if (r.status === 429) { out.quota = true; return null; }
-      return r.ok ? r.json() : null;
+      const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (google && r.status === 429) out.quota = true;
+      return r.ok ? await r.json() : null;
     } catch {
-      out.offline = true;
+      failed++; // sem rede, ou a base demorou demais
       return null;
     }
   };
+  // Google Livros com chave (a do usuário, em Ajustes, ou a do app, no config.js): sem chave, o Google
+  // recusa boa parte dos pedidos (limite gratuito compartilhado) e a busca fica só com a Open Library
+  const gk = state.settings.googleKey || CONFIG.googleBooksKey || '';
+  const key = gk ? `&key=${encodeURIComponent(gk)}` : '';
+  const google = (query, max) => get(`https://www.googleapis.com/books/v1/volumes?printType=books&maxResults=${max}&q=${encodeURIComponent(query)}${key}`, true);
+  const openLib = (params, limit) => get(`https://openlibrary.org/search.json?limit=${limit}&fields=title,author_name,number_of_pages_median,cover_i,isbn,publisher,first_publish_year,language&${params}`);
 
-  // 1) BrasilAPI: junta CBL, Mercado Editorial, Google e Open Library (bom para livros nacionais)
   if (isIsbn) {
-    const v = await get(`https://brasilapi.com.br/api/isbn/v1/${isbn}`);
-    if (v?.title) {
-      out.items.push({
-        title: [v.title, v.subtitle].filter(Boolean).join(': '), author: (v.authors || []).join(', '),
-        pages: v.page_count || '', category: (v.subjects || [])[0] || '', isbn: v.isbn || isbn, cover: v.cover_url || '',
-        publisher: v.publisher || '', year: v.year || '', city: v.location || '', edition: v.edition || '',
-      });
-      return out;
-    }
+    const [v, g, o] = await Promise.all([get(`https://brasilapi.com.br/api/isbn/v1/${isbn}`), google(`isbn:${isbn}`, 1), openLib(`isbn=${isbn}`, 1)]);
+    // tudo o que voltou é o mesmo livro: junta num resultado só (a BrasilAPI manda nos campos que tiver)
+    out.items = Busca.mergeBooks([Busca.fromBrasilApi(v, isbn), Busca.fromGoogle(g).slice(0, 1), Busca.fromOpenLibrary(o).slice(0, 1)], { sameBook: true });
+    if (out.items[0] && !out.items[0].isbn) out.items[0].isbn = Busca.isbn13(isbn) || isbn;
+  } else {
+    const [g, o] = await Promise.all([google(q, 20), openLib(`q=${encodeURIComponent(q)}`, 20)]);
+    out.items = Busca.rankBooks(Busca.mergeBooks([Busca.fromGoogle(g), Busca.fromOpenLibrary(o)]), { lang, query: q });
   }
-
-  // 2) Google Livros (com a chave do usuário, se houver, para não cair no limite compartilhado)
-  const key = state.settings.googleKey ? `&key=${encodeURIComponent(state.settings.googleKey)}` : '';
-  const g = await get(`https://www.googleapis.com/books/v1/volumes?maxResults=6&q=${encodeURIComponent(isIsbn ? `isbn:${isbn}` : q)}${key}`);
-  out.items = (g?.items || []).map(({ volumeInfo: v }) => ({
-    title: [v.title, v.subtitle].filter(Boolean).join(': '),
-    author: (v.authors || []).join(', '),
-    pages: v.pageCount || '',
-    category: (v.categories || [])[0] || '',
-    isbn: ((v.industryIdentifiers || []).find((i) => i.type === 'ISBN_13') || (v.industryIdentifiers || [])[0] || {}).identifier || '',
-    cover: (v.imageLinks?.thumbnail || '').replace('http://', 'https://'),
-    publisher: v.publisher || '', year: (v.publishedDate || '').slice(0, 4),
-  }));
-  if (out.items.length) return out;
-
-  // 3) Open Library
-  const o = await get(`https://openlibrary.org/search.json?limit=6&fields=title,author_name,number_of_pages_median,cover_i,isbn,publisher,first_publish_year&${isIsbn ? `isbn=${isbn}` : `q=${encodeURIComponent(q)}`}`);
-  out.items = (o?.docs || []).map((d) => ({
-    title: d.title, author: (d.author_name || []).join(', '), pages: d.number_of_pages_median || '', category: '',
-    isbn: (d.isbn || [])[0] || '', cover: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-M.jpg` : '',
-    publisher: (d.publisher || [])[0] || '', year: d.first_publish_year || '',
-  }));
+  out.offline = asked > 0 && failed === asked;
   return out;
 }
 

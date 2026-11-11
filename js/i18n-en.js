@@ -1082,3 +1082,5 @@ Object.assign(EN, {
   "Quando esta política mudar, a data no topo é atualizada.": "When this policy changes, the date at the top is updated."
 });
 Object.assign(EN, { '. Ao excluir a conta, tudo é apagado definitivamente dos nossos servidores.': '. When you delete your account, everything is permanently erased from our servers.' });
+
+Object.assign(EN, { 'pág.': 'p.' });

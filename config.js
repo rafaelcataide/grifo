@@ -17,6 +17,11 @@ export const CONFIG = {
   // Portal do cliente do Stripe (trocar de plano, cartão, cancelar). Vazio = sem o botão.
   billingPortalUrl: '',
 
+  // Busca de livros: chave da API do Google Livros (grátis, no Google Cloud). Sem chave, o Google recusa
+  // boa parte das buscas por limite compartilhado. Restrinja a chave ao endereço do app ("Referenciadores HTTP")
+  // e à API "Books API": assim ela pode ficar aqui, pública, sem risco. Vazio = busca sem chave.
+  googleBooksKey: '',
+
   // Endereço do app para divulgar (artes, convites). Troque quando tiver um domínio próprio.
   siteUrl: 'https://rafaelcataide.github.io/grifo/',
 
