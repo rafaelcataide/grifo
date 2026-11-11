@@ -283,6 +283,19 @@ test('nota solta: criar sem livro e achar pelo filtro "Sem livro"', async ({ pag
   await expect(page.locator('#note-list .note')).toContainText('não veio de livro');
 });
 
+test('nota: abrir a edição não abre a lista de livros sozinha; tocar no campo abre @celular', async ({ page }) => {
+  await semear(page, { books: [livro('b1')], notes: [nota('n1', 'b1', 'Ler devagar ajuda a lembrar.')] });
+  await page.goto('/#/nota/n1');
+  await page.getByRole('button', { name: 'Mais' }).click();
+  await page.getByRole('button', { name: /Título, tags, livro e página/ }).click();
+  const lista = page.locator('#note-form .combo-list');
+  await expect(page.locator('#note-form')).toBeVisible();
+  await expect(lista).toBeHidden();
+  expect(await page.evaluate(() => document.activeElement.id)).toBe('modal'); // nenhum campo com foco: o teclado não sobe
+  await page.locator('#note-form .combo input.search').click();
+  await expect(lista).toBeVisible();
+});
+
 test('nota: escolher o livro digitando parte do título', async ({ page }) => {
   await semear(page, { books: [livro('b1'), livro('b2', { title: 'Hábitos Atômicos', author: 'James Clear' })] });
   await page.goto('/#/notas');

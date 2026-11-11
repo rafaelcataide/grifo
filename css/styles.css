@@ -870,3 +870,6 @@ dialog.cam::backdrop { background: #000; }
 
 /* leitura de grifos: opção de IA */
 #ocr-ai-wrap { font-weight: 400; }
+
+/* a janela recebe o foco ao abrir (nenhum campo abre sozinho) */
+dialog#modal:focus { outline: none; }

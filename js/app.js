@@ -252,9 +252,17 @@ export function openModal(html, mount) {
   modal.classList.remove('sheet');
   modalBody.innerHTML = html;
   delete modal.dataset.dirty;
-  if (!modal.open) modal.showModal();
+  if (!modal.open) {
+    // Ao abrir, o navegador põe o foco no primeiro campo: isso abria a lista de livros e, no celular,
+    // subia o teclado sem a pessoa pedir. O foco fica na janela, a não ser que o formulário peça um campo (autofocus).
+    openingModal = true;
+    modal.showModal();
+    if (!modalBody.querySelector('[autofocus]')) modal.focus();
+    openingModal = false;
+  }
   mount?.(modalBody);
 }
+let openingModal = false;
 export const closeModal = () => modal.close();
 // Formulário com algo digitado não fecha sem querer: tocar fora, Esc e o "voltar" do Android
 // (que fecha a janela junto com o teclado) perguntam antes de descartar
@@ -888,7 +896,7 @@ function comboClose(box, restore = true) {
     input.value = cur ? comboOpts(box).find(([v]) => v === cur)?.[1] || '' : '';
   }
 }
-document.addEventListener('focusin', (e) => { const box = e.target.closest?.('.combo'); if (box) { e.target.select?.(); comboRender(box); } });
+document.addEventListener('focusin', (e) => { const box = e.target.closest?.('.combo'); if (box && !openingModal) { e.target.select?.(); comboRender(box); } });
 document.addEventListener('focusout', (e) => { const box = e.target.closest?.('.combo'); if (box) setTimeout(() => { if (!box.contains(document.activeElement)) comboClose(box); }, 120); });
 document.addEventListener('input', (e) => { const box = e.target.closest?.('.combo'); if (box) comboRender(box); });
 // o "✕" do campo tira só esse filtro
