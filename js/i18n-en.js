@@ -1011,3 +1011,10 @@ Object.assign(EN, {
   'Guarde um trecho de': 'Save a passage from',
   ': digite, cole ou escolha uma foto da página. No celular, o Grifo lê o que você marcou com marca-texto direto pela câmera.': ': type, paste or choose a photo of the page. On your phone, Grifo reads what you highlighted straight from the camera.',
 });
+
+// privacidade: fotos de páginas e a leitura por IA
+Object.assign(EN, {
+  'são lidas no próprio aparelho para extrair o texto grifado. A foto só sai do aparelho na leitura por IA: quando a opção “Usar a IA quando a foto estiver difícil de ler” está ligada na tela da nota, ou quando você toca em “Ler com IA”. Nesse caso ela é enviada à Anthropic para extrair o texto e': 'are read on the device itself to extract the highlighted text. The photo only leaves the device for AI reading: when the option “Use AI when the photo is hard to read” is on in the note screen, or when you tap “Read with AI”. In that case it is sent to Anthropic to extract the text and',
+  'não fica guardada': 'is not stored', 'nos nossos servidores.': 'on our servers.',
+  'Atualizada em 11/11/2026 · Grifo — leituras que ficam': 'Updated on 11/11/2026 · Grifo — reading that sticks',
+});

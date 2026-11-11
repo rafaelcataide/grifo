@@ -2180,12 +2180,12 @@ const contactLine = () => (CONFIG.contactEmail
 function privacyView() {
   return `${legalBack()}<article class="card legal">
   <h2>Política de privacidade</h2>
-  <p class="small muted">Atualizada em 24/10/2026 · Grifo — leituras que ficam</p>
+  <p class="small muted">Atualizada em 11/11/2026 · Grifo — leituras que ficam</p>
   <h3>O que coletamos</h3>
   <ul>
     <li><b>Conta:</b> nome, e-mail e foto do seu perfil Google (ou só o e-mail, no login por código).</li>
     <li><b>Suas leituras:</b> livros, sessões de leitura, notas, grifos, cards, revisões, metas e conquistas que você registra.</li>
-    <li><b>Fotos de páginas:</b> são lidas no próprio aparelho para extrair o texto grifado e <b>não são enviadas</b> nem guardadas.</li>
+    <li><b>Fotos de páginas:</b> são lidas no próprio aparelho para extrair o texto grifado. A foto só sai do aparelho na leitura por IA: quando a opção “Usar a IA quando a foto estiver difícil de ler” está ligada na tela da nota, ou quando você toca em “Ler com IA”. Nesse caso ela é enviada à Anthropic para extrair o texto e <b>não fica guardada</b> nos nossos servidores.</li>
     <li><b>Erros do app:</b> mensagem técnica, tela e navegador, para corrigirmos falhas. Não inclui suas notas.</li>
   </ul>
   <h3>Para que usamos</h3>
