@@ -1,6 +1,6 @@
 // Artigos salvos por link e PDFs: leitores, grifar, fila de leitura.
 // Parte do app.js separada por tela: usa o estado e os utilitários do app (importados de ../app.js).
-import { LINK_RE, esc, norm, plainText } from '../util.js';
+import { LINK_RE, esc, norm, plainText, safeHref } from '../util.js';
 import { db, uid } from '../db.js';
 import { lang } from '../i18n.js';
 import * as G from '../game.js';
@@ -117,14 +117,14 @@ export function articleView(id) {
     <div class="small muted">${esc([a.site, a.author, `${readMinutes(a)} min de leitura`].filter(Boolean).join(' · '))}</div>
     <h1 class="reader-title">${esc(a.title)}</h1>
     <div class="quick">
-      <a class="btn small" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">↗ Original</a>
+      <a class="btn small" href="${esc(safeHref(a.url))}" target="_blank" rel="noopener noreferrer">↗ Original</a>
       <button class="btn small" data-action="reference" data-id="${a.id}">📚 Referência</button>
       <button class="btn small" data-action="articleRead" data-id="${a.id}">${a.status === 'finished' ? '✓ Lido' : '✔ Marcar como lido'}</button>
       <button class="btn small" data-action="newNote" data-id="${a.id}">✍️ Nota</button>
       <button class="btn small ghost" data-action="deleteArticle" data-id="${a.id}">🗑️ Excluir</button>
     </div>
     ${articleTags(a)}
-    <div class="reader-body" id="reader-body">${body || `<p class="nudge">Este artigo foi guardado só como link. Leia no <a href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">site original ↗</a> e registre aqui seus grifos com <b>✍️ Nota</b>, ou baixe o PDF de lá e use <a href="#" data-action="addPdf">📄 Adicionar PDF</a>.</p>`}</div>
+    <div class="reader-body" id="reader-body">${body || `<p class="nudge">Este artigo foi guardado só como link. Leia no <a href="${esc(safeHref(a.url))}" target="_blank" rel="noopener noreferrer">site original ↗</a> e registre aqui seus grifos com <b>✍️ Nota</b>, ou baixe o PDF de lá e use <a href="#" data-action="addPdf">📄 Adicionar PDF</a>.</p>`}</div>
   </article>
   <h3>Seus grifos (${notes.length})</h3>
   ${notes.length ? notes.map((n) => noteCard(n, false)).join('') : '<p class="small muted">Selecione um trecho do texto e toque em <b>Grifar</b>.</p>'}

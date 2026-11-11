@@ -1,6 +1,6 @@
 // Vocabulário (palavras do dicionário) e página de tags.
 // Parte do app.js separada por tela: usa o estado e os utilitários do app (importados de ../app.js).
-import { esc, norm, splitTags } from '../util.js';
+import { esc, norm, splitTags, safeHref } from '../util.js';
 import { uid } from '../db.js';
 import { lang } from '../i18n.js';
 import * as G from '../game.js';
@@ -39,7 +39,7 @@ export function wordModal(r, { context = '', sourceId = null } = {}) {
     ${r.base ? `<p class="small muted" style="margin:0">Forma de <b>${esc(r.base)}</b></p>` : ''}
     ${wordDefsHtml(r)}
     ${context ? `<blockquote class="word-ctx">${esc(context)}</blockquote>` : ''}
-    <p class="small muted" style="margin:0">Fonte: <a href="${esc(r.source?.url || '#')}" target="_blank" rel="noopener">${esc(r.source?.name || '')}</a></p>
+    <p class="small muted" style="margin:0">Fonte: <a href="${esc(safeHref(r.source?.url))}" target="_blank" rel="noopener">${esc(r.source?.name || '')}</a></p>
     <div class="actions">
       <button type="button" class="btn ghost" data-action="close">Fechar</button>
       ${saved ? '<span class="chip">✓ No seu vocabulário</span>' : '<button type="button" class="btn" id="word-save">➕ Salvar</button>'}

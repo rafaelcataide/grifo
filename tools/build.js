@@ -13,7 +13,7 @@ const FILES = [
   'supabase/functions/_shared/ai-tasks.js', // usado pelo app no modo pessoal (IA com a chave do usuário)
   'supabase/functions/_shared/planos.js', // limites dos planos (o app mostra; a função "ai" faz valer)
 ];
-const DIRS = ['css', 'js', 'icons', '.well-known'];
+const DIRS = ['css', 'js', 'icons', 'fonts', '.well-known'];
 
 // Cabeçalhos da hospedagem (Cloudflare Pages e Netlify leem o arquivo _headers)
 const HEADERS = `/*

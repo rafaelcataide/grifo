@@ -1,6 +1,15 @@
 // Utilidades de texto usadas pelo app inteiro (sem tela: testáveis com node --test).
 import { LOCALE } from './i18n.js';
 
+// Endereço externo seguro para usar em href: só http e https (um "javascript:" vindo de um backup
+// adulterado ou de um serviço de fora viraria código ao tocar no link). Devolve '#' se não servir.
+export function safeHref(url) {
+  try {
+    const u = new URL(String(url || '').trim());
+    return u.protocol === 'https:' || u.protocol === 'http:' ? u.href : '#';
+  } catch { return '#'; }
+}
+
 // [[ligação]] ou [[ligação|apelido]] dentro das notas
 export const LINK_RE = /\[\[([^[\]\n]+?)\]\]/g;
 

@@ -2,6 +2,11 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
+  <!-- Política de segurança de conteúdo: o app só carrega código dele mesmo e dos serviços listados.
+       Se uma falha de injeção aparecer, o navegador barra scripts de fora e o envio de dados a outros sites.
+       Ao usar um serviço novo, inclua o endereço aqui (tests/nucleo.test.mjs confere os que o código usa). -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://challenges.cloudflare.com 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https:; media-src 'self' blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://cdn.jsdelivr.net https://api.anthropic.com https://brasilapi.com.br https://www.googleapis.com https://openlibrary.org https://covers.openlibrary.org https://pt.wiktionary.org https://en.wiktionary.org https://api.dicionario-aberto.net https://api.dictionaryapi.dev https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#f7f6f2">
   <meta name="description" content="Grifo: leituras que ficam. Fotografe seus grifos, conecte ideias e memorize o que leu.">
@@ -17,19 +22,11 @@
   <meta property="og:image:height" content="630">
   <meta property="og:locale" content="pt_BR">
   <meta name="twitter:card" content="summary_large_image">
-  <script>
-    // aplica o tema escolhido antes de pintar a tela (evita piscar)
-    try {
-      const t = localStorage.getItem('theme');
-      if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
-    } catch {}
-  </script>
+  <script src="js/tema.js"></script>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&family=Inter:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="css/fonts.css">
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
