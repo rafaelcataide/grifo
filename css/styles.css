@@ -876,3 +876,9 @@ dialog#modal:focus { outline: none; }
 
 /* leitura por IA: pergunta da primeira vez */
 .ocr-consent { display: grid; gap: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
+
+/* ficha do livro pela foto e resumo do artigo (IA) */
+.ficha-box { display: grid; gap: 6px; justify-items: start; }
+.art-summary { background: var(--accent-soft); border-radius: 14px; padding: 14px 16px; margin: 12px 0; display: grid; gap: 8px; }
+.art-summary p, .art-summary ul { margin: 0; }
+.art-summary ul { padding-left: 20px; display: grid; gap: 4px; }

@@ -134,7 +134,7 @@ test('OCR: limpa sobras de borda e junta linhas hifenizadas', () => {
 
 test('IA: formato do pedido (modelo, saída estruturada, fallback) e recusa', () => {
   for (const task of TASK_NAMES) {
-    const input = { notes: [], note: { text: 'x' }, candidates: [], question: 'q', text: 't', read: [], highlights: [], owned: [] };
+    const input = { notes: [], note: { text: 'x' }, candidates: [], question: 'q', text: 't', read: [], highlights: [], owned: [], title: 'T', site: 'S' };
     const p = buildParams(task, input);
     assert.ok(['claude-haiku-5-5', 'claude-sonnet-5-5'].includes(p.model));
     assert.equal(p.output_config.format.type, 'json_schema');
@@ -142,7 +142,7 @@ test('IA: formato do pedido (modelo, saída estruturada, fallback) e recusa', ()
     if (p.model === 'claude-sonnet-5-5') assert.equal(p.fallbacks, 'default');
     else assert.equal(p.fallbacks, undefined);
     assert.ok(p.output_config.effort);
-    assert.equal(typeof p.messages[0].content, task === 'readphoto' ? 'object' : 'string');
+    assert.equal(typeof p.messages[0].content, ['readphoto', 'bookphoto'].includes(task) ? 'object' : 'string'); // as tarefas com foto mandam imagem + texto
   }
   assert.deepEqual(parseResult({ stop_reason: 'end_turn', content: [{ type: 'text', text: '{"ok":1}' }] }), { ok: 1 });
   assert.throws(() => parseResult({ stop_reason: 'refusal', content: [] }), /não pôde/);
@@ -214,6 +214,31 @@ test('OCR: acha grifo claro pela diferença para a cor do papel (creme ou azulad
     assert.equal(mask[Math.floor(60 / B) * gw + 20], 0, 'fora do grifo fica de fora');
     assert.equal(blocos(paginaFalsa({ paper })).total, 0, 'página sem grifo');
   }
+});
+
+test('IA: ficha do livro pela foto e resumo do artigo (formato, modelo rápido e entrada conferida)', async () => {
+  const { validateInput, taskKind, SUMMARY_MIN } = await import('../supabase/functions/_shared/ai-tasks.js');
+  const image = 'A'.repeat(400);
+  const ficha = buildParams('bookphoto', { image });
+  assert.equal(ficha.model, 'claude-haiku-5-5');
+  assert.equal(taskKind('bookphoto'), 'light');
+  assert.equal(ficha.messages[0].content[0].source.data, image);
+  assert.deepEqual(ficha.output_config.format.schema.required, ['found', 'title', 'subtitle', 'author', 'publisher', 'city', 'year', 'edition', 'isbn', 'pages']);
+  assert.match(ficha.system, /não complete com o que você sabe/); // copia o que está na foto, não o que "lembra" do livro
+  assert.equal(validateInput('bookphoto', { image }), null);
+  assert.equal(validateInput('bookphoto', {}), 'foto ausente');
+
+  const texto = 'Ler devagar ajuda a lembrar. '.repeat(40);
+  const resumo = buildParams('artsummary', { title: 'Por que ler "devagar"', site: 'Revista', text: texto });
+  assert.equal(taskKind('artsummary'), 'light');
+  assert.match(resumo.messages[0].content, /^<artigo titulo="Por que ler "devagar"" site="Revista">\nLer devagar/);
+  assert.deepEqual(resumo.output_config.format.schema.required, ['gist', 'points', 'audience']);
+  // artigo enorme: o texto enviado é cortado (o custo por resumo tem teto)
+  assert.ok(buildParams('artsummary', { title: 't', site: 's', text: 'a'.repeat(200000) }).messages[0].content.length < 61000);
+  assert.equal(validateInput('artsummary', { text: texto }), null);
+  assert.equal(validateInput('artsummary', { text: 'curto' }), 'texto curto demais para resumir');
+  assert.equal(validateInput('artsummary', {}), 'texto curto demais para resumir');
+  assert.ok(SUMMARY_MIN >= 200);
 });
 
 test('segurança: leitor de artigos recusa endereços de rede interna (IPv4 e IPv6)', async () => {

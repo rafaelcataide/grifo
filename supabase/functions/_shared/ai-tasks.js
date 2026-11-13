@@ -243,12 +243,61 @@ TASKS.readphoto = {
   ],
 };
 
+// Ficha do livro pela foto: capa, folha de rosto ou página de créditos (ficha catalográfica).
+// Dá os dados que as bases de livros quase nunca trazem para a referência (cidade, edição).
+TASKS.bookphoto = {
+  model: HAIKU,
+  effort: 'low',
+  system: `Você lê a foto de um livro (capa, folha de rosto ou página de créditos com a ficha catalográfica) e devolve os dados bibliográficos que aparecem nela.
+- Copie o que está impresso; não complete com o que você sabe sobre o livro. Campo que não aparece na foto fica vazio ("" ou 0).
+- "title": título principal, sem o subtítulo. "subtitle": subtítulo, se houver.
+- "author": autores na ordem em que aparecem, separados por "; ", com as maiúsculas normais (não tudo em maiúsculas).
+- "publisher": só o nome da editora. "city": cidade de publicação (local). "year": ano da edição, com 4 dígitos.
+- "edition": só o número da edição (ex.: "2"); vazio se for a primeira ou se não aparecer.
+- "isbn": só os dígitos do ISBN (prefira o de 13). "pages": número de páginas, se aparecer na ficha (ex.: "608 p.").
+- Se a foto não for de um livro ou não der para ler, responda found=false com os outros campos vazios.`,
+  schema: {
+    type: 'object',
+    properties: {
+      found: { type: 'boolean' }, title: { type: 'string' }, subtitle: { type: 'string' }, author: { type: 'string' },
+      publisher: { type: 'string' }, city: { type: 'string' }, year: { type: 'string' }, edition: { type: 'string' },
+      isbn: { type: 'string' }, pages: { type: 'integer' },
+    },
+    required: ['found', 'title', 'subtitle', 'author', 'publisher', 'city', 'year', 'edition', 'isbn', 'pages'],
+    additionalProperties: false,
+  },
+  build: ({ image }) => [
+    { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: image } },
+    { type: 'text', text: 'Dados bibliográficos desta foto.' },
+  ],
+};
+
+// Resumo de um artigo salvo, para decidir se vale a leitura e para lembrar depois do que ele trata
+export const SUMMARY_MIN = 400; // caracteres: abaixo disso não há o que resumir
+TASKS.artsummary = {
+  model: HAIKU,
+  effort: 'low',
+  system: `Você resume artigos em português do Brasil para um leitor decidir se vale a leitura.
+- "gist": a ideia central em uma frase.
+- "points": de 3 a 5 pontos principais, uma frase curta cada, na ordem do texto, com os dados e exemplos concretos que o artigo traz.
+- "audience": para quem ou para que a leitura é útil, em uma frase curta.
+- Use só o que está no texto: não acrescente fatos, opinião sua nem conclusões que o artigo não tira.`,
+  schema: {
+    type: 'object',
+    properties: { gist: { type: 'string' }, points: { type: 'array', items: { type: 'string' } }, audience: { type: 'string' } },
+    required: ['gist', 'points', 'audience'],
+    additionalProperties: false,
+  },
+  build: ({ title, site, text }) => `<artigo titulo="${clip(title, 200)}" site="${clip(site, 80)}">\n${clip(text, 60000)}\n</artigo>`,
+};
+
 export const TASK_NAMES = Object.keys(TASKS);
 
 // Confere o que chega antes de gastar cota. Devolve a mensagem de erro, ou null se está tudo certo.
 export const IMAGE_MAX = 4_000_000; // caracteres em base64 (cerca de 3 MB de foto)
 export function validateInput(task, input) {
-  if (task === 'readphoto') {
+  if (task === 'artsummary' && (typeof input?.text !== 'string' || input.text.trim().length < SUMMARY_MIN)) return 'texto curto demais para resumir';
+  if (task === 'readphoto' || task === 'bookphoto') {
     const img = input?.image;
     if (typeof img !== 'string' || img.length < 100) return 'foto ausente';
     if (img.length > IMAGE_MAX) return 'foto grande demais';

@@ -2208,7 +2208,7 @@ function privacyView() {
     <li><b>GitHub Pages:</b> hospeda as páginas do app e recebe o endereço IP de quem o abre.</li>
     <li><b>jsDelivr:</b> entrega bibliotecas de código usadas pelo app (como a leitura de fotos e de PDFs) e recebe o endereço IP ao baixá-las.</li>
     <li><b>Google:</b> login com sua conta Google.</li>
-    <li><b>Anthropic (Claude):</b> quando você usa a IA, o texto das notas envolvidas (ou a foto da página, na leitura de grifos por IA) é enviado para gerar a resposta. A Anthropic não usa esses dados para treinar modelos pela API.</li>
+    <li><b>Anthropic (Claude):</b> quando você usa a IA, o texto das notas envolvidas (ou a foto, na leitura de grifos e da ficha do livro por IA) é enviado para gerar a resposta. A Anthropic não usa esses dados para treinar modelos pela API.</li>
     <li><b>Stripe:</b> pagamentos dos planos pagos, se você assinar.</li>
     <li><b>Resend:</b> envia o e-mail semanal, se você ativar.</li>
     <li><b>Serviço de notificações do seu navegador:</b> Google, Apple ou Mozilla entregam as notificações ao aparelho, se você ativar.</li>
@@ -2291,6 +2291,11 @@ function bookForm(existing, opts = {}) {
       </div>
       <input type="file" accept="image/*" hidden id="scan-file">
     </div>
+    ${AI.available(state.settings) === 'ok' ? `<div class="ficha-box">
+      <button type="button" class="btn small" id="ficha-btn">✨ Preencher pela foto</button>
+      <span class="hint" id="ficha-status">Fotografe a capa ou a página de créditos (a da ficha catalográfica): a IA preenche título, autor, editora, cidade, ano e ISBN.</span>
+      <input type="file" accept="image/*" ${hasCam() ? 'capture="environment"' : ''} hidden id="ficha-file">
+    </div>` : ''}
     <div id="lookup-results"></div>
     <label>Título* <input name="title" required value="${esc(b.title)}"></label>
     <label>Autor <input name="author" value="${esc(b.author)}"></label>
@@ -2353,6 +2358,39 @@ function bookForm(existing, opts = {}) {
     };
     $('#cover-file', root).onchange = onCoverFile;
     $('#cover-camfile', root).onchange = onCoverFile;
+    // Ficha pela foto: a IA lê a capa ou a página de créditos e preenche o formulário. Editora, cidade,
+    // ano e edição não têm campo aqui (vão para a referência), então aparecem no aviso para a pessoa conferir.
+    const fichaBtn = $('#ficha-btn', root);
+    if (fichaBtn) {
+      const fichaFile = $('#ficha-file', root), fichaStatus = $('#ficha-status', root);
+      fichaBtn.onclick = () => { fichaFile.value = ''; fichaFile.click(); };
+      fichaFile.onchange = async () => {
+        const f = fichaFile.files[0];
+        if (!f) return;
+        const bf = $('#book-form', root);
+        fichaBtn.disabled = true;
+        fichaStatus.textContent = tr('Lendo a foto com IA…');
+        try {
+          const { photoForAI } = await import('./ocr.js');
+          const r = await aiRun('bookphoto', { image: await photoForAI(f) });
+          if (!r?.found || !r.title) { fichaStatus.textContent = tr('Não consegui ler os dados do livro nessa foto. Tente a página de créditos, com boa luz.'); return; }
+          bf.title.value = [r.title, r.subtitle].filter(Boolean).join(': ');
+          if (r.author) bf.author.value = r.author;
+          if (r.pages > 0) bf.pages.value = r.pages;
+          const isbn = String(r.isbn || '').replace(/\D/g, '');
+          if (isbn.length === 10 || isbn.length === 13) bf.isbn.value = isbn;
+          const year = /^(1[5-9]|20)\d\d$/.test(r.year) ? r.year : '';
+          edicao = { ...edicao, ...Object.fromEntries(Object.entries({ publisher: r.publisher, city: r.city, year, edition: String(r.edition || '').replace(/\D/g, '') }).filter(([, v]) => v)) };
+          const extra = [edicao.publisher, edicao.city, edicao.year, edicao.edition ? `${edicao.edition}ª ${tr('ed.')}` : ''].filter(Boolean).join(', ');
+          fichaStatus.textContent = `✔ ${tr('Preenchido pela foto.')} ${extra ? `${tr('Para a referência:')} ${extra}. ` : ''}${tr('Confira antes de salvar.')}`;
+          modal.dataset.dirty = '1';
+        } catch (e) {
+          fichaStatus.textContent = e.message ? `${tr('Erro na leitura por IA:')} ${e.message}` : tr('Fotografe a capa ou a página de créditos (a da ficha catalográfica): a IA preenche título, autor, editora, cidade, ano e ISBN.');
+        } finally {
+          fichaBtn.disabled = false;
+        }
+      };
+    }
     form.genre.oninput = () => { $('#subthemes-wrap', root).innerHTML = datalist('subthemes', subthemeOptions(form.genre.value)); };
     let found = [];
     const doLookup = async () => {

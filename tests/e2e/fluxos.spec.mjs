@@ -132,6 +132,76 @@ test('novo livro: a busca junta Google Livros e Open Library, mostra a edição 
   await expect(page.locator('#book-form [name="isbn"]')).toHaveValue('9788539003830');
 });
 
+test('artigo: "Resumo" pede o resumo à IA uma vez, guarda no artigo e mostra no topo @celular', async ({ page }) => {
+  await semear(page, { books: [artigo('a1', { blocks: [{ t: 'p', x: 'Ler devagar dá tempo para cada ideia se ligar ao que você já sabe, e isso muda tudo na memória. '.repeat(6) }] }), artigo('a2', { title: 'Curto', blocks: [{ t: 'p', x: 'Texto curto.' }] })] });
+  await page.goto('/#/artigo/a1');
+  const pedidos = await page.evaluateHandle(() => {
+    const log = [];
+    globalThis.__aiMock = async (task, input) => {
+      log.push({ task, title: input.title, chars: input.text.length });
+      return { gist: `Ler devagar fixa melhor (${log.length}).`, points: ['Cada ideia precisa de tempo.', 'Revisar em intervalos ajuda.', ''], audience: 'Para quem estuda.' };
+    };
+    return log;
+  });
+  await expect(page.locator('#art-summary')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Resumo', exact: true }).click();
+  const card = page.locator('#art-summary');
+  await expect(card).toContainText('Ler devagar fixa melhor (1).');
+  await expect(card.locator('li')).toHaveText(['Cada ideia precisa de tempo.', 'Revisar em intervalos ajuda.']); // ponto vazio fica de fora
+  await expect(card).toContainText('Para quem estuda.');
+  await expect(card).toContainText('Gerado por IA');
+  await expect(page.getByRole('button', { name: 'Resumo', exact: true })).toHaveCount(0); // já tem: o botão dá lugar ao "Refazer"
+  // fica guardado: reabrir não chama a IA de novo
+  await page.goto('/#/artigos');
+  await page.goto('/#/artigo/a1');
+  await expect(page.locator('#art-summary')).toContainText('Ler devagar fixa melhor (1).');
+  expect((await pedidos.jsonValue()).map((p) => [p.task, p.title])).toEqual([['artsummary', 'Por que ler devagar ajuda a lembrar']]);
+  const salvo = (await lerBanco(page, 'books')).find((b) => b.id === 'a1');
+  expect(salvo.summary.points).toHaveLength(2);
+  // "Refazer" troca o resumo
+  await page.getByRole('button', { name: 'Refazer' }).click();
+  await expect(page.locator('#art-summary')).toContainText('Ler devagar fixa melhor (2).');
+  // artigo sem texto suficiente não oferece resumo
+  await page.goto('/#/artigo/a2');
+  await expect(page.getByRole('heading', { name: 'Curto' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Resumo', exact: true })).toHaveCount(0);
+});
+
+test('novo livro: "Preencher pela foto" lê a ficha com IA e guarda editora, cidade e ano para a referência @celular', async ({ page }) => {
+  await semear(page, { settings: { aiKey: 'chave-de-teste' } }); // modo pessoal com IA ligada (as chamadas são simuladas)
+  await page.goto('/#/livros');
+  const pedidos = await page.evaluateHandle(() => {
+    const log = [];
+    globalThis.__aiMock = async (task, input) => {
+      log.push({ task, image: input.image.length });
+      return log.length === 1
+        ? { found: true, title: 'Rápido e devagar', subtitle: 'Duas formas de pensar', author: 'Daniel Kahneman', publisher: 'Objetiva', city: 'Rio de Janeiro', year: '2012', edition: '1', isbn: '978-85-390-0383-9', pages: 608 }
+        : { found: false, title: '', subtitle: '', author: '', publisher: '', city: '', year: '', edition: '', isbn: '', pages: 0 };
+    };
+    return log;
+  });
+  await page.locator('[data-action="newBook"]').first().click();
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  await expect(page.getByRole('button', { name: 'Preencher pela foto' })).toBeVisible();
+  await page.locator('#ficha-file').setInputFiles({ name: 'ficha.png', mimeType: 'image/png', buffer: png });
+  await expect(page.locator('#ficha-status')).toContainText('Preenchido pela foto.');
+  await expect(page.locator('#ficha-status')).toContainText('Objetiva, Rio de Janeiro, 2012, 1ª ed.');
+  const form = page.locator('#book-form');
+  await expect(form.locator('[name="title"]')).toHaveValue('Rápido e devagar: Duas formas de pensar');
+  await expect(form.locator('[name="author"]')).toHaveValue('Daniel Kahneman');
+  await expect(form.locator('[name="pages"]')).toHaveValue('608');
+  await expect(form.locator('[name="isbn"]')).toHaveValue('9788539003839');
+  // foto que não é de livro: avisa e não apaga o que já estava preenchido
+  await page.locator('#ficha-file').setInputFiles({ name: 'outra.png', mimeType: 'image/png', buffer: png });
+  await expect(page.locator('#ficha-status')).toContainText('Não consegui ler os dados do livro');
+  await expect(form.locator('[name="title"]')).toHaveValue('Rápido e devagar: Duas formas de pensar');
+  await form.getByRole('button', { name: 'Salvar' }).click();
+  await expect(form).toBeHidden();
+  const [livroSalvo] = await lerBanco(page, 'books');
+  expect(livroSalvo).toMatchObject({ title: 'Rápido e devagar: Duas formas de pensar', publisher: 'Objetiva', city: 'Rio de Janeiro', year: '2012', edition: '1', isbn: '9788539003839' });
+  expect((await pedidos.jsonValue()).map((p) => p.task)).toEqual(['bookphoto', 'bookphoto']);
+});
+
 test('busca única: encontra livro, nota e texto de artigo', async ({ page }) => {
   await semear(page, { books: [livro('b1'), artigo('a1')], notes: [nota('n1', 'b1', 'A memória gosta de pausas.')] });
   await page.goto('/#/');

@@ -105,6 +105,21 @@ export function markHighlights(html, quotes) {
   return out;
 }
 
+// Resumo por IA: guardado no próprio artigo (não é refeito nem cobrado de novo a cada abertura)
+const articleText = (a) => (a.blocks || []).map((b) => b.x).join('\n');
+const canSummarize = (a) => articleText(a).trim().length >= 400;
+function summaryCard(a) {
+  const s = a.summary;
+  if (!s?.gist) return '';
+  return `<section class="art-summary" id="art-summary">
+    <div class="row between gap-s"><b>✨ Resumo</b><button class="btn small ghost" data-action="articleSummary" data-id="${a.id}" data-redo="1">Refazer</button></div>
+    <p data-no-tr>${esc(s.gist)}</p>
+    <ul data-no-tr>${(s.points || []).map((p) => `<li>${esc(p)}</li>`).join('')}</ul>
+    ${s.audience ? `<p class="small" data-no-tr>${esc(s.audience)}</p>` : ''}
+    <span class="hint">Gerado por IA a partir do texto do artigo. Pode conter erros.</span>
+  </section>`;
+}
+
 export function articleView(id) {
   const a = state.articles.find((x) => x.id === id);
   if (!a) return `<a href="#/artigos" class="back">← Artigos</a>${empty('Artigo não encontrado.')}`;
@@ -121,9 +136,11 @@ export function articleView(id) {
       <button class="btn small" data-action="reference" data-id="${a.id}">📚 Referência</button>
       <button class="btn small" data-action="articleRead" data-id="${a.id}">${a.status === 'finished' ? '✓ Lido' : '✔ Marcar como lido'}</button>
       <button class="btn small" data-action="newNote" data-id="${a.id}">✍️ Nota</button>
+      ${!a.summary && canSummarize(a) ? `<button class="btn small" data-action="articleSummary" data-id="${a.id}">✨ Resumo</button>` : ''}
       <button class="btn small ghost" data-action="deleteArticle" data-id="${a.id}">🗑️ Excluir</button>
     </div>
     ${articleTags(a)}
+    ${summaryCard(a)}
     <div class="reader-body" id="reader-body">${body || `<p class="nudge">Este artigo foi guardado só como link. Leia no <a href="${esc(safeHref(a.url))}" target="_blank" rel="noopener noreferrer">site original ↗</a> e registre aqui seus grifos com <b>✍️ Nota</b>, ou baixe o PDF de lá e use <a href="#" data-action="addPdf">📄 Adicionar PDF</a>.</p>`}</div>
   </article>
   <h3>Seus grifos (${notes.length})</h3>
@@ -435,6 +452,21 @@ export const articleActions = {
       articleFallback(url, e.message);
     } finally {
       if (btn?.isConnected) { btn.disabled = false; btn.textContent = 'Salvar'; }
+    }
+  },
+  async articleSummary({ id }, el) {
+    const a = state.articles.find((x) => x.id === id);
+    if (!a || !canSummarize(a)) return;
+    const label = el?.textContent;
+    if (el) { el.disabled = true; el.textContent = '✨ Resumindo…'; }
+    try {
+      const r = await aiRun('artsummary', { title: a.title, site: a.site || '', text: articleText(a) });
+      const points = (r?.points || []).map((p) => String(p).trim()).filter(Boolean).slice(0, 6);
+      if (!r?.gist || !points.length) throw new Error('A IA não devolveu um resumo. Tente de novo.');
+      await commit(() => persist('books', { ...a, summary: { gist: String(r.gist).trim(), points, audience: String(r.audience || '').trim(), at: Date.now() } }));
+    } catch (e) {
+      if (e.message) toast(esc(e.message), 'err');
+      if (el?.isConnected) { el.disabled = false; el.textContent = label; }
     }
   },
   classifyArticle({ id }) {
