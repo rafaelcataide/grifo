@@ -466,5 +466,6 @@ export async function downloadPdf(id) {
 }
 export async function deletePdf(id) {
   const sb = await client();
-  await sb.storage.from('pdfs').remove([pdfPath(id)]);
+  const { error } = await sb.storage.from('pdfs').remove([pdfPath(id)]);
+  if (error) throw error;
 }

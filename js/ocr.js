@@ -608,7 +608,12 @@ export async function runOCR(file, mode, onProgress = () => {}, { crop } = {}) {
     return texts.join('\n\n');
   }
 
-  const result = (text, regions, boxes) => ({ text, regions, preview: preview(src, w, h, boxes), size: [bmp.width, bmp.height], conf: confN ? Math.round(confSum / confN) : 0, angle });
+  // forAI: quando o aparelho achou os grifos, a foto para a leitura por IA leva só esses trechos (o resto
+  // fica branco); assim a IA não tem como copiar o texto que não está grifado
+  const result = (text, regions, boxes) => ({
+    text, regions, preview: preview(src, w, h, boxes), size: [bmp.width, bmp.height], conf: confN ? Math.round(confSum / confN) : 0, angle,
+    forAI: boxes.length ? () => jpegB64(onlyBoxes(src, w, h, boxes)) : null,
+  });
   // Lê tudo o que está na imagem (página inteira, ou a área marcada quando não há grifo nela)
   async function readWhole() {
     await setMode('3');
@@ -662,6 +667,30 @@ export async function runOCR(file, mode, onProgress = () => {}, { crop } = {}) {
   return result('', last.passages.length, last.passages);
 }
 
+/** Cópia da imagem só com os retângulos dados (com uma folga); o resto fica branco. Lado maior até maxSide. */
+export function onlyBoxes(source, w, h, boxes, maxSide = 1568) {
+  const k = Math.min(1, maxSide / Math.max(w, h));
+  const c = canvasOf(Math.max(1, Math.round(w * k)), Math.max(1, Math.round(h * k)));
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.imageSmoothingQuality = 'high';
+  for (const b of boxes) {
+    const pad = Math.max(6, Math.round((b.y1 - b.y0) * 0.06)); // folga pequena: não entra a linha de cima nem a de baixo
+    const x0 = Math.max(0, b.x0 - pad * 2), y0 = Math.max(0, b.y0 - pad), x1 = Math.min(w, b.x1 + pad * 2), y1 = Math.min(h, b.y1 + pad);
+    ctx.drawImage(source, x0, y0, x1 - x0, y1 - y0, x0 * k, y0 * k, (x1 - x0) * k, (y1 - y0) * k);
+  }
+  return c;
+}
+
+async function jpegB64(c) {
+  const blob = await new Promise((ok) => c.toBlob(ok, 'image/jpeg', 0.85));
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
 /**
  * Foto pronta para a leitura por IA: só a área escolhida, com a rotação da câmera aplicada, reduzida
  * (lado maior de até maxSide) e em JPEG. Devolve o conteúdo em base64 (sem o prefixo "data:").
@@ -678,9 +707,5 @@ export async function photoForAI(file, crop, maxSide = 1568) {
   ctx.fillRect(0, 0, c.width, c.height);
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(bmp, sx, sy, sw, sh, 0, 0, c.width, c.height);
-  const blob = await new Promise((ok) => c.toBlob(ok, 'image/jpeg', 0.85));
-  const bytes = new Uint8Array(await blob.arrayBuffer());
-  let bin = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(bin);
+  return jpegB64(c);
 }

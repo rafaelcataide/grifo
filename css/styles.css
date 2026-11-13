@@ -761,8 +761,11 @@ dialog.cam::backdrop { background: #000; }
 .cam-shutter { width: 76px; height: 76px; border-radius: 50%; border: 4px solid #fff; background: transparent; padding: 5px; cursor: pointer; }
 .cam-shutter span { display: block; width: 100%; height: 100%; border-radius: 50%; background: #fff; }
 .cam.steady .cam-shutter span { background: #6ee7a8; }
-.cam-auto, .cam-res { width: 130px; white-space: nowrap; font-size: .78rem; text-shadow: 0 1px 4px #000; }
-.cam-res { text-align: right; opacity: .75; }
+.cam-auto, .cam-side { width: 130px; white-space: nowrap; font-size: .78rem; text-shadow: 0 1px 4px #000; }
+.cam-side { display: grid; justify-items: end; gap: 6px; }
+.cam-res { opacity: .75; }
+.cam-sys { border: 1px solid rgb(255 255 255 / .7); border-radius: 999px; background: rgb(0 0 0 / .45); color: #fff; font: inherit; padding: 7px 10px; cursor: pointer; }
+.pdf-hl { position: absolute; background: rgb(255 214 64 / .45); mix-blend-mode: multiply; border-radius: 2px; pointer-events: none; }
 .cam.flash::after { content: ''; position: absolute; inset: 0; background: #fff; animation: camflash .25s ease-out forwards; }
 @keyframes camflash { to { opacity: 0; } }
 

@@ -2,7 +2,7 @@
 // Parte do app.js separada por tela: usa o estado e os utilitários do app (importados de ../app.js).
 import { LINK_RE, esc, norm, plainText, safeHref } from '../util.js';
 import { db, uid } from '../db.js';
-import { lang } from '../i18n.js';
+import { lang, tr } from '../i18n.js';
 import * as G from '../game.js';
 import * as Cloud from '../cloud.js';
 import * as AI from '../ai.js';
@@ -31,7 +31,7 @@ export function articleItem(a) {
   return `<a class="card book art-item" href="${srcHref(a)}">
       ${a.cover ? `<img class="art-thumb" src="${esc(a.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="art-thumb ph">${a.kind === 'pdf' ? '📄' : '📰'}</span>`}
       <div class="grow"><div class="book-title">${esc(a.title)}</div>
-        <div class="small muted">${a.kind === 'pdf' ? `PDF · ${a.pages || '?'} páginas` : `${esc(a.site || '')} · ${readMinutes(a)} min`}${notes ? ` · ${notes} ${notes === 1 ? 'grifo' : 'grifos'}` : ''}</div>
+        <div class="small muted">${a.kind === 'pdf' ? `PDF · ${a.pages || '?'} páginas${a.fileGone ? ` · ${tr('sem o arquivo')}` : ''}` : `${esc(a.site || '')} · ${readMinutes(a)} min`}${notes ? ` · ${notes} ${notes === 1 ? 'grifo' : 'grifos'}` : ''}</div>
         <div class="chips" style="margin-top:4px">${status}${a.genre ? `<span class="chip tag">${esc(a.genre)}</span>` : ''}</div></div></a>`;
 }
 
@@ -175,7 +175,7 @@ export function attachGrifar(bodyEl, btn, onSave, { sourceId = null, refine = nu
     const block = el?.closest('p, li, blockquote, h1, h2, h3, h4, .pdf-page, figcaption, td') || el;
     // refine: no PDF em duas colunas, refaz o texto seguindo a coluna onde a seleção começou
     const text = (refine && refine(r)) || r.toString();
-    return { text: text.replace(/\s+/g, ' ').trim(), page: Number(el?.closest('[data-page]')?.dataset.page) || null, around: block?.textContent || '' };
+    return { text: text.replace(/\s+/g, ' ').trim(), page: Number(el?.closest('[data-page]')?.dataset.page) || null, around: block?.textContent || '', range: r, refined: text !== r.toString() };
   };
   // guarda o último trecho selecionado: no toque, a seleção pode sumir antes do clique chegar ao botão
   let last = null;
@@ -198,7 +198,7 @@ export function attachGrifar(bodyEl, btn, onSave, { sourceId = null, refine = nu
     last = null;
     bar.hidden = true;
     getSelection().removeAllRanges();
-    await onSave(t.text, t.page);
+    await onSave(t.text, t.page, t);
   };
   if (defineBtn) defineBtn.onclick = async () => {
     const t = sel() || last;
@@ -245,6 +245,8 @@ articleView.mount = (id) => {
 // O arquivo fica no aparelho (IndexedDB); no Plus também vai para o armazenamento da conta e é baixado em outro aparelho.
 export const canSyncPdf = () => Cloud.enabled() && Cloud.user() && ['plus', 'pro'].includes(Cloud.plan());
 export async function pdfBlob(a) {
+  // arquivo apagado de propósito ("Apagar só o arquivo"): some também dos outros aparelhos da conta
+  if (a.fileGone) { await db.delFile(a.id).catch(() => {}); return null; }
   const local = await db.getFile(a.id);
   if (local) return local;
   if (!canSyncPdf() || !a.synced) return null;
@@ -268,7 +270,8 @@ export function pdfView(id) {
       <button class="btn small" data-action="reference" data-id="${a.id}">📚 Referência</button>
       <button class="btn small" data-action="articleRead" data-id="${a.id}">${a.status === 'finished' ? '✓ Lido' : '✔ Marcar como lido'}</button>
       <button class="btn small" data-action="newNote" data-id="${a.id}">✍️ Nota</button>
-      <button class="btn small" data-action="pdfImport" data-id="${a.id}">📥 Importar grifos do arquivo</button>
+      ${a.fileGone ? '' : `<button class="btn small" data-action="pdfImport" data-id="${a.id}">📥 Importar grifos do arquivo</button>
+      <button class="btn small ghost" data-action="pdfRemoveFile" data-id="${a.id}">📄 Apagar só o arquivo</button>`}
       <button class="btn small ghost" data-action="deleteArticle" data-id="${a.id}">🗑️ Excluir</button>
     </div>
     ${articleTags(a)}
@@ -286,6 +289,11 @@ pdfView.mount = async (id) => {
   let blob;
   try { blob = await pdfBlob(a); } catch { blob = null; }
   if (!bodyEl.isConnected) return;
+  if (!blob && a.fileGone) {
+    status.innerHTML = 'O arquivo deste PDF foi apagado. Os grifos, o título e os demais dados continuam aqui. <button class="btn small" id="pdf-reattach">📄 Colocar o arquivo de novo</button>';
+    $('#pdf-reattach').onclick = () => actions.addPdf({ id });
+    return;
+  }
   if (!blob) {
     status.innerHTML = `O arquivo deste PDF está em outro aparelho${canSyncPdf() ? '' : ' (no Plus, seus PDFs sincronizam entre aparelhos)'}. <button class="btn small" id="pdf-reattach">📄 Escolher o arquivo</button>`;
     $('#pdf-reattach').onclick = () => actions.addPdf({ id });
@@ -301,18 +309,27 @@ pdfView.mount = async (id) => {
   const v = first.getViewport({ scale: 1 });
   const h = Math.round((width / v.width) * v.height);
   bodyEl.innerHTML = Array.from({ length: doc.numPages }, (_, i) => `<div class="pdf-page" data-page="${i + 1}" style="width:${width}px;height:${h}px"><span class="pdf-pn">${i + 1}</span></div>`).join('');
+  // os grifos ficam pintados na página enquanto o arquivo existir (os novos, os antigos e os importados)
+  const paint = (el) => P.paintHighlights(el, state.notes.filter((n) => n.bookId === id && n.page === Number(el.dataset.page)));
   const io = new IntersectionObserver((entries) => {
     for (const e of entries) {
       if (!e.isIntersecting || e.target.dataset.done) continue;
       e.target.dataset.done = '1';
-      P.renderPage(doc, Number(e.target.dataset.page), e.target, width).catch(() => { e.target.dataset.done = ''; });
+      P.renderPage(doc, Number(e.target.dataset.page), e.target, width).then(() => { e.target.dataset.done = '2'; paint(e.target); }).catch(() => { e.target.dataset.done = ''; });
     }
   }, { rootMargin: '900px 0px' });
   bodyEl.querySelectorAll('.pdf-page').forEach((el) => io.observe(el));
   trackReading(id, bodyEl);
-  attachGrifar(bodyEl, $('#grifar-btn'), async (text, page) => {
+  attachGrifar(bodyEl, $('#grifar-btn'), async (text, page, t) => {
     const note = { id: uid(), createdAt: Date.now(), bookId: id, text, kind: 'quote', source: 'pdf', tags: [], page };
+    // onde o grifo fica na página (frações): seleção refeita em duas colunas é achada pelo texto na hora de pintar
+    const pageEl = page && bodyEl.querySelector(`.pdf-page[data-page="${page}"]`);
+    if (pageEl && t?.range && !t.refined) {
+      const rects = P.rangeRects(t.range, pageEl);
+      if (rects.length) note.rects = rects;
+    }
     await commit(() => persist('notes', note), { rerender: false });
+    if (pageEl) paint(pageEl);
     $('#pdf-notes').innerHTML = pdfNotesHtml(id);
     toast(`🖍️ Grifado${page ? ` (p. ${page})` : ''} · <u>adicionar reflexão</u>`, '', () => noteForm(noteById(note.id)));
   }, { sourceId: id, refine: P.columnText });
@@ -333,6 +350,7 @@ export async function importPdfHighlights(a, doc, P, auto = false) {
       await persist('books', { ...state.articles.find((y) => y.id === a.id), imported: true });
     }, { rerender: false });
     if ($('#pdf-notes')) $('#pdf-notes').innerHTML = pdfNotesHtml(a.id);
+    document.querySelectorAll('.pdf-page[data-done="2"]').forEach((el) => P.paintHighlights(el, state.notes.filter((n) => n.bookId === a.id && n.page === Number(el.dataset.page))));
     if (add.length) toast(`📥 ${add.length} ${add.length === 1 ? 'grifo importado' : 'grifos importados'} do arquivo`);
     else if (!auto) toast(found.length ? 'Os grifos do arquivo já estavam aqui.' : 'Este PDF não tem grifos feitos em outros apps.');
   } catch (e) {
@@ -357,6 +375,20 @@ export const pdfActions = {
     const name = decodeURIComponent(res.headers.get('x-name') || 'documento.pdf');
     importPdfFile(new File([await res.blob()], name, { type: 'application/pdf' }));
   },
+  // apaga o arquivo (do aparelho e da conta) e mantém o registro: título, autor, tags, referência e grifos
+  async pdfRemoveFile({ id }) {
+    const a = state.articles.find((x) => x.id === id);
+    if (!a) return;
+    const notes = state.notes.filter((n) => n.bookId === id).length;
+    if (!confirm(tr('Apagar o arquivo deste PDF? O título, os dados e os grifos continuam guardados; só o arquivo sai do aparelho e da sua conta. Isso não pode ser desfeito.'))) return;
+    await db.delFile(id);
+    let onServer = false;
+    if (a.synced && Cloud.enabled() && Cloud.user()) {
+      try { await Cloud.deletePdf(id); } catch { onServer = true; }
+    }
+    await commit(() => persist('books', { ...a, fileGone: true, synced: onServer, size: 0 }));
+    toast(onServer ? 'Arquivo apagado deste aparelho, mas não consegui apagar da conta agora. Tente de novo com internet.' : `📄 Arquivo apagado · ${notes} ${notes === 1 ? 'grifo guardado' : 'grifos guardados'}`, onServer ? 'err' : '');
+  },
   async pdfImport({ id }) {
     const a = state.articles.find((x) => x.id === id);
     const blob = await pdfBlob(a);
@@ -377,7 +409,7 @@ export async function importPdfFile(f, id) {
     const doc = await P.openPdf(f);
     const meta = await P.info(doc, f.name);
     const old = id && state.articles.find((x) => x.id === id);
-    const rec = old ? { ...old, pages: meta.pages } : {
+    const rec = old ? { ...old, pages: meta.pages, fileGone: false, fileName: f.name, size: f.size } : {
       id: uid(), createdAt: Date.now(), kind: 'pdf', status: 'reading', startDate: G.ymd(), purpose: 'hobby', genre: '', subtheme: '', pages: meta.pages, currentPage: 0, rating: 0, isbn: '',
       title: meta.title || 'PDF sem título', author: meta.author, fileName: f.name, size: f.size,
     };

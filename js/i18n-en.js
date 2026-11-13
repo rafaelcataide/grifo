@@ -1098,3 +1098,14 @@ Object.assign(EN, {
   'A IA não devolveu um resumo. Tente de novo.': 'The AI returned no summary. Try again.',
   'quando você usa a IA, o texto das notas envolvidas (ou a foto, na leitura de grifos e da ficha do livro por IA) é enviado para gerar a resposta. A Anthropic não usa esses dados para treinar modelos pela API.': "when you use the AI, the text of the notes involved (or the photo, when AI reads highlights or a book's details) is sent to generate the answer. Anthropic doesn't use this API data to train models.",
 });
+
+Object.assign(EN, {
+  'Câmera do celular': 'Phone camera',
+  'Nesse caso a foto é enviada à Anthropic só para extrair o texto. Desmarque para ler só no aparelho.': 'In that case the photo is sent to Anthropic only to extract the text. Untick to read on the device only.',
+  'Apagar só o arquivo': 'Delete the file only',
+  'Apagar o arquivo deste PDF? O título, os dados e os grifos continuam guardados; só o arquivo sai do aparelho e da sua conta. Isso não pode ser desfeito.': 'Delete this PDF file? The title, details and highlights are kept; only the file is removed from this device and your account. This cannot be undone.',
+  'O arquivo deste PDF foi apagado. Os grifos, o título e os demais dados continuam aqui.': 'This PDF file was deleted. The highlights, title and other details are still here.',
+  'Colocar o arquivo de novo': 'Add the file again',
+  'sem o arquivo': 'file removed',
+  'Arquivo apagado deste aparelho, mas não consegui apagar da conta agora. Tente de novo com internet.': 'File deleted from this device, but it could not be deleted from the account right now. Try again when online.',
+});

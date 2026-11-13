@@ -2731,12 +2731,7 @@ export function noteForm(existing, { bookId, autoOCR, link } = {}) {
         <button type="button" class="btn small" id="ocr-area">✂️ Ajustar área</button>
         <button type="button" class="btn small" id="ocr-fix">✨ Ler com IA</button>
       </div>
-      <div class="ocr-consent" id="ocr-consent" hidden>
-        <span class="small">A leitura ficou difícil. Quer que a IA leia esta foto? Ela é enviada à Anthropic só para extrair o texto e não fica guardada nos nossos servidores.</span>
-        <div class="row gap-s wrap"><button type="button" class="btn small primary" id="ocr-consent-yes">Sim, usar a IA</button><button type="button" class="btn small ghost" id="ocr-consent-no">Agora não</button></div>
-        <span class="hint">Vale para as próximas fotos difíceis. Você muda isso na opção abaixo.</span>
-      </div>
-      ${AI.available(state.settings) === 'ok' ? '<label class="check small" id="ocr-ai-wrap"><input type="checkbox" id="ocr-ai"> Usar a IA quando a foto estiver difícil de ler</label>' : ''}
+      ${AI.available(state.settings) === 'ok' ? '<label class="check small" id="ocr-ai-wrap"><input type="checkbox" id="ocr-ai"> Usar a IA quando a foto estiver difícil de ler</label><span class="hint" id="ocr-ai-hint">Nesse caso a foto é enviada à Anthropic só para extrair o texto. Desmarque para ler só no aparelho.</span>' : ''}
       <img id="ocr-preview" alt="Pré-visualização dos trechos detectados" hidden>
     </div>
     <label>Título (opcional) <input name="title" value="${esc(noteTitle(n))}" placeholder="ex: Normalização"><span class="hint">Com título, outras notas podem citar esta com [[título]].</span></label>
@@ -2782,9 +2777,11 @@ export function noteForm(existing, { bookId, autoOCR, link } = {}) {
           const Cam = await import('./camera.js');
           if (Cam.cameraAvailable()) {
             try {
-              const blob = await Cam.capturePage({ texts: { hint: tr('Enquadre a página e segure firme'), opening: tr('Abrindo a câmera…'), steady: tr('Segure firme…'), auto: tr('Foto automática'), close: tr('Fechar'), torch: tr('Lanterna'), shot: tr('Tirar foto') } });
-              if (blob) newPhoto(blob);
-              return;
+              const blob = await Cam.capturePage({ texts: { hint: tr('Enquadre a página e segure firme'), opening: tr('Abrindo a câmera…'), steady: tr('Segure firme…'), auto: tr('Foto automática'), close: tr('Fechar'), torch: tr('Lanterna'), shot: tr('Tirar foto'), system: tr('Câmera do celular') } });
+              if (blob !== 'system') {
+                if (blob) newPhoto(blob);
+                return;
+              }
             } catch (err) {
               console.warn('câmera do Grifo indisponível, usando a do sistema', err);
             }
@@ -2798,16 +2795,15 @@ export function noteForm(existing, { bookId, autoOCR, link } = {}) {
     // A foto é lida na hora, sem passos no meio. Depois da leitura dá para marcar só uma área da foto
     // ("Ajustar área") ou pedir a leitura por IA; as duas trocam o texto lido dessa mesma foto.
     const after = $('#ocr-after', root), areaBtn = $('#ocr-area', root), fixBtn = $('#ocr-fix', root), aiAuto = $('#ocr-ai', root);
-    // A foto só sai do aparelho com um "sim": a opção começa desligada e, na primeira foto difícil,
-    // o app pergunta. A resposta fica guardada no aparelho ('1' sim, '0' não; sem valor = ainda não perguntou).
-    const consent = $('#ocr-consent', root);
-    const aiPref = () => { try { return localStorage.getItem('grifo.ocrAI'); } catch { return '0'; } };
+    // Foto difícil de ler: a IA lê sozinha (a opção vem ligada, com o aviso de que a foto é enviada).
+    // Quem desligar fica com a escolha guardada no aparelho ('0'); "Ler com IA" continua à mão.
+    const aiPref = () => { try { return localStorage.getItem('grifo.ocrAI'); } catch { return null; } };
     const setAiPref = (on) => { try { localStorage.setItem('grifo.ocrAI', on ? '1' : '0'); } catch { /* sem armazenamento */ } if (aiAuto) aiAuto.checked = on; };
     if (aiAuto) {
-      aiAuto.checked = aiPref() === '1';
+      aiAuto.checked = aiPref() !== '0';
       aiAuto.onchange = () => setAiPref(aiAuto.checked);
     }
-    let lastOcr = '', photo = null, photoArea = null;
+    let lastOcr = '', photo = null, photoArea = null, lastRead = null;
     const putText = (text) => {
       const cur = form.text.value;
       form.text.value = lastOcr && cur.includes(lastOcr) ? cur.replace(lastOcr, text) : cur.trim() ? `${cur.trim()}\n\n${text}` : text;
@@ -2819,7 +2815,8 @@ export function noteForm(existing, { bookId, autoOCR, link } = {}) {
     // leitura por IA da foto (ou da área marcada); devolve o texto, ou '' se a IA não achou nada
     const readWithAI = async (quiet) => {
       const { photoForAI } = await import('./ocr.js');
-      const image = await photoForAI(photo, photoArea || undefined);
+      // só os grifos: se o aparelho achou os trechos, a IA recebe a foto só com eles (não copia o que não está grifado)
+      const image = mode === 'highlight' && lastRead?.forAI ? await lastRead.forAI() : await photoForAI(photo, photoArea || undefined);
       const r = await (quiet ? aiQuiet : aiRun)('readphoto', { image, mode });
       return r?.found === false ? '' : (r?.text || '').trim();
     };
@@ -2829,13 +2826,13 @@ export function noteForm(existing, { bookId, autoOCR, link } = {}) {
       try {
         const { runOCR } = await import('./ocr.js'); // OCR: só quando há foto
         const r = await runOCR(photo, mode, (msg, p) => { status.textContent = `${msg}…${p != null ? ` ${Math.round(p * 100)}%` : ''}`; }, { crop: photoArea || undefined });
+        lastRead = r;
         img.src = r.preview;
         img.hidden = false;
         after.hidden = false;
         // leitura fraca (nada lido, ou o OCR com pouca certeza): a IA lê a mesma foto, se a pessoa deixou
         let text = r.text, viaAI = false;
         const weak = (!r.text || r.conf < OCR_WEAK) && aiAuto && navigator.onLine !== false;
-        consent.hidden = !(weak && aiPref() === null); // ainda não respondeu: pergunta (a leitura do aparelho já fica no texto)
         if (weak && aiAuto.checked) {
           status.textContent = tr('Foto difícil de ler: lendo com IA…');
           const t = await readWithAI(true).catch(() => '');
@@ -2859,9 +2856,7 @@ export function noteForm(existing, { bookId, autoOCR, link } = {}) {
         busy(false);
       }
     };
-    const newPhoto = (f) => { photo = f; photoArea = null; lastOcr = ''; consent.hidden = true; return readPhoto(); };
-    $('#ocr-consent-no', root).onclick = () => { setAiPref(false); consent.hidden = true; };
-    $('#ocr-consent-yes', root).onclick = () => { setAiPref(true); consent.hidden = true; fixBtn.click(); };
+    const newPhoto = (f) => { photo = f; photoArea = null; lastOcr = ''; lastRead = null; return readPhoto(); };
     const chooseArea = attachCropper(root);
     areaBtn.onclick = async () => {
       if (!photo) return;

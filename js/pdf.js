@@ -169,3 +169,79 @@ export function columnText(range) {
   }
   return out.trim() || null;
 }
+
+// ---------- grifos desenhados por cima da página ----------
+// Junta os retângulos de uma seleção em faixas por linha (o navegador devolve um por pedaço de texto)
+function lineBands(list) {
+  const rs = list.filter((r) => r.width > 1 && r.height > 1).map((r) => ({ x0: r.left, y0: r.top, x1: r.right, y1: r.bottom })).sort((a, b) => a.y0 - b.y0 || a.x0 - b.x0);
+  const out = [];
+  for (const r of rs) {
+    const h = r.y1 - r.y0;
+    const hit = out.find((o) => Math.min(o.y1, r.y1) - Math.max(o.y0, r.y0) > Math.min(h, o.y1 - o.y0) * 0.5 && r.x0 <= o.x1 + h * 1.5 && r.x1 >= o.x0 - h * 1.5);
+    if (hit) { hit.x0 = Math.min(hit.x0, r.x0); hit.x1 = Math.max(hit.x1, r.x1); hit.y0 = Math.min(hit.y0, r.y0); hit.y1 = Math.max(hit.y1, r.y1); } else out.push({ ...r });
+  }
+  return out;
+}
+
+/** Retângulos de um trecho selecionado, em frações (0 a 1) da página: [[x, y, largura, altura], …]. */
+export function rangeRects(range, pageEl) {
+  const box = pageEl.getBoundingClientRect();
+  if (!box.width || !box.height) return [];
+  const f = (n) => Math.round(Math.min(1, Math.max(0, n)) * 10000) / 10000;
+  return lineBands([...range.getClientRects()])
+    .filter((r) => r.x1 > box.left && r.x0 < box.right && r.y1 > box.top && r.y0 < box.bottom && r.x1 - r.x0 < box.width * 0.98)
+    .map((r) => [f((r.x0 - box.left) / box.width), f((r.y0 - box.top) / box.height), f((r.x1 - r.x0) / box.width), f((r.y1 - r.y0) / box.height)]);
+}
+
+/**
+ * Acha um texto na camada de texto da página (ignora espaços, hífens de quebra de linha e maiúsculas)
+ * e devolve os retângulos dele, ou [] se não achar. Serve para os grifos antigos e os importados do arquivo.
+ */
+export function findTextRects(pageEl, text) {
+  const layer = pageEl.querySelector('.textLayer');
+  if (!layer) return [];
+  const skip = /[\s\-\u00ad\u2010\u2011]/;
+  const needle = [...String(text)].filter((ch) => !skip.test(ch)).join('').toLowerCase();
+  if (needle.length < 3) return [];
+  let hay = '';
+  const pos = [];
+  const walker = document.createTreeWalker(layer, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    for (let i = 0; i < n.data.length; i++) {
+      if (skip.test(n.data[i])) continue;
+      const low = n.data[i].toLowerCase();
+      if (low.length !== 1) continue;
+      hay += low;
+      pos.push([n, i]);
+    }
+  }
+  const at = hay.indexOf(needle);
+  if (at < 0) return [];
+  const range = document.createRange();
+  range.setStart(pos[at][0], pos[at][1]);
+  const end = pos[at + needle.length - 1];
+  range.setEnd(end[0], end[1] + 1);
+  return rangeRects(range, pageEl);
+}
+
+/** Desenha os grifos (notas) de uma página já renderizada. Devolve quantos foram desenhados. */
+export function paintHighlights(pageEl, notes) {
+  pageEl.querySelectorAll('.pdf-hl').forEach((x) => x.remove());
+  const layer = pageEl.querySelector('.textLayer');
+  if (!layer) return 0;
+  let n = 0;
+  for (const note of notes) {
+    const quote = String(note.text || '').split('\n\n')[0]; // a reflexão escrita depois do trecho não está no PDF
+    const rects = note.rects?.length ? note.rects : findTextRects(pageEl, quote);
+    if (!rects.length) continue;
+    n++;
+    for (const [x, y, w, h] of rects) {
+      const d = document.createElement('div');
+      d.className = 'pdf-hl';
+      d.dataset.note = note.id;
+      d.style.cssText = `left:${x * 100}%;top:${y * 100}%;width:${w * 100}%;height:${h * 100}%`;
+      pageEl.insertBefore(d, layer);
+    }
+  }
+  return n;
+}

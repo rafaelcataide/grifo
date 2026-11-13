@@ -23,11 +23,12 @@ function frameStats(ctx, w, h, prev) {
 }
 
 /**
- * Abre a câmera em tela cheia e devolve a foto (Blob JPEG) ou null se a pessoa fechar.
+ * Abre a câmera em tela cheia e devolve a foto (Blob JPEG), null se a pessoa fechar ou 'system' se ela
+ * pedir a câmera do aparelho.
  * Lança erro se a câmera não puder ser usada (sem permissão, sem câmera): quem chama usa a câmera do sistema.
  */
 export async function capturePage({ texts = {} } = {}) {
-  const t = { hint: 'Enquadre a página e segure firme', opening: 'Abrindo a câmera…', steady: 'Segure firme…', auto: 'Foto automática', close: 'Fechar', torch: 'Lanterna', shot: 'Tirar foto', ...texts };
+  const t = { hint: 'Enquadre a página e segure firme', opening: 'Abrindo a câmera…', steady: 'Segure firme…', auto: 'Foto automática', close: 'Fechar', torch: 'Lanterna', shot: 'Tirar foto', system: 'Câmera do celular', ...texts };
   const limit = (p, ms) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error('demorou')), ms))]);
   // <dialog> em tela cheia: fica por cima até da janela da nota (as duas ficam na camada do topo).
   // Abre na hora ("Abrindo a câmera…"): algumas câmeras demoram a responder.
@@ -39,7 +40,8 @@ export async function capturePage({ texts = {} } = {}) {
       <span class="cam-hint" aria-live="polite">${t.opening}</span>
       <button type="button" class="cam-btn" data-cam="torch" aria-label="${t.torch}" hidden>🔦</button></div>
     <div class="cam-bottom"><label class="cam-auto"><input type="checkbox" checked> ${t.auto}</label>
-      <button type="button" class="cam-shutter" data-cam="shot" aria-label="${t.shot}"><span></span></button><span class="cam-res"></span></div>`;
+      <button type="button" class="cam-shutter" data-cam="shot" aria-label="${t.shot}"><span></span></button>
+      <span class="cam-side"><button type="button" class="cam-sys" data-cam="system">${t.system}</button><span class="cam-res"></span></span></div>`;
   document.body.append(ui);
   ui.showModal();
   const hint = ui.querySelector('.cam-hint');
@@ -70,21 +72,42 @@ export async function capturePage({ texts = {} } = {}) {
   const caps = track.getCapabilities?.() || {};
   let torchOn = false;
   if (caps.torch) ui.querySelector('[data-cam=torch]').hidden = false;
+  // Alguns aparelhos abrem a câmera em resolução baixa mesmo pedindo a máxima: sobe para o máximo que o
+  // sensor informa e liga o foco contínuo (texto de perto sai borrado com foco fixo).
+  const s0 = track.getSettings?.() || {};
+  if (caps.width?.max && caps.height?.max && s0.width && s0.width * s0.height < caps.width.max * caps.height.max) {
+    await track.applyConstraints({ width: { ideal: caps.width.max }, height: { ideal: caps.height.max } }).catch(() => {});
+  }
+  if (caps.focusMode?.includes?.('continuous')) await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
   const s = track.getSettings?.() || {};
+  // sem foto em resolução cheia (iPhone) e com o vídeo pequeno, a câmera do sistema tira foto melhor
+  if (!('ImageCapture' in window) && s.width && Math.max(s.width, s.height) < 1600) {
+    track.stop();
+    ui.close();
+    ui.remove();
+    throw new Error(`câmera em resolução baixa (${s.width}×${s.height})`);
+  }
   ui.querySelector('.cam-res').textContent = s.width ? `${s.width}×${s.height}` : '';
 
   // foto na resolução máxima: ImageCapture (Android) ou o quadro do vídeo.
   // Algumas câmeras demoram ou travam no takePhoto: depois de 5 s, vale o quadro do vídeo.
   async function take() {
+    let photo = null;
     try {
       if ('ImageCapture' in window) {
         const ic = new window.ImageCapture(track);
         const pc = await limit(ic.getPhotoCapabilities(), 2000).catch(() => null);
         const opts = pc?.imageWidth?.max ? { imageWidth: pc.imageWidth.max, imageHeight: pc.imageHeight?.max } : {};
         if (torchOn) opts.fillLightMode = 'flash';
-        return await limit(ic.takePhoto(opts).catch(() => ic.takePhoto()), 5000);
+        photo = await limit(ic.takePhoto(opts).catch(() => ic.takePhoto()), 5000);
+        // há aparelhos em que a "foto" sai menor que o vídeo: nesse caso vale o quadro do vídeo
+        const bmp = await createImageBitmap(photo);
+        const small = bmp.width * bmp.height < video.videoWidth * video.videoHeight;
+        bmp.close?.();
+        if (!small) return photo;
       }
     } catch { /* cai no quadro do vídeo */ }
+    if (!video.videoWidth) return photo;
     const c = document.createElement('canvas');
     c.width = video.videoWidth; c.height = video.videoHeight;
     c.getContext('2d').drawImage(video, 0, 0);
@@ -96,11 +119,11 @@ export async function capturePage({ texts = {} } = {}) {
     const probe = document.createElement('canvas');
     probe.width = 96; probe.height = 72;
     const pctx = probe.getContext('2d', { willReadFrequently: true });
-    const finish = async (shoot) => {
+    const finish = async (shoot, other = null) => {
       if (done) return;
       done = true;
       clearInterval(timer);
-      let blob = null;
+      let blob = other;
       if (shoot) {
         ui.classList.add('flash');
         shutter.disabled = true;
@@ -131,6 +154,7 @@ export async function capturePage({ texts = {} } = {}) {
       if (!b) return;
       if (b.dataset.cam === 'close') finish(false);
       else if (b.dataset.cam === 'shot') finish(true);
+      else if (b.dataset.cam === 'system') finish(false, 'system'); // a pessoa prefere a câmera do aparelho
       else if (b.dataset.cam === 'torch') {
         torchOn = !torchOn;
         await track.applyConstraints({ advanced: [{ torch: torchOn }] }).catch(() => {});

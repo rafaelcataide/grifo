@@ -225,11 +225,12 @@ TASKS.readphoto = {
   model: HAIKU,
   effort: 'low',
   system: `Você transcreve trechos de páginas de livros a partir de uma foto.
-- Modo "grifos": transcreva SOMENTE o texto marcado com marca-texto (de qualquer cor, mesmo bem claro) ou com o grifo cinza de leitores digitais. Ignore o texto sem marca, cabeçalhos, números de página, legendas e marcas d'água.
+- Modo "grifos": transcreva SOMENTE as palavras que estão sobre um fundo de marca-texto (de qualquer cor, mesmo bem claro) ou sobre o grifo cinza de leitores digitais. Antes de escrever, localize onde cada marca começa e onde termina: o trecho começa na primeira palavra marcada e acaba na última, mesmo no meio de uma frase ou de uma linha. NÃO inclua o resto da frase, a linha de cima, a linha de baixo nem o resto do parágrafo, ainda que o trecho fique sem sentido completo. Na dúvida se uma palavra está marcada, deixe-a de fora. Ignore cabeçalhos, números de página, legendas e marcas d'água.
+- A foto pode vir com partes em branco: são áreas sem grifo que foram apagadas. Leia só o que aparece.
 - Modo "página": transcreva todo o texto principal da página, sem cabeçalho e número de página.
 - Copie exatamente o que está impresso, no idioma original: não corrija, não resuma, não traduza e não complete frases.
 - Junte as linhas em texto corrido e una as palavras separadas por hífen no fim da linha. Trechos grifados separados viram parágrafos separados por uma linha em branco.
-- Se a marca pegar só parte de uma palavra, escreva a palavra inteira.
+- Se a marca pegar só parte de uma palavra, escreva a palavra inteira (só essa palavra).
 - Se não houver texto legível para o modo pedido, responda com found=false e text vazio.`,
   schema: {
     type: 'object',
@@ -239,7 +240,7 @@ TASKS.readphoto = {
   },
   build: ({ image, mode }) => [
     { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: image } },
-    { type: 'text', text: mode === 'page' ? 'Modo: página.' : 'Modo: grifos.' },
+    { type: 'text', text: mode === 'page' ? 'Modo: página.' : 'Modo: grifos. Copie só o que está marcado; texto sem marca fica de fora.' },
   ],
 };
 

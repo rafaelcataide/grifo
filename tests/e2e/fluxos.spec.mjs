@@ -282,6 +282,41 @@ test('PDF: selecionar um trecho da página e Grifar salva a nota com a página @
   await expect(page.getByRole('heading', { name: 'Seus grifos (2)' })).toBeVisible();
   const nova = (await lerBanco(page, 'notes')).find((x) => x.text.startsWith('Ler devagar'));
   expect(nova).toMatchObject({ source: 'pdf', page: 1, kind: 'quote' });
+  // o grifo fica pintado na página, por cima do trecho
+  expect(nova.rects.length).toBeGreaterThan(0);
+  const pintado = page.locator(`.pdf-hl[data-note="${nova.id}"]`).first();
+  await expect(pintado).toBeAttached();
+  const sobre = async () => page.evaluate((id) => {
+    const hl = document.querySelector(`.pdf-hl[data-note="${id}"]`).getBoundingClientRect();
+    const sp = [...document.querySelectorAll('.pdf-page[data-page="1"] .textLayer span')].find((s) => s.textContent.includes('Ler devagar')).getBoundingClientRect();
+    return Math.abs(hl.top - sp.top) < 6 && Math.abs(hl.left - sp.left) < 6 && hl.width > 20;
+  }, nova.id);
+  expect(await sobre()).toBe(true);
+  // o grifo que já vinha no arquivo (importado, sem posição guardada) é achado pelo texto e pintado também
+  const importada = (await lerBanco(page, 'notes')).find((x) => x.id !== nova.id);
+  await expect(page.locator(`.pdf-hl[data-note="${importada.id}"]`).first()).toBeAttached();
+  // reabrir o PDF: os grifos continuam na página
+  await page.reload();
+  await expect(page.locator(`.pdf-hl[data-note="${nova.id}"]`).first()).toBeAttached({ timeout: 30_000 });
+  expect(await sobre()).toBe(true);
+  // "Apagar só o arquivo": o PDF sai, o título e os grifos ficam
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: 'Apagar só o arquivo' }).click();
+  await expect(page.locator('#pdf-status')).toContainText('foi apagado');
+  await expect(page.locator('.pdf-page')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Seus grifos (2)' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Apagar só o arquivo' })).toHaveCount(0);
+  const [reg] = await lerBanco(page, 'books');
+  expect(reg).toMatchObject({ kind: 'pdf', fileGone: true });
+  expect(await page.evaluate(async (id) => (await (await import('/js/db.js')).db.getFile(id)) == null, reg.id)).toBe(true);
+  await page.goto('/#/artigos');
+  await expect(page.locator('#view')).toContainText('sem o arquivo');
+  // dá para colocar o arquivo de novo: os grifos voltam a aparecer na página
+  await page.goto(`/#/pdf/${reg.id}`);
+  const de_novo = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Colocar o arquivo de novo' }).click();
+  await (await de_novo).setFiles({ name: 'guia.pdf', mimeType: 'application/pdf', buffer: pdfDeTeste() });
+  await expect(page.locator(`.pdf-hl[data-note="${nova.id}"]`).first()).toBeAttached({ timeout: 30_000 });
 });
 
 test('post da citação: escolher tema e cor desenha a arte', async ({ page }) => {
@@ -365,7 +400,7 @@ test('OCR: a foto é lida na hora; depois dá para marcar só a área que vai se
   await expect(crop).toBeHidden();
 });
 
-test('OCR: foto difícil pergunta antes de mandar para a IA; com o sim, lê sozinha das próximas vezes @celular', async ({ page }) => {
+test('OCR: foto difícil é lida pela IA sozinha (opção ligada por padrão); desligando, fica só no aparelho @celular', async ({ page }) => {
   await semear(page, { books: [livro('b1')], settings: { aiKey: 'chave-de-teste' } }); // modo pessoal com IA ligada (as chamadas são simuladas)
   await page.goto('/#/notas');
   const pedidos = await page.evaluateHandle(() => {
@@ -377,16 +412,12 @@ test('OCR: foto difícil pergunta antes de mandar para a IA; com o sim, lê sozi
     return log;
   });
   await page.getByRole('button', { name: 'Nova' }).click();
-  await expect(page.locator('#ocr-ai')).not.toBeChecked(); // começa desligada: a foto só sai do aparelho com um "sim"
+  await expect(page.locator('#ocr-ai')).toBeChecked(); // vem ligada, com o aviso de que a foto é enviada
+  await expect(page.locator('#ocr-ai-hint')).toContainText('enviada à Anthropic');
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
   await page.locator('#ocr-file').setInputFiles({ name: 'pagina.png', mimeType: 'image/png', buffer: png });
-  // o OCR do aparelho não leu nada: o app pergunta, e nada é enviado antes da resposta
-  await expect(page.locator('#ocr-consent')).toBeVisible({ timeout: 60_000 });
-  expect((await pedidos.jsonValue()).length).toBe(0);
-  await page.getByRole('button', { name: 'Sim, usar a IA' }).click();
+  // o OCR do aparelho não leu nada: a IA lê sozinha, sem a pessoa marcar nada
   await expect(page.locator('#ocr-status')).toContainText('Lido com IA', { timeout: 60_000 });
-  await expect(page.locator('#ocr-consent')).toBeHidden();
-  await expect(page.locator('#ocr-ai')).toBeChecked();
   await expect(page.locator('textarea[name="text"]')).toHaveValue('Ler devagar é a forma mais rápida de lembrar.');
   // pedir de novo troca o texto dessa foto (não empilha)
   await page.getByRole('button', { name: 'Ler com IA' }).click();
@@ -400,22 +431,20 @@ test('OCR: foto difícil pergunta antes de mandar para a IA; com o sim, lê sozi
   await page.locator('#ocr-file').setInputFiles({ name: 'pagina.png', mimeType: 'image/png', buffer: png });
   await expect(page.locator('#ocr-status')).toContainText('Nenhum grifo encontrado', { timeout: 60_000 });
   expect((await pedidos.jsonValue()).length).toBe(2);
-  await expect(page.locator('#ocr-consent')).toBeHidden(); // já respondeu: não pergunta de novo
+  expect(await page.evaluate(() => localStorage.getItem('grifo.ocrAI'))).toBe('0'); // a escolha fica guardada
 });
 
-test('OCR: "Agora não" guarda a recusa e não manda a foto @celular', async ({ page }) => {
+test('OCR: quem desligou a leitura por IA continua sem mandar a foto @celular', async ({ page }) => {
   await semear(page, { books: [livro('b1')], settings: { aiKey: 'chave-de-teste' } });
+  await page.addInitScript(() => localStorage.setItem('grifo.ocrAI', '0'));
   await page.goto('/#/notas');
   await page.evaluate(() => { globalThis.__pedidosIA = 0; globalThis.__aiMock = async () => { globalThis.__pedidosIA++; return { found: true, text: 'x' }; }; });
   await page.getByRole('button', { name: 'Nova' }).click();
+  await expect(page.locator('#ocr-ai')).not.toBeChecked();
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
   await page.locator('#ocr-file').setInputFiles({ name: 'pagina.png', mimeType: 'image/png', buffer: png });
-  await page.getByRole('button', { name: 'Agora não' }).click({ timeout: 60_000 });
-  await expect(page.locator('#ocr-consent')).toBeHidden();
-  await page.locator('#ocr-file').setInputFiles({ name: 'pagina.png', mimeType: 'image/png', buffer: png });
   await expect(page.locator('#ocr-status')).toContainText('Nenhum grifo encontrado', { timeout: 60_000 });
-  await expect(page.locator('#ocr-consent')).toBeHidden();
-  expect(await page.evaluate(() => [globalThis.__pedidosIA, localStorage.getItem('grifo.ocrAI')])).toEqual([0, '0']);
+  expect(await page.evaluate(() => globalThis.__pedidosIA)).toBe(0);
 });
 
 test('nota solta: criar sem livro e achar pelo filtro "Sem livro"', async ({ page }) => {

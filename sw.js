@@ -1,6 +1,6 @@
 // Service worker: app funciona offline depois da primeira visita.
 const SHARE_CACHE = 'grifo-compartilhado';
-const CACHE = 'grifo-v71';
+const CACHE = 'grifo-v72';
 const SHELL = [
   './', 'index.html', 'css/styles.css', 'css/fonts.css', 'js/tema.js', 'manifest.webmanifest',
   'fonts/fraunces-normal-latin.woff2', 'fonts/fraunces-normal-latin-ext.woff2', 'fonts/fraunces-italic-latin.woff2', 'fonts/fraunces-italic-latin-ext.woff2', 'fonts/inter-normal-latin.woff2', 'fonts/inter-normal-latin-ext.woff2',
